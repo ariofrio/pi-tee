@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Keep the authenticated native-verifier Cargo lock in LF form on Windows, preserving its exact pinned hash across checkout settings.
+
 - Add a Docker-free native NVIDIA verifier build candidate with locked SDK, Rust and dependency inputs, disabled local collectors and six-target desktop execution checks. Test real GPU nonce, report/mode signature and certificate-signature rejection. Production verification and admission remain unchanged; packaging and full qualification are unfinished.
 
 - Retry temporary helper-file locks during cleanup and handle persistent removal failures without terminating Pi. Only the executable snapshot can remain; no request data is written there.
