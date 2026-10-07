@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Strengthen the isolated expiry regression with an independent loopback IPC observer. Catch a request write before a misplaced expiry check, even when the parent subsequently returns the expected error. Production transport is unchanged.
+
 - Limit native TLS connection setup to ten seconds without cutting off admitted response streams. Bind TLS fixtures to loopback and test the parent-side expiry check independently of the Go helper's own check.
 
 - Add public Tinfoil worker discovery and an evidence-only probe covering every advertised candidate for the seven current chat workloads. Fix delivery services, compare the expected publisher repository, bound results and reject arbitrary hosts/releases; ignore claimed keys and measurements. Support worker hostname aliases independently of catalog IDs. Production routing and admission are unchanged.

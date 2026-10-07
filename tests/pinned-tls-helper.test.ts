@@ -4,18 +4,41 @@ import { createHash, X509Certificate } from "node:crypto";
 import { spawn, spawnSync } from "node:child_process";
 import { mkdtemp, mkdir, readFile, rm } from "node:fs/promises";
 import { resolve } from "node:path";
+import { createServer as createTcpServer, type Socket } from "node:net";
 import { pinnedTlsHelperFetch } from "../packages/core/src/pinned-tls-helper.js";
 
 const helperPath = process.env.PI_TEE_PINNED_TLS_TEST_HELPER;
 const stubPath = process.env.PI_TEE_PINNED_TLS_TEST_STUB;
 
-test("parent refuses to hand credentials to a helper that becomes ready after admission expiry", { skip: !stubPath }, async () => {
-  const endpoint = "https://synthetic.invalid/v1/chat/completions";
+test("parent refuses to hand credentials to a helper that becomes ready after admission expiry", { skip: !stubPath, timeout: 10000 }, async () => {
+  const peers = new Set<Socket>();
+  let observations: number[] = [];
+  let completed!: () => void;
+  const observed = new Promise<void>(resolve => { completed = resolve; });
+  const oracle = createTcpServer(socket => {
+    peers.add(socket);
+    socket.on("data", bytes => { observations.push(...bytes); });
+    socket.on("close", () => { peers.delete(socket); completed(); });
+  });
+  await new Promise<void>(resolve => oracle.listen(0, "127.0.0.1", resolve));
+  const address = oracle.address();
+  assert.ok(address && typeof address === "object");
+  const endpoint = `https://127.0.0.1:${address.port}/v1/chat/completions`;
   const artifact = { helperPath: stubPath!, sha256: createHash("sha256").update(await readFile(stubPath!)).digest("hex") };
-  const fetch = pinnedTlsHelperFetch(endpoint, "00".repeat(32), artifact, Date.now() + 200);
-  await assert.rejects(fetch(endpoint, {
-    method: "POST", body: "synthetic payload", headers: { authorization: "Bearer synthetic-key" }, signal: AbortSignal.timeout(5000),
-  }), /TEE_PUBLIC_SESSION_REJECTED/);
+  try {
+    const fetch = pinnedTlsHelperFetch(endpoint, "00".repeat(32), artifact, Date.now() + 200);
+    await assert.rejects(fetch(endpoint, {
+      method: "POST", body: "synthetic payload", headers: { authorization: "Bearer synthetic-key" }, signal: AbortSignal.timeout(5000),
+    }), /TEE_PUBLIC_SESSION_REJECTED/);
+    await Promise.race([observed, new Promise<never>((_, reject) => {
+      const timer = setTimeout(() => reject(new Error("IPC observation timed out")), 4000);
+      observed.finally(() => clearTimeout(timer));
+    })]);
+    assert.deepEqual(observations, [0], "No REQUEST bytes may enter the helper after expiry, regardless of the eventual parent error.");
+  } finally {
+    for (const peer of peers) peer.destroy();
+    await new Promise<void>(resolve => oracle.close(() => resolve()));
+  }
 });
 
 test("portable helper authenticates before credentials, streams, refuses redirects and cancels", { skip: !helperPath }, async () => {
