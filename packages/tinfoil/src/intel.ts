@@ -8,7 +8,7 @@ export async function openIntelTinfoilTransport(signal: AbortSignal, mode: "froz
   const nvatDir = process.env.PI_TINFOIL_NVAT_DIR;
   if (!cpuVerifier || !nvatDir || process.platform !== "darwin" || process.arch !== "arm64") throw new TeeError("TEE_RUNTIME_UNSUPPORTED");
   const keys = await qualifyIntelCandidate({ cpuVerifier, nvatDir, signal, mode });
-  return openEncryptedWorkerTransport(signal, INTEL_CANDIDATE.host, keys, "cache_salt");
+  return openEncryptedWorkerTransport(signal, INTEL_CANDIDATE.host, keys, "cache_salt", undefined, keys.publicBuild?.expiresAt);
 }
 
 export const INTEL_PUBLIC_BUILD_PROFILE: PublicBuildProfile = Object.freeze({
@@ -36,7 +36,7 @@ export const INTEL_PUBLIC_BUILD_PROFILE: PublicBuildProfile = Object.freeze({
     signal.throwIfAborted();
     return {
       admission: { profile: PUBLIC_BUILD_PROFILE_ID, model: model.id, authorityPolicyDigest: PUBLIC_BUILD_AUTHORITY_POLICY_DIGEST, ...keys.publicBuild },
-      transport: await openEncryptedWorkerTransport(signal, INTEL_CANDIDATE.host, keys, "cache_salt"),
+      transport: await openEncryptedWorkerTransport(signal, INTEL_CANDIDATE.host, keys, "cache_salt", undefined, keys.publicBuild?.expiresAt),
     };
   },
 });

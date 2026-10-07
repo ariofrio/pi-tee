@@ -7,7 +7,7 @@ import { TeeError } from "./policy.js";
 import { MAX_REQUEST_BYTES, readBoundedBody, withAbort } from "./transport.js";
 
 const INIT = 1, READY = 2, REQUEST = 3, RESPONSE = 4, BODY = 5, END = 6, ERROR = 7;
-const helperErrors = new Set(["TEE_REQUEST_REJECTED", "TEE_TLS_KEY_REJECTED", "TEE_CONNECTION_FAILED"]);
+const helperErrors = new Set(["TEE_REQUEST_REJECTED", "TEE_TLS_KEY_REJECTED", "TEE_CONNECTION_FAILED", "TEE_PUBLIC_SESSION_REJECTED"]);
 
 function frame(kind: number, data = Buffer.alloc(0)) {
   const bytes = Buffer.alloc(5 + data.length);
@@ -46,12 +46,13 @@ class Frames {
 /** Optional portable transport. Adapters must supply a reviewed platform artifact digest. */
 export function pinnedTlsHelperFetch(endpoint: string, fingerprint: string, artifact: {
   helperPath: string; sha256: string;
-}): typeof globalThis.fetch {
+}, expiresAt?: number): typeof globalThis.fetch {
   const target = new URL(endpoint);
   const { helperPath, sha256 } = artifact;
   if (target.protocol !== "https:" || target.username || target.password || target.search || target.hash ||
       target.pathname !== "/v1/chat/completions" || !/^[a-f0-9]{64}$/.test(fingerprint) ||
-      !isAbsolute(helperPath) || !/^[a-f0-9]{64}$/.test(sha256)) throw new TeeError("TEE_REQUEST_REJECTED");
+      !isAbsolute(helperPath) || !/^[a-f0-9]{64}$/.test(sha256) ||
+      (expiresAt !== undefined && (!Number.isSafeInteger(expiresAt) || expiresAt <= 0))) throw new TeeError("TEE_REQUEST_REJECTED");
   return async (input, init) => {
     const request = new Request(input, init);
     if (request.url !== endpoint || request.method !== "POST") throw new TeeError("TEE_REQUEST_REJECTED");
@@ -93,10 +94,11 @@ export function pinnedTlsHelperFetch(endpoint: string, fingerprint: string, arti
     }), signal);
     try {
       signal.throwIfAborted();
-      await write(frame(INIT, Buffer.from(JSON.stringify({ endpoint, fingerprint }))));
+      await write(frame(INIT, Buffer.from(JSON.stringify({ endpoint, fingerprint, expiresAt }))));
       const ready = await next();
       if (ready.kind !== READY || ready.data.length) throw new TeeError("TEE_CONNECTION_FAILED");
       signal.throwIfAborted();
+      if (expiresAt !== undefined && Date.now() >= expiresAt) throw new TeeError("TEE_PUBLIC_SESSION_REJECTED");
       // The helper has authenticated its sole socket; only now send secrets to it.
       await write(frame(REQUEST, Buffer.from(JSON.stringify({ headers: Object.fromEntries(request.headers), body: Buffer.from(body).toString("base64") }))));
       const incoming = await next();

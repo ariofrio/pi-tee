@@ -45,13 +45,15 @@ test("portable helper authenticates before credentials, streams, refuses redirec
   }
   try {
     await waitFor(() => port !== 0);
-    const endpoint = `https://127.0.0.1:${port}/v1/chat/completions`;
+    const endpoint = `https://localhost:${port}/v1/chat/completions`;
     const request = { method: "POST", body: "synthetic payload", headers: { authorization: "Bearer synthetic-key" }, signal: AbortSignal.timeout(10000) };
     await assert.rejects(pinnedTlsHelperFetch(endpoint, "00".repeat(32), artifact)(endpoint, request), /TEE_TLS_KEY_REJECTED/);
     assert.equal(sends, 0);
     await assert.rejects(pinnedTlsHelperFetch(endpoint, pin, { ...artifact, sha256: "00".repeat(32) })(endpoint, request), /TEE_VERIFIER_ARTIFACT_REJECTED/);
     assert.equal(sends, 0);
-    const fetch = pinnedTlsHelperFetch(endpoint, pin, artifact);
+    await assert.rejects(pinnedTlsHelperFetch(endpoint, pin, artifact, Date.now() + 50)(endpoint, request), /TEE_PUBLIC_SESSION_REJECTED/);
+    assert.equal(sends, 0, "Expiry during TLS setup must disclose neither credentials nor body.");
+    const fetch = pinnedTlsHelperFetch(endpoint, pin, artifact, Date.now() + 10000);
     assert.equal(await (await fetch(endpoint, request)).text(), "complete");
     await waitFor(() => sends === 1);
     assert.equal(sends, 1);

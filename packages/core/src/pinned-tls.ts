@@ -7,10 +7,11 @@ import { TeeError } from "./policy.js";
 import { MAX_REQUEST_BYTES, readBoundedBody } from "./transport.js";
 
 /** Credentials are transmitted only after the exact socket presents the attested SPKI. */
-export function pinnedTlsFetch(endpoint: string, fingerprint: string): typeof globalThis.fetch {
+export function pinnedTlsFetch(endpoint: string, fingerprint: string, expiresAt?: number): typeof globalThis.fetch {
   const target = new URL(endpoint);
   if (target.protocol !== "https:" || target.username || target.password || target.search || target.hash ||
-      !/^[a-f0-9]{64}$/.test(fingerprint)) throw new TeeError("TEE_REQUEST_REJECTED");
+      !/^[a-f0-9]{64}$/.test(fingerprint) ||
+      (expiresAt !== undefined && (!Number.isSafeInteger(expiresAt) || expiresAt <= 0))) throw new TeeError("TEE_REQUEST_REJECTED");
   return async (input, init) => {
     const request = new Request(input, init);
     if (request.url !== endpoint || request.method !== "POST") throw new TeeError("TEE_REQUEST_REJECTED");
@@ -38,6 +39,7 @@ export function pinnedTlsFetch(endpoint: string, fingerprint: string): typeof gl
         });
       });
       signal.throwIfAborted();
+      if (expiresAt !== undefined && Date.now() >= expiresAt) throw new TeeError("TEE_PUBLIC_SESSION_REJECTED");
       agent.createConnection = () => socket;
       return await new Promise<Response>((resolve, reject) => {
         const outgoing = httpsRequest(target, {

@@ -36,11 +36,13 @@ var (
 	errInput      = errors.New("TEE_REQUEST_REJECTED")
 	errKey        = errors.New("TEE_TLS_KEY_REJECTED")
 	errConnection = errors.New("TEE_CONNECTION_FAILED")
+	errExpired    = errors.New("TEE_PUBLIC_SESSION_REJECTED")
 )
 
 type configuration struct {
 	Endpoint    string `json:"endpoint"`
 	Fingerprint string `json:"fingerprint"`
+	ExpiresAt   *int64 `json:"expiresAt,omitempty"`
 }
 
 type requestData struct {
@@ -121,7 +123,7 @@ func run(in io.Reader, out io.Writer) error {
 	pin, pinErr := hex.DecodeString(config.Fingerprint)
 	if err != nil || pinErr != nil || len(pin) != 32 || config.Fingerprint != strings.ToLower(config.Fingerprint) ||
 		target.Scheme != "https" || target.Hostname() == "" || target.User != nil || target.RawQuery != "" || target.ForceQuery || target.Fragment != "" ||
-		target.EscapedPath() != "/v1/chat/completions" || target.Opaque != "" {
+		target.EscapedPath() != "/v1/chat/completions" || target.Opaque != "" || (config.ExpiresAt != nil && (*config.ExpiresAt <= 0 || *config.ExpiresAt > 9007199254740991)) {
 		return errInput
 	}
 	port := target.Port()
@@ -179,6 +181,9 @@ func run(in io.Reader, out io.Writer) error {
 	request.Close = true
 	// No HTTP Client/Transport: they may redirect, reconnect, retry or pool.
 	// Write precisely once to the socket whose attested key was checked above.
+	if config.ExpiresAt != nil && time.Now().UnixMilli() >= *config.ExpiresAt {
+		return errExpired
+	}
 	if request.Write(secure) != nil {
 		return errConnection
 	}

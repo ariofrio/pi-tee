@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Recheck public admission expiry after TLS setup before sending credentials or ciphertext, in both the native and portable transports. Pass the verified deadline from Tinfoil sessions; check it again inside the helper before its sole HTTP write. Add slow-handshake and post-readiness expiry negatives. Accepted response streams may continue past the dispatch deadline.
+
 - Add an optional owned Go TLS transport for portable Node/Bun integration. Authenticate the socket before passing credentials/body to the helper; snapshot hash-checked artifacts, stream bounded frames and close processes/sockets on cancellation. Add real socket, dropped-response/no-replay and Node/Bun tests plus a candidate Pi harness. Production routing and GPU-verifier dependencies are unchanged.
 
 - Allow separate public-build profiles for different models in one provider. Bind each admission, authority digest and expected endpoint to its canonical model; reject ambiguous profile ownership and inconsistent session endpoints before transmission. Each profile declares its own trust assumptions. Adapters sharing a URL must isolate workloads through their attested connections. Existing production coverage is unchanged.

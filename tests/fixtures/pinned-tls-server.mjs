@@ -1,10 +1,14 @@
 import assert from "node:assert/strict";
 import { createServer } from "node:https";
+import { createSecureContext } from "node:tls";
 import { readFile } from "node:fs/promises";
 
 const [certificate, privateKey] = process.argv.slice(2);
 let requests = 0;
-const server = createServer({ cert: await readFile(certificate), key: await readFile(privateKey) }, (req, res) => {
+const cert = await readFile(certificate), key = await readFile(privateKey);
+const server = createServer({ cert, key, SNICallback: (_name, callback) => {
+  setTimeout(() => callback(null, createSecureContext({ cert, key })), 100);
+} }, (req, res) => {
   const id = ++requests;
   assert.equal(req.headers.authorization, "Bearer synthetic-key");
   let body = "";
@@ -22,4 +26,4 @@ const server = createServer({ cert: await readFile(certificate), key: await read
     } else { res.writeHead(200); res.end("complete"); }
   });
 });
-server.listen(0, "127.0.0.1", () => console.log(JSON.stringify({ port: server.address().port })));
+server.listen(0, () => console.log(JSON.stringify({ port: server.address().port })));

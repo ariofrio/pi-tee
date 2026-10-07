@@ -35,12 +35,12 @@ export async function openDirectTinfoilTransport(signal: AbortSignal, attestatio
   return openEncryptedWorkerTransport(signal, profile.host, { tls: attestation.tlsPublicKeyFingerprint, hpke: attestation.hpkePublicKey }, "user_cache_secret");
 }
 
-export async function openEncryptedWorkerTransport(signal: AbortSignal, host: string, keys: { tls: string; hpke: string }, cacheField: "user_cache_secret" | "cache_salt", tlsArtifact?: { helperPath: string; sha256: string }): Promise<SdkTransport> {
+export async function openEncryptedWorkerTransport(signal: AbortSignal, host: string, keys: { tls: string; hpke: string }, cacheField: "user_cache_secret" | "cache_salt", tlsArtifact?: { helperPath: string; sha256: string }, expiresAt?: number): Promise<SdkTransport> {
   const { Identity } = await import("ehbp");
   const identity = await Identity.fromPublicKeyHex(keys.hpke);
   const baseUrl = `https://${host}/v1`;
   const endpoint = `${baseUrl}/chat/completions`;
-  const fetch = tlsArtifact ? pinnedTlsHelperFetch(endpoint, keys.tls, tlsArtifact) : pinnedTlsFetch(endpoint, keys.tls);
+  const fetch = tlsArtifact ? pinnedTlsHelperFetch(endpoint, keys.tls, tlsArtifact, expiresAt) : pinnedTlsFetch(endpoint, keys.tls, expiresAt);
   const cacheSecret = randomBytes(32).toString("hex");
   let sent = false;
   return { baseUrl, fetch: async (input, init) => {

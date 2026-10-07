@@ -48,7 +48,7 @@ const profile = artifact ? {
     const keys = await qualifyIntelCandidate({cpuVerifier:process.env.PI_TINFOIL_PUBLIC_BUILD_VERIFIER,nvatDir:process.env.PI_TINFOIL_NVAT_DIR,signal,mode:"public-builds"});
     if(!keys.publicBuild) throw Error("TEE_PUBLIC_SESSION_REJECTED");
     return {admission:{profile:profile.id,model:model.id,authorityPolicyDigest:profile.authorityPolicyDigest,...keys.publicBuild},
-      transport:await openEncryptedWorkerTransport(signal,INTEL_CANDIDATE.host,keys,"cache_salt",artifact)};
+      transport:await openEncryptedWorkerTransport(signal,INTEL_CANDIDATE.host,keys,"cache_salt",artifact,keys.publicBuild.expiresAt)};
   },
 } : INTEL_PUBLIC_BUILD_PROFILE;
 export default async function(pi) {

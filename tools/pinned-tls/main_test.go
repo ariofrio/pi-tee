@@ -224,3 +224,53 @@ func TestEOFClosesStreamingSocket(t *testing.T) {
 		t.Fatal("Helper did not stop")
 	}
 }
+
+func TestExpiryAfterHandshakePreventsHTTP(t *testing.T) {
+	var sends atomic.Int32
+	server, pin := fixture(t, func(w http.ResponseWriter, r *http.Request) {
+		sends.Add(1)
+		w.WriteHeader(200)
+	})
+	inputRead, inputWrite := io.Pipe()
+	outputRead, outputWrite := io.Pipe()
+	defer inputRead.Close()
+	defer inputWrite.Close()
+	defer outputRead.Close()
+	defer outputWrite.Close()
+	done := make(chan error, 1)
+	go func() { done <- run(inputRead, outputWrite) }()
+	config := map[string]any{"endpoint": server.URL + "/v1/chat/completions", "fingerprint": pin, "expiresAt": time.Now().Add(time.Second).UnixMilli()}
+	go func() { _, _ = inputWrite.Write(inputFrame(t, frameInit, config)) }()
+	ready := make(chan byte, 1)
+	go func() {
+		var header [5]byte
+		if _, err := io.ReadFull(outputRead, header[:]); err != nil {
+			ready <- 0
+			return
+		}
+		ready <- header[0]
+	}()
+	select {
+	case err := <-done:
+		t.Fatalf("Initialization rejected before readiness: %v", err)
+	case kind := <-ready:
+		if kind != frameReady {
+			t.Fatal("Handshake did not finish")
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("Readiness timed out")
+	}
+	time.Sleep(1100 * time.Millisecond)
+	_, _ = inputWrite.Write(inputFrame(t, frameRequest, requestData{Headers: map[string]string{"Authorization": "Bearer synthetic-key"}, Body: []byte("synthetic")}))
+	select {
+	case err := <-done:
+		if err == nil || err.Error() != "TEE_PUBLIC_SESSION_REJECTED" {
+			t.Fatalf("Wrong expiry result: %v", err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("Expiry did not terminate dispatch")
+	}
+	if sends.Load() != 0 {
+		t.Fatal("Expired admission leaked HTTP credentials or payload")
+	}
+}
