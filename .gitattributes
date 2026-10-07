@@ -1,2 +1,3 @@
 # The build authenticates the exact lock bytes on every platform.
 tools/nvidia-native/regorus.Cargo.lock text eol=lf
+tools/nvidia-native/openssl.cnf text eol=lf

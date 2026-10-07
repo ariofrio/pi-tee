@@ -10,6 +10,7 @@ on:
       - tools/nvidia-native/**
       - scripts/build-native-nvidia.mjs
       - scripts/check-native-nvidia.ts
+      - scripts/research/native-nvidia-collateral.ts
   pull_request:
     paths:
       - .gitattributes
@@ -17,6 +18,7 @@ on:
       - tools/nvidia-native/**
       - scripts/build-native-nvidia.mjs
       - scripts/check-native-nvidia.ts
+      - scripts/research/native-nvidia-collateral.ts
 
 permissions:
   contents: read
@@ -55,4 +57,4 @@ jobs:
       - run: npm ci --ignore-scripts
       - run: npm run build
       - run: node scripts/build-native-nvidia.mjs
-      - run: node --import tsx scripts/check-native-nvidia.ts
+      - run: node --import tsx scripts/check-native-nvidia.ts --collateral

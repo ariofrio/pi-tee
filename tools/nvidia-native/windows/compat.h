@@ -2,6 +2,12 @@
 #include <cstdlib>
 #include <ctime>
 #include <sys/stat.h>
+#include <windows.h>
+
+// Load Windows headers once, then remove the macro that collides with LogLevel.
+#ifdef ERROR
+#undef ERROR
+#endif
 
 inline time_t timegm(struct tm* value) { return _mkgmtime(value); }
 inline struct tm* gmtime_r(const time_t* value, struct tm* output) {

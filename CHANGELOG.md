@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Restrict native-verifier builds to a toolchain environment, package a hash-checked OpenSSL configuration and strip runtime overrides. Add reference/OCSP signature negatives with authentic delivery controls to the six-target workflow. Remove source paths from application compilation and fix a Windows logging-macro collision. The native verifier remains a candidate; production admission is unchanged.
+
 - Keep the authenticated native-verifier Cargo lock in LF form on Windows, preserving its exact pinned hash across checkout settings.
 
 - Add a Docker-free native NVIDIA verifier build candidate with locked SDK, Rust and dependency inputs, disabled local collectors and six-target desktop execution checks. Test real GPU nonce, report/mode signature and certificate-signature rejection. Production verification and admission remain unchanged; packaging and full qualification are unfinished.

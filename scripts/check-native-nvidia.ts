@@ -1,17 +1,23 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 import { readBoundedBody } from "../packages/core/src/transport.js";
 import { discoverTinfoilWorkers } from "../packages/tinfoil/src/worker-discovery.js";
 import { gpuVersionsAllowed } from "../packages/tinfoil/src/gpu-policy.js";
 import { parseHopperGpuMode } from "../packages/tinfoil/src/gpu-mode.js";
 import { INTEL_CANDIDATE } from "../packages/tinfoil/src/intel-appraisal.js";
+import { collateralOracle } from "./research/native-nvidia-collateral.js";
 
 // GPU verifier seam only: no CPU/workload appraisal, credentials or inference.
 const binary = resolve(process.env.PI_TEE_NATIVE_NVIDIA_BINARY ?? `.scratch/work/nvidia-native/artifact/bin/${process.platform === "win32" ? "nvattest.exe" : "nvattest"}`);
+const opensslConfig = resolve(process.env.PI_TEE_NATIVE_NVIDIA_CONFIG ?? resolve(dirname(binary), "../share/openssl.cnf"));
+const verifierEnv = {
+  ...(process.platform === "win32" ? { SystemRoot: process.env.SystemRoot } : {}),
+  OPENSSL_CONF: opensslConfig, OPENSSL_MODULES: resolve(dirname(opensslConfig), "../modules"),
+};
 const execute = promisify(execFile);
 const required = [
   "x-nvidia-gpu-arch-check", "x-nvidia-gpu-attestation-report-parsed", "x-nvidia-gpu-attestation-report-cert-chain-fwid-match",
@@ -93,8 +99,11 @@ function changedCertificate(evidence: any) {
 }
 await mkdir(".scratch/work", { recursive: true });
 const scratch = await mkdtemp(resolve(".scratch/work/native-nvidia-check-"));
-let phase = "fixture";
+let phase = "openssl-config";
 try {
+  const lock = JSON.parse(await readFile("tools/nvidia-native/source-lock.json", "utf8"));
+  assert.equal(createHash("sha256").update(await readFile(opensslConfig)).digest("hex"), lock.opensslConfigSha256);
+  phase = "fixture";
   const { nonce, evidence } = await fixture();
   if (process.argv.includes("--save-evidence")) {
     await mkdir(".scratch/work/native-nvidia-diagnostics", { recursive: true, mode: 0o700 });
@@ -112,7 +121,7 @@ try {
     let stdout = "", code: string | number = 0;
     try {
       ({ stdout } = await execute(binary, ["--log-level", "off", "--format", "json", "attest", "--device", "gpu", "--gpu-evidence-source", "file", "--gpu-evidence-file", file, "--verifier", "local", "--nonce", challenge], {
-        timeout: 90000, maxBuffer: 256 * 1024, env: { PATH: process.env.PATH, ...(process.platform === "win32" ? { SystemRoot: process.env.SystemRoot } : {}) },
+        timeout: 90000, maxBuffer: 256 * 1024, env: verifierEnv,
       }));
     } catch (error: any) { code = error.code ?? "process-failed"; stdout = error.stdout ?? ""; }
     let result: any;
@@ -122,6 +131,35 @@ try {
     assert.equal(code === 0, expectedCode === 0);
     assert.equal(accepted(result, challenge, raw), expectedCode === 0);
     console.log(JSON.stringify({ case: label, accepted: expectedCode === 0, resultCode: result.result_code, inferenceRequests: 0, cpuVerified: false, workloadQualified: false }));
+  }
+  if (process.argv.includes("--collateral")) {
+    const file = resolve(scratch, "authentic.json");
+    for (const mode of ["authentic", "rim-signature", "ocsp-signature"] as const) {
+      phase = `collateral-${mode}`;
+      const oracle = await collateralOracle(mode);
+      try {
+        let stdout = "", code: string | number = 0;
+        try {
+          ({ stdout } = await execute(binary, ["--log-level", "off", "--format", "json", "attest", "--device", "gpu", "--gpu-evidence-source", "file", "--gpu-evidence-file", file, "--verifier", "local", "--nonce", nonce, ...oracle.args], {
+            timeout: 90000, maxBuffer: 256 * 1024, env: verifierEnv,
+          }));
+        } catch (error: any) { code = error.code ?? "process-failed"; stdout = error.stdout ?? ""; }
+        const result = JSON.parse(stdout);
+        if (process.argv.includes("--save-evidence")) await writeFile(`.scratch/work/native-nvidia-diagnostics/${phase}.json`, stdout, { mode: 0o600 });
+        const observations = oracle.observations();
+        assert.equal(observations.failures, 0); assert.ok(observations.deliveries > 0);
+        if (mode === "authentic") {
+          assert.equal(code, 0); assert.equal(accepted(result, nonce, evidence), true); assert.equal(observations.mutations, 0);
+        } else {
+          assert.notEqual(code, 0); assert.equal(accepted(result, nonce, evidence), false); assert.ok(observations.mutations > 0);
+          assert.equal(result.result_code, mode === "rim-signature" ? 105 : 12);
+          if (mode === "ocsp-signature") {
+            assert.ok(result.claims?.some((claim: any) => ["x-nvidia-gpu-attestation-report-cert-chain", "x-nvidia-gpu-driver-rim-cert-chain", "x-nvidia-gpu-vbios-rim-cert-chain"].some(name => claim[name]?.["x-nvidia-cert-ocsp-response-valid"] === false)));
+          }
+        }
+        console.log(JSON.stringify({ case: phase, accepted: mode === "authentic", resultCode: result.result_code, ...observations, inferenceRequests: 0, cpuVerified: false, workloadQualified: false }));
+      } finally { await oracle.close(); }
+    }
   }
 } catch {
   console.error(`Native GPU candidate check failed at ${phase}. No inference was sent.`);

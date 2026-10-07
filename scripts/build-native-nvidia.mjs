@@ -21,7 +21,19 @@ if (process.env.PI_TEE_TEST_EXPECTED_ARCH) assert.equal(process.arch, process.en
 const [triplet, rustTarget] = targets[platform];
 const root = resolve(process.env.PI_TEE_NATIVE_BUILD_DIR ?? ".scratch/work/nvidia-native");
 await mkdir(root, { recursive: true });
-function run(executable, args, cwd = root, env = process.env, capture = false) {
+const inheritedNames = [
+  "PATH", "Path", "HOME", "USERPROFILE", "TEMP", "TMP", "TMPDIR", "SystemRoot", "SYSTEMROOT", "windir", "ComSpec", "COMSPEC",
+  "ProgramFiles", "ProgramFiles(x86)", "ProgramW6432", "LOCALAPPDATA", "APPDATA", "HOMEDRIVE", "HOMEPATH", "RUSTUP_HOME",
+  "VSINSTALLDIR", "VCINSTALLDIR", "VCToolsInstallDir", "WindowsSdkDir", "WindowsSDKVersion", "WindowsSdkBinPath", "WindowsSdkVerBinPath",
+  "UniversalCRTSdkDir", "UCRTVersion", "LIB", "LIBPATH", "INCLUDE", "DevEnvDir", "FrameworkDir", "FrameworkVersion",
+  "VSCMD_ARG_TGT_ARCH", "VSCMD_ARG_HOST_ARCH",
+];
+const buildEnv = {
+  ...Object.fromEntries(inheritedNames.filter(name => process.env[name] !== undefined).map(name => [name, process.env[name]])),
+  TZ: "UTC", LANG: "C", LC_ALL: "C", RUSTUP_TOOLCHAIN: lock.rust,
+  CARGO_HOME: resolve(root, "cargo-home"), VCPKG_BINARY_SOURCES: "clear", VCPKG_DISABLE_METRICS: "1",
+};
+function run(executable, args, cwd = root, env = buildEnv, capture = false) {
   const result = spawnSync(executable, args, { cwd, env, encoding: "utf8", stdio: capture ? "pipe" : "inherit", timeout: 1800000 });
   if (capture && result.status !== 0) process.stderr.write(result.stderr ?? "");
   assert.equal(result.status, 0, `${executable} failed (${result.error?.code ?? result.status})`);
@@ -29,10 +41,11 @@ function run(executable, args, cwd = root, env = process.env, capture = false) {
 }
 async function source(name) {
   const path = resolve(root, name);
-  if (!(await stat(path).catch(() => null))) run("git", ["clone", "--no-checkout", lock[name].repository, path]);
+  if (!(await stat(path).catch(() => null))) run("git", ["clone", "--no-checkout", "-c", "core.autocrlf=false", lock[name].repository, path]);
+  run("git", ["config", "core.autocrlf", "false"], path);
   run("git", ["checkout", "--detach", lock[name].commit], path);
-  assert.equal(run("git", ["rev-parse", "HEAD"], path, process.env, true), lock[name].commit);
-  assert.equal(run("git", ["diff", "--name-only", "HEAD"], path, process.env, true), "", `${name} source must be clean`);
+  assert.equal(run("git", ["rev-parse", "HEAD"], path, buildEnv, true), lock[name].commit);
+  assert.equal(run("git", ["diff", "--name-only", "HEAD"], path, buildEnv, true), "", `${name} source must be clean`);
   return path;
 }
 const sdk = await source("sdk"), regorus = await source("regorus"), vcpkg = await source("vcpkg");
@@ -40,9 +53,9 @@ const cargoLock = await readFile(resolve(recipe, "regorus.Cargo.lock"));
 assert.equal(createHash("sha256").update(cargoLock).digest("hex"), lock.regorusCargoLockSha256);
 await copyFile(resolve(recipe, "regorus.Cargo.lock"), resolve(regorus, "bindings/ffi/Cargo.lock"));
 const cargo = process.env.PI_TEE_BUILD_CARGO ?? "cargo";
-assert.match(run(cargo, ["--version"], root, process.env, true), new RegExp(`^cargo ${lock.rust.replaceAll(".", "\\.")} `));
-const rustEnv = { ...process.env, CARGO_TARGET_DIR: resolve(root, "rust-build"),
-  ...(process.platform === "win32" ? { RUSTFLAGS: "-C target-feature=+crt-static" } : {}) };
+assert.match(run(cargo, ["--version"], root, buildEnv, true), new RegExp(`^cargo ${lock.rust.replaceAll(".", "\\.")} `));
+const rustEnv = { ...buildEnv, CARGO_TARGET_DIR: resolve(root, "rust-build"),
+  RUSTFLAGS: `--remap-path-prefix=${root}=/pi-tee-nvidia-build${process.platform === "win32" ? " -C target-feature=+crt-static" : ""}` };
 run(cargo, ["build", "--release", "--locked", "--manifest-path", "bindings/ffi/Cargo.toml", "--features", "regorus/semver", "--target", rustTarget], regorus, rustEnv);
 const regorusLibrary = resolve(root, "rust-build", rustTarget, "release", process.platform === "win32" ? "regorus_ffi.lib" : "libregorus_ffi.a");
 assert.ok((await stat(regorusLibrary)).isFile());
@@ -52,7 +65,6 @@ if (!(await stat(vcpkgBinary).catch(() => null))) {
   else run("sh", ["bootstrap-vcpkg.sh", "-disableMetrics"], vcpkg);
 }
 const build = resolve(root, "build");
-const buildEnv = { ...process.env, VCPKG_BINARY_SOURCES: "clear" };
 run("cmake", ["-S", recipe, "-B", build, "-DCMAKE_BUILD_TYPE=Release",
   ...(process.platform === "win32" ? ["-A", process.arch === "arm64" ? "ARM64" : "x64"] : []),
   `-DCMAKE_TOOLCHAIN_FILE=${resolve(vcpkg, "scripts/buildsystems/vcpkg.cmake")}`,
@@ -61,10 +73,16 @@ run("cmake", ["--build", build, "--config", "Release", "--parallel", "2"]);
 const output = resolve(root, "artifact");
 run("cmake", ["--install", build, "--config", "Release", "--prefix", output]);
 const executable = resolve(output, "bin", process.platform === "win32" ? "nvattest.exe" : "nvattest");
+await mkdir(resolve(output, "share"), { recursive: true });
+await mkdir(resolve(output, "modules"), { recursive: true });
+const opensslConfig = await readFile(resolve(recipe, "openssl.cnf"));
+assert.equal(createHash("sha256").update(opensslConfig).digest("hex"), lock.opensslConfigSha256);
+await writeFile(resolve(output, "share/openssl.cnf"), opensslConfig);
 run(executable, ["version"]);
 await writeFile(resolve(output, "candidate-inventory.json"), JSON.stringify({
   qualified: false, platform, triplet, sources: lock,
   binarySha256: createHash("sha256").update(await readFile(executable)).digest("hex"),
+  opensslConfigSha256: lock.opensslConfigSha256,
   vcpkgManifest: JSON.parse(await readFile(resolve(recipe, "vcpkg.json"), "utf8")),
   installedPackages: await readFile(resolve(build, "vcpkg_installed/vcpkg/status"), "utf8"),
 }, null, 2) + "\n");

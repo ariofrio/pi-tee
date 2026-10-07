@@ -1,0 +1,11 @@
+# Use the built-in default provider; load no external provider modules.
+openssl_conf = openssl_init
+
+[openssl_init]
+providers = providers
+
+[providers]
+default = default_provider
+
+[default_provider]
+activate = 1
