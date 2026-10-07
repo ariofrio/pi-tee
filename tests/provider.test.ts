@@ -4,6 +4,7 @@ import { normalizeContext, Type, type Model } from "@earendil-works/pi-ai/compat
 import { createTeeProvider } from "../packages/core/src/provider.js";
 import { isRetryableAssistantError } from "@earendil-works/pi-ai/utils/retry";
 import { authenticateResponse } from "../packages/core/src/response.js";
+import { TeeError } from "../packages/core/src/policy.js";
 
 const model: Model<"openai-completions"> = {
   id: "test-model", name: "Test model", provider: "test-tee", api: "openai-completions",
@@ -55,6 +56,21 @@ test("SDK preflight diagnostics cannot impersonate a retryable terminal security
   const result = await integration.provider.streamSimple(model, context, { apiKey: "test-key" }).result();
   assert.equal(result.errorMessage, "TEE_REQUEST_FAILED");
   assert.equal(isRetryableAssistantError(result), false);
+});
+
+test("GPU mode rejection reaches Pi without retrying or opening inference", async () => {
+  let attempts = 0;
+  const integration = createTeeProvider({
+    id: model.provider, name: "Test TEE", baseUrl: model.baseUrl, apiKeyEnv: "TEST_API_KEY", policy: "sdk",
+    parseCatalog: () => [model], catalogFetch: async () => Response.json({ data: [] }),
+    openSdkTransport: async () => { attempts++; throw new TeeError("TEE_GPU_MODE_REJECTED"); }, assumptions: [],
+  });
+  await integration.initializeCatalog();
+  const result = await integration.provider.streamSimple(model, context, { apiKey: "test-key", maxRetries: 10 }).result();
+  assert.equal(result.errorMessage, "TEE_GPU_MODE_REJECTED");
+  assert.equal(integration.getReport().reason, "TEE_GPU_MODE_REJECTED");
+  assert.equal(isRetryableAssistantError(result), false);
+  assert.equal(attempts, 1);
 });
 
 test("URL, header and fetch overrides cannot escape the registered transport", async () => {

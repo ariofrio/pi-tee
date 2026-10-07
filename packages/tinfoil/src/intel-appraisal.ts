@@ -3,6 +3,7 @@ import { execFile } from "node:child_process";
 import { mkdtemp, readFile, writeFile, rm } from "node:fs/promises";
 import { resolve, dirname, isAbsolute } from "node:path";
 import { TeeError, readBoundedBody } from "pi-tee-core";
+import { parseHopperGpuMode } from "./gpu-mode.js";
 
 export const INTEL_CANDIDATE = Object.freeze({
   host: "gemma4-31b-inf8-0.tinfoil.containers.tinfoil.dev",
@@ -77,6 +78,7 @@ export async function qualifyIntelCandidate(options: {
       const chain = c[field];
       requireCondition(chain?.["x-nvidia-cert-status"] === "valid" && chain["x-nvidia-cert-ocsp-status"] === "good" && chain["x-nvidia-cert-ocsp-response-valid"] === true && chain["x-nvidia-cert-ocsp-nonce-matches"] === true, "TEE_GPU_POLICY_REJECTED");
     }
+    requireCondition(parseHopperGpuMode(evidence.evidence) === "spt", "TEE_GPU_MODE_REJECTED");
   } finally {
     await new Promise<void>(resolve => execFile("docker", ["rm", "--force", name], { timeout: 10000, maxBuffer: 4096, env: { PATH: process.env.PATH, HOME: process.env.HOME } }, () => resolve()));
     await rm(scratch, { recursive: true, force: true });

@@ -28,7 +28,7 @@ export function createTinfoilProvider(options: {
   const assumptions = route === "direct-intel" ? [
     "Local Pi/runtime/extensions/tools, the hash-pinned Go CPU verifier and its dependencies, Docker runtime/image, and hash-pinned NVIDIA local verifier are trusted.",
     "Fresh Intel TDX quote authentication, revocation and UpToDate status enforce locally frozen guest registers and CPU security policy; no current provider release/reference authorizes a workload.",
-    "The exact CPU-bound GPU evidence is appraised locally against NVIDIA roots, driver/VBIOS pins, signed references and OCSP; CC-mode, compute-channel and reset lifecycle still require full runtime qualification.",
+    "The exact CPU-bound GPU evidence is appraised locally against NVIDIA roots, driver/VBIOS pins, signed references and OCSP, then required to declare authenticated SPT mode; compute-channel and reset lifecycle still require full runtime qualification.",
     "This is a candidate, not independent software approval: frozen boot registers were initially acquired from provider material; guest, engine, weights and key custody still need independent review.",
     "Attested TLS SPKI authenticates the exact inference socket before credentials or EHBP ciphertext; send once, fail on rotation, and generate a fresh encrypted vLLM cache salt.",
     "Tinfoil retains availability and credential/billing authority; local clock and manufacturer endorsement/reference/revocation processes are trusted.",
