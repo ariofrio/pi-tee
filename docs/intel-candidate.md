@@ -24,6 +24,8 @@ The [combined research probe](../scripts/research/tinfoil-intel.mjs) also passed
 | Initial software selection | Tinfoil's exact deployed guest/configuration/engine/model artifacts and GitHub/Sigstore build/provenance processes were used to bootstrap candidate measurements. [Immutable artifact inventory](direct-access.md#artifact-key-and-runtime-evidence). They still require independent source/build/workload review. No latest Tinfoil release or reference service is consulted to approve the running CPU workload. |
 | Provider operations | Tinfoil still authorizes API credentials/billing and controls worker availability. These are not hardware-key or workload-reference approval roots in this route. |
 
+Appraisal first requires the configured Docker endpoint to be the local Docker Desktop or OrbStack Unix socket under the current user’s home directory. TCP, SSH and other sockets are rejected before evidence collection. Both container execution and cleanup explicitly use that checked socket, so a later context switch cannot redirect the appraisal. This is a local installation/OS assumption, not cryptographic proof that a Unix socket never forwards traffic.
+
 The wrapper writes public GPU evidence and private copies of the verified NVIDIA CLI/library into an owner-only temporary directory next to the configured CPU helper, derives the loader aliases there, and removes it after appraisal. The container uses those copies rather than reopening mutable source artifacts. It buffers helper claims in memory and exposes no raw reports, prompts, responses or keys in normal status output. Cancellation closes the verifier process, removes its named container and rejects inference; public manufacturer verification traffic may already have occurred.
 
 ## Local setup

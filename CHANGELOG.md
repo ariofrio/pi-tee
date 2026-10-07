@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Reject remote or unapproved Docker verification endpoints before collecting evidence; bind NVIDIA appraisal and cleanup to the checked local Docker Desktop or OrbStack Unix socket. This assumes the local OS and socket service are trusted.
+
 - Cache immutable public-build artifacts and deterministic helper results within the Pi process, with bounded memory and fresh CPU/GPU/freshness appraisal on every request. Execute private copies of verified public-build and NVIDIA helpers, and clean them after appraisal. Add warm-cache, nonce and helper-replacement regressions through the real verifier/delivery boundary.
 
 - Allow newer NVIDIA driver/VBIOS versions in `direct-public` when they satisfy explicit local floors and all existing manufacturer signature, reference, revocation, nonce and SPT checks. Preserve exact versions for the frozen Intel candidate. Evidence-CLI tests check version compatibility without claiming authentication of synthetic reports.

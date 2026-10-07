@@ -23,3 +23,5 @@ The router and AMD direct routes use a fresh memory-only cache secret per reques
 On 2026-10-07, the direct route passed the complete actual Pi CLI/RPC suite with `gemma4-31b`: compiled loading, native secret login, stored-key precedence, completion/usage, Unicode tool execution/result follow-up, reasoning/final text and cancellation. Cancellation is exercised at a test-only response-consumption barrier after HTTP 200; it does not establish when the remote engine stops generation. The router also passed a separate actual Pi cancellation run with `gpt-oss-120b`; its intermittent SDK key-mismatch failure remains unresolved. [Live harness and validation record](../../README.md#validation).
 
 Written by Codex.
+
+The Intel routes require a local Docker Desktop or OrbStack Unix socket. Remote Docker contexts are rejected before evidence collection; the local OS, CLI and daemon remain trusted verifier components. [Local verifier boundary](../../docs/intel-candidate.md).

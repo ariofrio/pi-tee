@@ -2,6 +2,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { execFile } from "node:child_process";
 import { mkdtemp, mkdir, readFile, writeFile, symlink, rm } from "node:fs/promises";
 import { resolve, dirname, isAbsolute } from "node:path";
+import { homedir } from "node:os";
 import { TeeError, readBoundedBody } from "pi-tee-core";
 import { parseHopperGpuMode } from "./gpu-mode.js";
 import { gpuVersionsAllowed } from "./gpu-policy.js";
@@ -51,6 +52,12 @@ export async function qualifyIntelCandidate(options: {
   const signal = AbortSignal.any([options.signal, AbortSignal.timeout(options.mode === "public-builds" ? 240000 : 90000)]);
   signal.throwIfAborted();
   requireCondition(isAbsolute(cpuVerifier) && isAbsolute(nvatDir), "TEE_VERIFIER_ARTIFACT_REJECTED");
+  const context = await command("docker", ["context", "inspect"], signal);
+  let contexts: any;
+  try { contexts = JSON.parse(context.stdout); } catch { throw new TeeError("TEE_GPU_VERIFIER_LOCATION_REJECTED"); }
+  const dockerHost = contexts?.[0]?.Endpoints?.docker?.Host;
+  const localSockets = [".docker/run/docker.sock", ".orbstack/run/docker.sock"].map(path => `unix://${resolve(homedir(), path)}`);
+  requireCondition(context.code === 0 && Array.isArray(contexts) && contexts.length === 1 && localSockets.includes(dockerHost), "TEE_GPU_VERIFIER_LOCATION_REJECTED");
   await pinnedFile(cpuVerifier, options.mode === "public-builds" ? PUBLIC_BUILD_VERIFIER_SHA256 : INTEL_CANDIDATE.cpuVerifierSha256);
   const nvat = new Map<string, Buffer>();
   for (const [path, digest] of Object.entries(nvatHashes)) {
@@ -83,7 +90,7 @@ export async function qualifyIntelCandidate(options: {
     for (const [path, bytes] of nvat) await writeFile(resolve(privateNvat, path), bytes, { mode: path === "bin/nvattest" ? 0o555 : 0o444, flag: "wx", signal });
     for (const alias of ["libnvat.so", "libnvat.so.1"]) await symlink("libnvat.so.1.2.2", resolve(privateNvat, "lib", alias));
     await writeFile(resolve(scratch, "evidence.json"), JSON.stringify([evidence]), { mode: 0o600, flag: "wx" });
-    const checked = await command("docker", ["run", "--rm", "--pull=never", "--name", name, "--cpus=2", "--memory=1g", "--cap-drop=ALL", "--security-opt=no-new-privileges", "--read-only", "--tmpfs", "/tmp:rw,noexec,nosuid,size=16m", "--mount", `type=bind,source=${privateNvat},target=/evidence/libnvat-linux-sbsa-1.2.2.1780962352-archive,readonly`, "--mount", `type=bind,source=${scratch},target=/fixtures,readonly`, INTEL_CANDIDATE.gpuImage, "--log-level", "off", "--format", "json", "attest", "--device", "gpu", "--gpu-evidence-source", "file", "--gpu-evidence-file", "/fixtures/evidence.json", "--verifier", "local", "--nonce", nonce], signal);
+    const checked = await command("docker", ["--host", dockerHost, "run", "--rm", "--pull=never", "--name", name, "--cpus=2", "--memory=1g", "--cap-drop=ALL", "--security-opt=no-new-privileges", "--read-only", "--tmpfs", "/tmp:rw,noexec,nosuid,size=16m", "--mount", `type=bind,source=${privateNvat},target=/evidence/libnvat-linux-sbsa-1.2.2.1780962352-archive,readonly`, "--mount", `type=bind,source=${scratch},target=/fixtures,readonly`, INTEL_CANDIDATE.gpuImage, "--log-level", "off", "--format", "json", "attest", "--device", "gpu", "--gpu-evidence-source", "file", "--gpu-evidence-file", "/fixtures/evidence.json", "--verifier", "local", "--nonce", nonce], signal);
     const gpu = JSON.parse(checked.stdout);
     requireCondition(checked.code === 0 && gpu.result_code === 0 && Array.isArray(gpu.claims) && gpu.claims.length === 1, "TEE_GPU_POLICY_REJECTED");
     const c = gpu.claims[0];
@@ -99,7 +106,7 @@ export async function qualifyIntelCandidate(options: {
     }
     requireCondition(parseHopperGpuMode(evidence.evidence) === "spt", "TEE_GPU_MODE_REJECTED");
   } finally {
-    await new Promise<void>(resolve => execFile("docker", ["rm", "--force", name], { timeout: 10000, maxBuffer: 4096, env: { PATH: process.env.PATH, HOME: process.env.HOME } }, () => resolve()));
+    await new Promise<void>(resolve => execFile("docker", ["--host", dockerHost, "rm", "--force", name], { timeout: 10000, maxBuffer: 4096, env: { PATH: process.env.PATH, HOME: process.env.HOME } }, () => resolve()));
     await rm(scratch, { recursive: true, force: true });
   }
   signal.throwIfAborted();
