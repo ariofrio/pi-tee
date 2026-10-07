@@ -24,6 +24,7 @@ export function pinnedTlsFetch(endpoint: string, fingerprint: string, expiresAt?
       // Attested SPKI replaces WebPKI authorization. No HTTP is created before checking it.
       rejectUnauthorized: false, minVersion: "TLSv1.3",
     }));
+    const connectionTimeout = setTimeout(() => socket.destroy(new TeeError("TEE_CONNECTION_FAILED")), 10000);
     const agent = new Agent({ keepAlive: false });
     try {
       await new Promise<void>((resolve, reject) => {
@@ -38,6 +39,7 @@ export function pinnedTlsFetch(endpoint: string, fingerprint: string, expiresAt?
           } catch { reject(new TeeError("TEE_TLS_KEY_REJECTED")); }
         });
       });
+      clearTimeout(connectionTimeout);
       signal.throwIfAborted();
       if (expiresAt !== undefined && Date.now() >= expiresAt) throw new TeeError("TEE_PUBLIC_SESSION_REJECTED");
       agent.createConnection = () => socket;
@@ -61,6 +63,7 @@ export function pinnedTlsFetch(endpoint: string, fingerprint: string, expiresAt?
         outgoing.end(body);
       });
     } catch (error) {
+      clearTimeout(connectionTimeout);
       agent.destroy();
       socket.destroy();
       throw error;

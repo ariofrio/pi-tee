@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Limit native TLS connection setup to ten seconds without cutting off admitted response streams. Bind TLS fixtures to loopback and test the parent-side expiry check independently of the Go helper's own check.
+
 - Add public Tinfoil worker discovery and an evidence-only probe covering every advertised candidate for the seven current chat workloads. Fix delivery services, compare the expected publisher repository, bound results and reject arbitrary hosts/releases; ignore claimed keys and measurements. Support worker hostname aliases independently of catalog IDs. Production routing and admission are unchanged.
 
 - Separate NEAR model TEE declarations from SDK protocol support. Declared Chutes models are no longer labeled non-TEE; discovery reports their unavailable transport, the default picker hides them, and show-all labels them accurately. SDK dispatch fails before setup; public profiles remain independent of SDK support. Preserve the distinction in offline snapshots.

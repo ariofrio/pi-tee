@@ -26,4 +26,4 @@ const server = createServer({ cert, key, SNICallback: (_name, callback) => {
     } else { res.writeHead(200); res.end("complete"); }
   });
 });
-server.listen(0, () => console.log(JSON.stringify({ port: server.address().port })));
+server.listen(0, "127.0.0.1", () => console.log(JSON.stringify({ port: server.address().port })));

@@ -8,7 +8,9 @@ on:
       - .github/workflows/pinned-tls.yml
       - tools/pinned-tls/**
       - packages/core/src/pinned-tls-helper.ts
+      - packages/core/src/pinned-tls.ts
       - tests/pinned-tls-helper.test.ts
+      - tests/pinned-tls.test.ts
       - tests/fixtures/pinned-tls-server.mjs
       - scripts/check-pinned-tls.ts
       - package.json
@@ -18,7 +20,9 @@ on:
       - .github/workflows/pinned-tls.yml
       - tools/pinned-tls/**
       - packages/core/src/pinned-tls-helper.ts
+      - packages/core/src/pinned-tls.ts
       - tests/pinned-tls-helper.test.ts
+      - tests/pinned-tls.test.ts
       - tests/fixtures/pinned-tls-server.mjs
       - scripts/check-pinned-tls.ts
       - package.json

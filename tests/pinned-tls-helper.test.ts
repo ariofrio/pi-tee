@@ -7,6 +7,16 @@ import { resolve } from "node:path";
 import { pinnedTlsHelperFetch } from "../packages/core/src/pinned-tls-helper.js";
 
 const helperPath = process.env.PI_TEE_PINNED_TLS_TEST_HELPER;
+const stubPath = process.env.PI_TEE_PINNED_TLS_TEST_STUB;
+
+test("parent refuses to hand credentials to a helper that becomes ready after admission expiry", { skip: !stubPath }, async () => {
+  const endpoint = "https://synthetic.invalid/v1/chat/completions";
+  const artifact = { helperPath: stubPath!, sha256: createHash("sha256").update(await readFile(stubPath!)).digest("hex") };
+  const fetch = pinnedTlsHelperFetch(endpoint, "00".repeat(32), artifact, Date.now() + 200);
+  await assert.rejects(fetch(endpoint, {
+    method: "POST", body: "synthetic payload", headers: { authorization: "Bearer synthetic-key" }, signal: AbortSignal.timeout(5000),
+  }), /TEE_PUBLIC_SESSION_REJECTED/);
+});
 
 test("portable helper authenticates before credentials, streams, refuses redirects and cancels", { skip: !helperPath }, async () => {
   if (process.env.PI_TEE_TEST_EXPECTED_ARCH) assert.equal(process.arch, process.env.PI_TEE_TEST_EXPECTED_ARCH, "Run the native target architecture, not an emulated client runtime.");
