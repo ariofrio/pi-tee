@@ -4,6 +4,7 @@ import {
   TeeError, type PolicyMode, type ProviderDefinition,
 } from "pi-tee-core";
 import { openDirectTinfoilTransport, TINFOIL_DIRECT_PROFILE } from "./direct.js";
+import { openIntelTinfoilTransport } from "./intel.js";
 import { parseTinfoilCatalog, TINFOIL_BASE_URL } from "./catalog.js";
 export { parseTinfoilCatalog, TINFOIL_BASE_URL } from "./catalog.js";
 
@@ -18,13 +19,20 @@ export const TINFOIL_ASSUMPTIONS = [
 
 export function createTinfoilProvider(options: {
   policy?: PolicyMode;
-  route?: "router" | "direct";
+  route?: "router" | "direct" | "direct-intel";
   catalogFetch?: typeof globalThis.fetch;
   openSdkTransport?: ProviderDefinition["openSdkTransport"];
 } = {}) {
   const route = options.route ?? process.env.PI_TINFOIL_ROUTE ?? "router";
-  if (route !== "router" && route !== "direct") throw new TeeError("TEE_ROUTE_INVALID");
-  const assumptions = route === "direct" ? [
+  if (route !== "router" && route !== "direct" && route !== "direct-intel") throw new TeeError("TEE_ROUTE_INVALID");
+  const assumptions = route === "direct-intel" ? [
+    "Local Pi/runtime/extensions/tools, the hash-pinned Go CPU verifier and its dependencies, Docker runtime/image, and hash-pinned NVIDIA local verifier are trusted.",
+    "Fresh Intel TDX quote authentication, revocation and UpToDate status enforce locally frozen guest registers and CPU security policy; no current provider release/reference authorizes a workload.",
+    "The exact CPU-bound GPU evidence is appraised locally against NVIDIA roots, driver/VBIOS pins, signed references and OCSP; CC-mode, compute-channel and reset lifecycle still require full runtime qualification.",
+    "This is a candidate, not independent software approval: frozen boot registers were initially acquired from provider material; guest, engine, weights and key custody still need independent review.",
+    "Attested TLS SPKI authenticates the exact inference socket before credentials or EHBP ciphertext; send once, fail on rotation, and generate a fresh encrypted vLLM cache salt.",
+    "Tinfoil retains availability and credential/billing authority; local clock and manufacturer endorsement/reference/revocation processes are trusted.",
+  ] : route === "direct" ? [
     "Local Pi, runtime, extensions, tools, the pinned JS verifier and EHBP are trusted.",
     "This direct SDK-policy candidate pins one worker, artifact digest and launch measurement; it is not independently approved.",
     "The AMD Genoa JS verifier supplies no revocation checks or independent GPU appraisal; fresh v3 evidence is not yet enforced.",
@@ -35,8 +43,8 @@ export function createTinfoilProvider(options: {
     id: "tinfoil", name: "Tinfoil", baseUrl: TINFOIL_BASE_URL, apiKeyEnv: "TINFOIL_API_KEY",
     policy: options.policy ?? resolvePolicy(process.env.PI_TINFOIL_POLICY),
     parseCatalog: parseTinfoilCatalog, catalogFetch: options.catalogFetch, assumptions,
-    availableModelIds: route === "direct" ? [TINFOIL_DIRECT_PROFILE.model] : undefined,
-    openSdkTransport: options.openSdkTransport ?? (route === "direct" ? ({ signal }) => openDirectTinfoilTransport(signal) : async ({ signal }) => {
+    availableModelIds: route !== "router" ? [TINFOIL_DIRECT_PROFILE.model] : undefined,
+    openSdkTransport: options.openSdkTransport ?? (route === "direct-intel" ? ({ signal }) => openIntelTinfoilTransport(signal) : route === "direct" ? ({ signal }) => openDirectTinfoilTransport(signal) : async ({ signal }) => {
       const { SecureClient } = await import("tinfoil");
       signal.throwIfAborted();
       const client = new SecureClient({ baseURL: TINFOIL_BASE_URL, transport: "ehbp", userCacheSecret: randomBytes(32).toString("hex") });

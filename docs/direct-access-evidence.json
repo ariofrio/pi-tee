@@ -289,5 +289,43 @@
     "responseSignatureRequiredBeforeOutput": true,
     "reconnectOrResendAllowed": false,
     "independentApproval": false
+  },
+  "tinfoilIntelCombined": {
+    "host": "gemma4-31b-inf8-0.tinfoil.containers.tinfoil.dev",
+    "checkedAt": "2026-10-07T07:05:25.993Z",
+    "independentApproval": false,
+    "inferenceRequests": 1,
+    "runtimeProviderReferenceAuthority": false,
+    "cpuVerified": true,
+    "policySha256": "6eacea241bd6ac37901cc3cb738f62eebb513e827d28023ffdfde719d54960b2",
+    "httpEnvelopeSha256": "e8837726265a4f3d5a97862be072340399049be86ae6808dc4a947dcccf2c396",
+    "gpuVerified": true,
+    "forgedGpuRejected": true,
+    "wrongGpuNonceRejected": true,
+    "encryptedInferenceVerified": true,
+    "syntheticMarker": true,
+    "usageReturned": true
+  },
+  "tinfoilIntelPi": {
+    "checkedAtDate": "2026-10-07",
+    "model": "gemma4-31b",
+    "route": "direct-intel",
+    "policy": "sdk",
+    "fullSuite": "passed",
+    "compiledExtension": true,
+    "nativeSecretLogin": true,
+    "storedKeyPrecedence": true,
+    "completionAndUsage": true,
+    "unicodeToolAndFollowup": true,
+    "reasoningAndFinal": true,
+    "rpcCancellation": "passed-at-response-consumption-barrier",
+    "separateStreamingCancellation": "passed-after-live-text-delta-without-barrier",
+    "freshLocalCpuAndGpuAppraisalBeforeInference": true,
+    "providerReleaseOrReferenceSelectionAtRuntime": false,
+    "independentApproval": false,
+    "cpuHelperSha256": "bcfc1896c156727a7612f4ff7500993236cd648f10e0a63e46eb2f71a3d03316",
+    "gpuCliSha256": "0db6cba463aefa91a1a81c62bc8b3928ffe5c3d8347bde6561f5ea08dab156ae",
+    "gpuLibrarySha256": "b87d4bf93dfd0f1ffd8999d7d04db3e6a44c4048ae9b8e319f2f1cab2d885776",
+    "gpuContainerImage": "sha256:b67dad12cafae0f436f21ade4b0519b5a0fb343bac4bf380d9551e96a2394b5c"
   }
 }

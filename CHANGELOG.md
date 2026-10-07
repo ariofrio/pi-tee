@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add an opt-in Intel direct Gemma candidate with fresh locally pinned TDX policy, local NVIDIA appraisal of CPU-bound evidence, helper/library/image hash checks, exact TLS/HPKE binding and encrypted vLLM cache salt. Its full actual Pi suite and separate live streaming cancellation pass. Record the closed hardware/local-artifact inventory, combined real GPU negatives and remaining independent workload/runtime gates; production Approved defaults are unchanged.
+
 - Add an experimental native GLM direct route for NEAR SDK policy. Require fresh UpToDate CPU evidence, GPU evidence, quote-bound SPKI on one TLS socket, OHTTP and model-response signatures. Reject reconnect/resend, limit the route to GLM and dispose owned transports after terminal results. Add real TLS and native-provider cleanup regressions.
 
 - Add locked, offline CPU qualification tooling with local AMD/Intel workload and security pins. Fresh Intel appraisal and real-evidence binding negatives pass without provider reference/freshness collateral; the sampled AMD worker fails manufacturer-based firmware floors. Probe reachable alternatives and record separate Intel GPU appraisal; extension defaults and Approved gates remain unchanged.

@@ -24,7 +24,7 @@ Use Go 1.26.6 in the locked repository. The standalone module does not change np
 
 ```sh
 mkdir -p .scratch/work
-go -C tools/tinfoil-cpu build -mod=readonly -trimpath -o ../../.scratch/work/tinfoil-cpu-verifier .
+GOTOOLCHAIN=go1.26.6 go -C tools/tinfoil-cpu build -mod=readonly -trimpath -buildvcs=false -o ../../.scratch/work/tinfoil-cpu-verifier .
 node scripts/research/tinfoil-cpu.mjs intel .scratch/work/intel-evidence.json
 # Expected nonzero rejection for the underpatched AMD worker:
 node scripts/research/tinfoil-cpu.mjs amd .scratch/work/amd-evidence.json

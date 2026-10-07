@@ -32,19 +32,25 @@ export async function openDirectTinfoilTransport(signal: AbortSignal, attestatio
       attestation.measurement.registers.length !== 1 || attestation.measurement.registers[0] !== profile.measurement ||
       !attestation.tlsPublicKeyFingerprint || !attestation.hpkePublicKey) throw new TeeError("TEE_WORKLOAD_PIN_REJECTED");
   signal.throwIfAborted();
+  return openEncryptedWorkerTransport(signal, profile.host, { tls: attestation.tlsPublicKeyFingerprint, hpke: attestation.hpkePublicKey }, "user_cache_secret");
+}
+
+export async function openEncryptedWorkerTransport(signal: AbortSignal, host: string, keys: { tls: string; hpke: string }, cacheField: "user_cache_secret" | "cache_salt"): Promise<SdkTransport> {
   const { Identity } = await import("ehbp");
-  const identity = await Identity.fromPublicKeyHex(attestation.hpkePublicKey);
-  const baseUrl = `https://${profile.host}/v1`;
+  const identity = await Identity.fromPublicKeyHex(keys.hpke);
+  const baseUrl = `https://${host}/v1`;
   const endpoint = `${baseUrl}/chat/completions`;
-  const fetch = pinnedTlsFetch(endpoint, attestation.tlsPublicKeyFingerprint);
+  const fetch = pinnedTlsFetch(endpoint, keys.tls);
   const cacheSecret = randomBytes(32).toString("hex");
+  let sent = false;
   return { baseUrl, fetch: async (input, init) => {
     const request = new Request(input, init);
-    if (request.url !== endpoint || request.method !== "POST") throw new TeeError("TEE_REQUEST_REJECTED");
+    if (request.url !== endpoint || request.method !== "POST" || sent) throw new TeeError("TEE_REQUEST_REJECTED");
+    sent = true;
     const requestSignal = AbortSignal.any([signal, request.signal]);
     requestSignal.throwIfAborted();
     // The shared provider checked the payload. Provision a generated, encrypted cache field.
-    const body = { ...await request.json(), user_cache_secret: cacheSecret };
+    const body = { ...await request.json(), [cacheField]: cacheSecret };
     const encrypted = await identity.encryptRequestWithContext(new Request(endpoint, {
       method: "POST", headers: request.headers, body: JSON.stringify(body), signal: requestSignal,
     }));
