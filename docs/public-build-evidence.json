@@ -27,7 +27,27 @@
   "initrdDigestMatched": true,
   "guestVerityRootAuthenticated": true,
   "rtmr2Recomputed": "233677c2518eadf59ff45e8c22ee776ff828d066675dc87d86043e2bc2c4352c4f915898044bf317993749045056f811",
+  "containerBuild": {
+    "builderClaim": "https://github.com/tinfoilsh/confidential-gemma4-31b/actions/runs/31575376519/attempts/1",
+    "cpuVerified": false,
+    "deploymentDigest": "65f2dfa59ced010aeba841fc909880ac3434282cf2b43e90d5c3a3e543b3ccf0",
+    "dockerfileDigest": "6b097efe99c68966509662bd68566331cc3581791da091fb1127782265adcfd0",
+    "freshnessVerified": false,
+    "gpuVerified": false,
+    "imageDigest": "cb45fc53829f73b588c26fa9ca6c90be122367a64e3b835ce4571a4e5f839d89",
+    "imageManifestDigest": "df6fbd4fade4e306f5a71dfcadcd9d4ae8556505393a3bdcb853fd004d78ad3f",
+    "independentBuilderVerified": false,
+    "inferenceQualified": false,
+    "provenanceDigest": "84fa65c63ebc16b9953e9c1132ecd6d13f239e0e4d459e6aedd9671f8e89e24e",
+    "publisherEndorsedBuildMetadata": true,
+    "releaseCommit": "43dc8f6d1c4d9c1504559ab181cf9dfe00ad239b",
+    "repo": "tinfoilsh/confidential-gemma4-31b",
+    "sourceCommit": "bff40cb8bd650c01be92e0f4cd98c960dbb222d9",
+    "tag": "v0.0.25",
+    "publicSourceParentMatched": true,
+    "publicDockerfileBytesMatched": true
+  },
   "independentRebuild": false,
   "observedAt": "2026-10-07",
-  "verificationScope": "Public workload/platform provenance and freshness; Intel CPU appraisal; public deployment and source-config comparison; authenticated CVM build manifest/kernel/initrd/disk subjects; downloaded kernel/initrd and RTMR2 checks. No GPU, inference, independent rebuild or full runtime qualification."
+  "verificationScope": "Public workload/platform provenance and freshness; Intel CPU appraisal; public deployment/source-config comparison; authenticated CVM build manifest/kernel/initrd/disk subjects; downloaded kernel/initrd and RTMR2 checks; publisher-endorsed OCI image/config/BuildKit metadata, public source parent and Dockerfile bytes. No GPU, inference, independent container builder signature, independent rebuild or full runtime qualification."
 }

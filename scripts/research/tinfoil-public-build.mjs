@@ -12,8 +12,8 @@ const host = "gemma4-31b-inf8-0.tinfoil.containers.tinfoil.dev";
 const repo = "tinfoilsh/confidential-gemma4-31b";
 const sha256 = bytes => createHash("sha256").update(bytes).digest("hex");
 
-async function get(url, redirect = "error", maxBytes = 2 * 1024 * 1024) {
-  const response = await fetch(url, { signal, redirect });
+async function get(url, redirect = "error", maxBytes = 2 * 1024 * 1024, headers = {}) {
+  const response = await fetch(url, { signal, redirect, headers });
   assert(response.ok, "TEE_PUBLIC_ARTIFACT_UNAVAILABLE");
   assert(response.body, "TEE_PUBLIC_ARTIFACT_UNAVAILABLE");
   const chunks = [];
@@ -91,6 +91,57 @@ for (const bytes of [Buffer.from(`${expectedCommand} initrd=initrd\0`, "utf16le"
   rtmr2 = sha384(Buffer.concat([rtmr2, sha384(bytes)]));
 }
 assert.equal(rtmr2.toString("hex"), deployment.tdx_measurement.rtmr2, "TEE_PUBLIC_BOOT_MEASUREMENT_REJECTED");
+
+// Select the registry root through the authenticated release, not delivery
+// metadata or a mutable tag. Anonymous GHCR pull tokens authorize reads only.
+const envelope = JSON.parse(raw);
+const codeCollateral = envelope.collateral.filter(item => item.id === "code");
+assert.equal(codeCollateral.length, 1, "TEE_CONTAINER_BUILD_REJECTED");
+const releaseInput = { tag: verified.tag, deployment: artifact.toString("base64"), bundle: codeCollateral[0].data.sigstore_bundle };
+const selected = await appraise(JSON.stringify(releaseInput), ["--container-reference"]);
+assert(selected.artifactReferenceVerified === true && selected.inferenceQualified === false &&
+  selected.repo === repo && selected.releaseCommit === verified.commit && selected.deploymentDigest === verified.digest &&
+  /^[a-f0-9]{64}$/.test(selected.imageDigest), "TEE_CONTAINER_BUILD_REJECTED");
+const tokenResponse = JSON.parse(await get(`https://ghcr.io/token?service=ghcr.io&scope=repository:${repo}:pull`));
+assert(typeof tokenResponse.token === "string" && tokenResponse.token.length > 0 && tokenResponse.token.length < 8192, "TEE_PUBLIC_ARTIFACT_UNAVAILABLE");
+async function registryArtifact(kind, digest) {
+  assert(/^sha256:[a-f0-9]{64}$/.test(digest), "TEE_CONTAINER_BUILD_REJECTED");
+  const bytes = await get(`https://ghcr.io/v2/${repo}/${kind}/${digest}`, kind === "blobs" ? "follow" : "error", 128 * 1024, {
+    authorization: `Bearer ${tokenResponse.token}`,
+    accept: "application/vnd.oci.image.index.v1+json, application/vnd.oci.image.manifest.v1+json",
+  });
+  // Cross-origin blob redirects strip Authorization; the digest authenticates
+  // public bytes regardless of the delivery origin.
+  assert.equal(`sha256:${sha256(bytes)}`, digest, "TEE_CONTAINER_BUILD_REJECTED");
+  return bytes;
+}
+const indexBytes = await registryArtifact("manifests", `sha256:${selected.imageDigest}`);
+const index = JSON.parse(indexBytes);
+assert(Array.isArray(index.manifests) && index.manifests.length === 2, "TEE_CONTAINER_BUILD_REJECTED");
+const engines = index.manifests.filter(item => item.platform?.architecture === "amd64" && item.platform?.os === "linux");
+const proofs = index.manifests.filter(item => item.annotations?.["vnd.docker.reference.type"] === "attestation-manifest");
+assert(engines.length === 1 && proofs.length === 1, "TEE_CONTAINER_BUILD_REJECTED");
+const [imageBytes, attestationBytes] = await Promise.all([
+  registryArtifact("manifests", engines[0].digest), registryArtifact("manifests", proofs[0].digest),
+]);
+const image = JSON.parse(imageBytes), attestation = JSON.parse(attestationBytes);
+assert(Array.isArray(attestation.layers) && attestation.layers.length === 1, "TEE_CONTAINER_BUILD_REJECTED");
+const [imageConfig, provenance] = await Promise.all([
+  registryArtifact("blobs", image.config.digest), registryArtifact("blobs", attestation.layers[0].digest),
+]);
+const container = await appraise(JSON.stringify({ ...releaseInput,
+  index: indexBytes.toString("base64"), imageManifest: imageBytes.toString("base64"), imageConfig: imageConfig.toString("base64"),
+  attestationManifest: attestationBytes.toString("base64"), provenance: provenance.toString("base64"),
+}), ["--container-build"]);
+assert(container.publisherEndorsedBuildMetadata === true && container.independentBuilderVerified === false && container.inferenceQualified === false &&
+  container.deploymentDigest === verified.digest && container.releaseCommit === verified.commit && container.imageDigest === selected.imageDigest &&
+  /^[a-f0-9]{40}$/.test(container.sourceCommit) && /^[a-f0-9]{64}$/.test(container.dockerfileDigest), "TEE_CONTAINER_BUILD_REJECTED");
+const [sourceCommit, dockerfile] = await Promise.all([
+  get(`https://api.github.com/repos/${repo}/git/commits/${verified.commit}`).then(bytes => JSON.parse(bytes)),
+  get(`https://raw.githubusercontent.com/${repo}/${container.sourceCommit}/Dockerfile`),
+]);
+assert(Array.isArray(sourceCommit.parents) && sourceCommit.parents.length === 1 && sourceCommit.parents[0].sha === container.sourceCommit, "TEE_PUBLIC_CONTAINER_SOURCE_REJECTED");
+assert.equal(sha256(dockerfile), container.dockerfileDigest, "TEE_PUBLIC_CONTAINER_SOURCE_REJECTED");
 if (fixturePath) await writeFile(resolve(fixturePath), input, { mode: 0o600, flag: "wx" });
 console.log(JSON.stringify({
   ...verified, host, publicArtifactDigestMatched: true, publicSourceConfigMatched: true,
@@ -100,5 +151,6 @@ console.log(JSON.stringify({
   cvmSourceUrl: `https://github.com/tinfoilsh/cvmimage/tree/${cvm.commit}`,
   kernelDigestMatched: true, initrdDigestMatched: true, guestVerityRootAuthenticated: true,
   rtmr2Recomputed: rtmr2.toString("hex"),
+  containerBuild: { ...container, publicSourceParentMatched: true, publicDockerfileBytesMatched: true },
   independentRebuild: false, inferenceQualified: false,
 }));

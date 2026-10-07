@@ -190,6 +190,12 @@ func run(reader io.Reader, writer io.Writer, now time.Time) int {
 }
 
 func main() {
+	if len(os.Args) == 2 && os.Args[1] == "--container-reference" {
+		os.Exit(runContainerReference(os.Stdin, os.Stdout))
+	}
+	if len(os.Args) == 2 && os.Args[1] == "--container-build" {
+		os.Exit(runContainerBuild(os.Stdin, os.Stdout))
+	}
 	if len(os.Args) == 2 && os.Args[1] == "--cvm-build" {
 		os.Exit(runCVM(os.Stdin, os.Stdout))
 	}

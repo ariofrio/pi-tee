@@ -93,7 +93,7 @@ Tests observe native provider/network boundaries, using real cryptography where 
 
 Automatic acceptance also needs a positive test in which another authentic acceptable release works under the same authority policy, with no edited deployment pin. Existing live success demonstrates one dynamic release, not multiple-release adoption or independent rebuilding.
 
-Next: complete the authenticated guest/container/model artifact chain; qualify GPU mode/channel/reset and runtime key/mutation contracts; package the verifier/dependency inventory; wire that admission to the send-once worker transport and exercise the full actual Pi suite. NEAR's missing session-binding/runtime contract must be implemented server-side before an equivalent route can qualify. Independent review of the changed verifier/transport remains a production release gate.
+Next: complete model attribution and full engine/runtime qualification; qualify GPU channel/reset and runtime key/mutation contracts; package the verifier/dependency inventory; wire that admission to the send-once worker transport and exercise the full actual Pi suite. NEAR's missing session-binding/runtime contract must be implemented server-side before an equivalent route can qualify. Independent review of the changed verifier/transport remains a production release gate.
 
 Availability, truthful billing, output correctness, traffic analysis, undocumented physical/side-channel protection and compromise of the user's local machine are outside the claim. Public-source monitoring and independent rebuilds can detect problems, but are not required to authorize each normal release. A frozen user manifest can impose that stricter policy later without making the extension maintain vendor deployment pins.
 

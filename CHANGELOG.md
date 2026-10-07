@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Follow the authenticated Tinfoil release into its dynamic OCI image/config/provenance digests and public build-source/Dockerfile checks. Treat embedded BuildKit metadata as publisher-endorsed claims, explicitly without independent builder-signature verification. Add offline real-signature/artifact substitutions, including rehashed metadata; the combined live evidence probe passes without inference.
+
 - Require the Intel candidate's signed Hopper report to declare SPT mode after local NVIDIA verification. Correct for the inspected C++ mode enum/JSON limitations using NVIDIA's Python field interpretation, reject ambiguous records, and preserve terminal mode diagnostics without retries. Add evidence-CLI and native-provider regressions; public-build inference qualification remains separate.
 
 - Authenticate Tinfoil guest builds through the exact public CVM release workflow, source commit and signed manifest/kernel/initrd/disk subjects. Derive guest versions dynamically, check downloaded kernel/initrd bytes and the verity/config-bound boot command, and recompute RTMR2 in the live public-build probe. Add offline real-signature substitution tests; inference qualification remains separate.

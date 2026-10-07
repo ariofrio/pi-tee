@@ -20,6 +20,12 @@ node scripts/research/tinfoil-boot.mjs ARTIFACT_DIRECTORY SOURCE_CONFIG
 
 Use the exact [deployment JSON](https://github.com/tinfoilsh/confidential-gemma4-31b/releases/download/v0.0.25/tinfoil-deployment.json), `tinfoil-inference-v0.11.0.vmlinuz` and `tinfoil-inference-v0.11.0.initrd` in that directory. Their URLs are under `https://images.tinfoil.sh/cvm/`; the script enforces fixed digests, independently of delivery. The source config is the file at the linked commit.
 
+## Engine artifact trace
+
+The live [public-build probe](../scripts/research/tinfoil-public-build.mjs) follows the release-authenticated OCI root into the Linux AMD64 image, its configuration and the associated BuildKit SLSA metadata. The [offline verifier](../tools/tinfoil-public-build/container.go) checks exact descriptor bytes, sizes/digests, image/provenance association and consistent source/version claims. GitHub public source delivery confirms that the claimed build commit is the release commit's parent and that its Dockerfile bytes match the embedded metadata. [Recorded digests and scope](public-build-evidence.json), [real-artifact substitution tests](../tools/tinfoil-public-build/container_test.go).
+
+The selected [release workflow](https://github.com/tinfoilsh/confidential-gemma4-31b/blob/43dc8f6d1c4d9c1504559ab181cf9dfe00ad239b/.github/workflows/tinfoil-release-publish.yml) endorses the deployment/configuration and hence the OCI root. The [build workflow](https://github.com/tinfoilsh/confidential-gemma4-31b/blob/bff40cb8bd650c01be92e0f4cd98c960dbb222d9/.github/workflows/tinfoil-release.yml) publishes embedded BuildKit provenance. That metadata has no separately verified builder signature: its source/build claims inherit the accepted release publisher's authority. This fits publisher-endorsed public builds, but must not be described as independent GitHub build attribution or an independent rebuild. Registry/CDN delivery cannot replace those bytes without changing the signed root. Full engine dependency/runtime and model-pack attribution remain separate qualification work.
+
 ## Runtime source checks
 
 These observations apply to CVM commit `a4dbce07f5b0efbee1df678026db538eba66a613`. They support the audit; they do not establish that every runtime path is safe.
