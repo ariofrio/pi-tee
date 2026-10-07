@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readFile, mkdir, mkdtemp, writeFile, readdir, rm } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { resolve } from "node:path";
 import { test } from "node:test";
@@ -37,26 +37,50 @@ test("the Node artifact chain rejects substituted delivery bytes using the real 
   for (const [kind, bytes] of [["manifests", index], ["manifests", image], ["manifests", attestation], ["blobs", imageConfig], ["blobs", provenance]] as const) {
     artifacts.set(`https://ghcr.io/v2/${repo}/${kind}/sha256:${hash(bytes)}`, bytes);
   }
-  const run = async (change?: { url: string; bytes: Buffer }) => {
+  const run = async (change?: { url: string; bytes: Buffer }, repeat = false, replaceOriginal?: string) => {
     const requests: string[] = [];
-    const result = verifyPublicBuildArtifacts({ helperPath: process.env.PI_TEE_PUBLIC_BUILD_TEST_HELPER!,
+    const options = { helperPath: replaceOriginal ?? process.env.PI_TEE_PUBLIC_BUILD_TEST_HELPER!,
+      expectedHelperDigest: hash(await readFile(process.env.PI_TEE_PUBLIC_BUILD_TEST_HELPER!)),
       raw: JSON.stringify(evidence.envelope), nonce: evidence.nonce, signal: AbortSignal.timeout(60000),
-      evidenceFetch: async (input, init) => {
+      evidenceFetch: (async (input, init) => {
         const url = String(input); requests.push(url);
+        if (replaceOriginal && requests.length === 1) await writeFile(replaceOriginal, "untrusted replacement", { mode: 0o700 });
         assert.equal(init?.body, undefined, "No artifact check sends a prompt or credentials.");
         assert(!url.includes("chat/completions") && !url.includes("nvidia"));
         const bytes = change?.url === url ? change.bytes : artifacts.get(url);
         assert(bytes, `Unexpected delivery endpoint ${url}`);
         return new Response(new Uint8Array(bytes));
-      },
-    });
+      }) as typeof globalThis.fetch,
+    };
+    const result = (async () => {
+      const first = await verifyPublicBuildArtifacts(options);
+      if (repeat) {
+        assert(requests.length > 0);
+        requests.length = 0;
+        const second = await verifyPublicBuildArtifacts(options);
+        assert.equal(second.codeStatementDigest, first.codeStatementDigest);
+        assert.equal(requests.length, 0, "A warm artifact chain must not re-download immutable bytes or discovery metadata.");
+        await assert.rejects(verifyPublicBuildArtifacts({ ...options, nonce: "a".repeat(64) }), /TEE_PUBLIC_BUILD_REJECTED/);
+        assert.equal(requests.length, 0, "A warm artifact cache cannot bypass the fresh CPU nonce check.");
+      }
+      return first;
+    })();
     return { result, requests };
   };
-  const positive = await run();
+  const positive = await run(undefined, true);
   const verified = await positive.result;
   assert.equal(verified.inferenceQualified, false);
   assert.equal(verified.runtimeConfig.subjectPredicateMatched, true);
   assert.equal(verified.runtimeConfig.codeStatementDigest, verified.codeStatementDigest);
+  await mkdir(".scratch/work", { recursive: true });
+  const scratch = await mkdtemp(resolve(".scratch/work/helper-copy-"));
+  try {
+    const original = resolve(scratch, "verifier");
+    await writeFile(original, await readFile(process.env.PI_TEE_PUBLIC_BUILD_TEST_HELPER!), { mode: 0o700 });
+    const replaced = await run(undefined, false, original);
+    assert.equal((await replaced.result).runtimeConfig.subjectPredicateMatched, true, "Replacing the original helper cannot alter the verified executable already owned by this appraisal.");
+    assert.deepEqual(await readdir(scratch), ["verifier"], "Private helper snapshots must be removed after appraisal.");
+  } finally { await rm(scratch, { recursive: true, force: true }); }
   for (const [url, bytes] of artifacts) {
     if (url.includes("ghcr.io/token")) continue;
     const altered = Buffer.from(bytes);

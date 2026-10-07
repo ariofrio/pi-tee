@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Cache immutable public-build artifacts and deterministic helper results within the Pi process, with bounded memory and fresh CPU/GPU/freshness appraisal on every request. Execute private copies of verified public-build and NVIDIA helpers, and clean them after appraisal. Add warm-cache, nonce and helper-replacement regressions through the real verifier/delivery boundary.
+
 - Allow newer NVIDIA driver/VBIOS versions in `direct-public` when they satisfy explicit local floors and all existing manufacturer signature, reference, revocation, nonce and SPT checks. Preserve exact versions for the frozen Intel candidate. Evidence-CLI tests check version compatibility without claiming authentication of synthetic reports.
 
 - Bind downloaded deployment/runtime/container inputs to the CPU-accepted signed predicate and statement digest. Recompute boot registers against the quote's authenticated expectations, require unambiguous collateral selection, apply security floors to an owned policy copy, enforce public platform/freshness workflow certificates, and reject JSON parser ambiguities. Add real-verifier Node delivery-substitution tests and a public inspection test of weak/strong TDX floors. Production admission remains gated.

@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import { execFile } from "node:child_process";
-import { mkdtemp, readFile, writeFile, rm } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, writeFile, symlink, rm } from "node:fs/promises";
 import { resolve, dirname, isAbsolute } from "node:path";
 import { TeeError, readBoundedBody } from "pi-tee-core";
 import { parseHopperGpuMode } from "./gpu-mode.js";
@@ -27,6 +27,7 @@ async function pinnedFile(path: string, digest: string) {
   let bytes: Buffer;
   try { bytes = await readFile(path); } catch { throw new TeeError("TEE_VERIFIER_ARTIFACT_REJECTED"); }
   requireCondition(createHash("sha256").update(bytes).digest("hex") === digest, "TEE_VERIFIER_ARTIFACT_REJECTED");
+  return bytes;
 }
 function command(file: string, args: string[], signal: AbortSignal, input?: string, cpu = false): Promise<{ code: number; stdout: string }> {
   return new Promise((resolve, reject) => {
@@ -51,14 +52,18 @@ export async function qualifyIntelCandidate(options: {
   signal.throwIfAborted();
   requireCondition(isAbsolute(cpuVerifier) && isAbsolute(nvatDir), "TEE_VERIFIER_ARTIFACT_REJECTED");
   await pinnedFile(cpuVerifier, options.mode === "public-builds" ? PUBLIC_BUILD_VERIFIER_SHA256 : INTEL_CANDIDATE.cpuVerifierSha256);
-  for (const [path, digest] of Object.entries(nvatHashes)) await pinnedFile(resolve(nvatDir, path), digest);
+  const nvat = new Map<string, Buffer>();
+  for (const [path, digest] of Object.entries(nvatHashes)) {
+    const bytes = await pinnedFile(resolve(nvatDir, path), digest);
+    if (path === "bin/nvattest" || path === "lib/libnvat.so.1.2.2") nvat.set(path, bytes);
+  }
   const nonce = randomBytes(32).toString("hex");
   const response = await (options.evidenceFetch ?? globalThis.fetch)(`https://${INTEL_CANDIDATE.host}/.well-known/tinfoil-attestation?nonce=${nonce}`, { signal, redirect: "error" });
   requireCondition(response.ok, "TEE_ATTESTATION_REJECTED");
   const raw = await readBoundedBody(response.body, 2 * 1024 * 1024, signal);
   const envelope = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(raw));
   if (options.mode === "public-builds") {
-    await verifyPublicBuildArtifacts({ helperPath: cpuVerifier, raw: new TextDecoder("utf-8", { fatal: true }).decode(raw), nonce, signal, evidenceFetch: options.evidenceFetch });
+    await verifyPublicBuildArtifacts({ helperPath: cpuVerifier, expectedHelperDigest: PUBLIC_BUILD_VERIFIER_SHA256, raw: new TextDecoder("utf-8", { fatal: true }).decode(raw), nonce, signal, evidenceFetch: options.evidenceFetch });
   } else {
     const checked = await command(cpuVerifier, [], signal, `{"nonce":${JSON.stringify(nonce)},"envelope":${new TextDecoder("utf-8", { fatal: true }).decode(raw)}}`, true);
     const cpu = JSON.parse(checked.stdout);
@@ -72,8 +77,13 @@ export async function qualifyIntelCandidate(options: {
   const scratch = await mkdtemp(resolve(dirname(cpuVerifier), "gpu-session-"));
   const name = `pi-tee-gpu-${randomBytes(8).toString("hex")}`;
   try {
+    const privateNvat = resolve(scratch, "nvat");
+    await mkdir(resolve(privateNvat, "bin"), { recursive: true, mode: 0o755 });
+    await mkdir(resolve(privateNvat, "lib"), { recursive: true, mode: 0o755 });
+    for (const [path, bytes] of nvat) await writeFile(resolve(privateNvat, path), bytes, { mode: path === "bin/nvattest" ? 0o555 : 0o444, flag: "wx", signal });
+    for (const alias of ["libnvat.so", "libnvat.so.1"]) await symlink("libnvat.so.1.2.2", resolve(privateNvat, "lib", alias));
     await writeFile(resolve(scratch, "evidence.json"), JSON.stringify([evidence]), { mode: 0o600, flag: "wx" });
-    const checked = await command("docker", ["run", "--rm", "--pull=never", "--name", name, "--cpus=2", "--memory=1g", "--cap-drop=ALL", "--security-opt=no-new-privileges", "--read-only", "--tmpfs", "/tmp:rw,noexec,nosuid,size=16m", "--mount", `type=bind,source=${nvatDir},target=/evidence/libnvat-linux-sbsa-1.2.2.1780962352-archive,readonly`, "--mount", `type=bind,source=${scratch},target=/fixtures,readonly`, INTEL_CANDIDATE.gpuImage, "--log-level", "off", "--format", "json", "attest", "--device", "gpu", "--gpu-evidence-source", "file", "--gpu-evidence-file", "/fixtures/evidence.json", "--verifier", "local", "--nonce", nonce], signal);
+    const checked = await command("docker", ["run", "--rm", "--pull=never", "--name", name, "--cpus=2", "--memory=1g", "--cap-drop=ALL", "--security-opt=no-new-privileges", "--read-only", "--tmpfs", "/tmp:rw,noexec,nosuid,size=16m", "--mount", `type=bind,source=${privateNvat},target=/evidence/libnvat-linux-sbsa-1.2.2.1780962352-archive,readonly`, "--mount", `type=bind,source=${scratch},target=/fixtures,readonly`, INTEL_CANDIDATE.gpuImage, "--log-level", "off", "--format", "json", "attest", "--device", "gpu", "--gpu-evidence-source", "file", "--gpu-evidence-file", "/fixtures/evidence.json", "--verifier", "local", "--nonce", nonce], signal);
     const gpu = JSON.parse(checked.stdout);
     requireCondition(checked.code === 0 && gpu.result_code === 0 && Array.isArray(gpu.claims) && gpu.claims.length === 1, "TEE_GPU_POLICY_REJECTED");
     const c = gpu.claims[0];

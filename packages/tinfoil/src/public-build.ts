@@ -1,5 +1,7 @@
 import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
+import { readFile, mkdtemp, writeFile, rm } from "node:fs/promises";
+import { dirname, resolve } from "node:path";
 import { readBoundedBody, TeeError } from "pi-tee-core";
 import assert from "node:assert/strict";
 import { computeBootMeasurements } from "./boot-measurements.js";
@@ -9,30 +11,91 @@ const repo = "tinfoilsh/confidential-gemma4-31b";
 const parseJson = (bytes: string | Uint8Array): any => JSON.parse(typeof bytes === "string" ? bytes : new TextDecoder("utf-8", { fatal: true }).decode(bytes));
 const sha256 = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex");
 
+// Process-local, bounded cache: no persistent evidence, credentials or keys.
+// Fresh CPU/GPU/freshness appraisal is never cached. Helper artifacts namespace
+// deterministic results so another executable cannot populate their cache.
+class ArtifactCache {
+  private objects = new Map<string, Buffer>();
+  private bytes = 0;
+  get(key: string, maxBytes: number) {
+    const value = this.objects.get(key);
+    if (!value || value.length > maxBytes) return undefined;
+    this.objects.delete(key); this.objects.set(key, value);
+    return value;
+  }
+  put(key: string, bytes: Buffer) {
+    const old = this.objects.get(key);
+    if (old) this.bytes -= old.length;
+    this.objects.delete(key); this.objects.set(key, bytes); this.bytes += bytes.length;
+    while (this.objects.size > 128 || this.bytes > 96 * 1024 * 1024) {
+      const first = this.objects.entries().next().value!;
+      this.objects.delete(first[0]); this.bytes -= first[1].length;
+    }
+  }
+  clear() { this.objects.clear(); this.bytes = 0; }
+}
+const artifactCaches = new WeakMap<typeof globalThis.fetch, Map<string, ArtifactCache>>();
+function cacheFor(fetch: typeof globalThis.fetch, helperDigest: string) {
+  let byHelper = artifactCaches.get(fetch);
+  if (!byHelper) { byHelper = new Map(); artifactCaches.set(fetch, byHelper); }
+  let cache = byHelper.get(helperDigest);
+  if (!cache) { cache = new ArtifactCache(); byHelper.clear(); byHelper.set(helperDigest, cache); }
+  return cache;
+}
+
 // Artifact authentication only. Callers must independently appraise the CPU-bound
 // GPU bytes and qualify runtime/key/channel behavior before production admission.
 export async function verifyPublicBuildArtifacts(options: {
-  helperPath: string; raw: string; nonce: string; signal: AbortSignal; evidenceFetch?: typeof globalThis.fetch;
+  helperPath: string; raw: string; nonce: string; signal: AbortSignal; evidenceFetch?: typeof globalThis.fetch; expectedHelperDigest?: string;
 }) {
   const { helperPath, raw, nonce, signal } = options;
   const evidenceFetch = options.evidenceFetch ?? globalThis.fetch;
-  async function get(url: string, redirect: RequestRedirect = "error", maxBytes = 2 * 1024 * 1024, headers: Record<string, string> = {}): Promise<Buffer> {
+  let cache: ArtifactCache | undefined;
+  let privateDirectory: string | undefined;
+  let executable = helperPath;
+  async function get(url: string, redirect: RequestRedirect = "error", maxBytes = 2 * 1024 * 1024, headers: Record<string, string> = {}, expectedDigest?: string, immutable = false): Promise<Buffer> {
+    signal.throwIfAborted();
+    const key = expectedDigest ? `sha256:${expectedDigest}` : immutable ? `immutable:${url}` : undefined;
+    const hit = key && cache?.get(key, maxBytes);
+    if (hit) {
+      if (expectedDigest) assert.equal(sha256(hit), expectedDigest);
+      return hit;
+    }
     const response = await evidenceFetch(url, { signal, redirect, headers });
     assert(response.ok && response.body, "TEE_PUBLIC_ARTIFACT_UNAVAILABLE");
-    return Buffer.from(await readBoundedBody(response.body, maxBytes, signal));
+    const bytes = Buffer.from(await readBoundedBody(response.body, maxBytes, signal));
+    if (expectedDigest) assert.equal(sha256(bytes), expectedDigest);
+    if (key) cache?.put(key, bytes);
+    return bytes;
   }
   const input = `{"nonce":${JSON.stringify(nonce)},"envelope":${raw}}`;
   function appraise(input: string, args: string[] = []): Promise<any> {
+    signal.throwIfAborted();
+    const key = args.length === 1 && ["--cvm-build", "--runtime-config", "--container-reference", "--container-build"].includes(args[0]!) ? `helper:${args[0]}:${sha256(Buffer.from(input))}` : undefined;
+    const hit = key && cache?.get(key, 16384);
+    if (hit) return Promise.resolve(parseJson(hit));
     return new Promise((resolveResult, reject) => {
-      const child = execFile(helperPath, args, { env: { TZ: "UTC" }, signal, timeout: 60000, maxBuffer: 16384 }, (error, stdout) => {
+      const child = execFile(executable, args, { env: { TZ: "UTC" }, signal, timeout: 60000, maxBuffer: 16384 }, (error, stdout) => {
         if (error) return reject(new TeeError("TEE_PUBLIC_BUILD_REJECTED"));
-        try { resolveResult(parseJson(stdout)); } catch { reject(new TeeError("TEE_PUBLIC_BUILD_REJECTED")); }
+        try {
+          const value = parseJson(stdout);
+          if (key) cache?.put(key, Buffer.from(stdout));
+          resolveResult(value);
+        } catch { reject(new TeeError("TEE_PUBLIC_BUILD_REJECTED")); }
       });
       child.stdin?.on("error", () => {});
       child.stdin?.end(input);
     });
   }
   try {
+    signal.throwIfAborted();
+    const helperBytes = await readFile(helperPath);
+    const helperDigest = sha256(helperBytes);
+    if (options.expectedHelperDigest) assert.equal(helperDigest, options.expectedHelperDigest);
+    cache = cacheFor(evidenceFetch, helperDigest);
+    privateDirectory = await mkdtemp(resolve(dirname(helperPath), "public-build-session-"));
+    executable = resolve(privateDirectory, "verifier");
+    await writeFile(executable, helperBytes, { mode: 0o700, flag: "wx", signal });
     const verified = await appraise(input);
     assert(verified.cpuVerified === true && verified.publicBuildVerified === true && verified.inferenceQualified === false, "TEE_PUBLIC_BUILD_REJECTED");
     assert.equal(verified.repo, repo);
@@ -43,21 +106,21 @@ export async function verifyPublicBuildArtifacts(options: {
 
     // GitHub's public asset redirects carry no credentials. The authenticated
     // subject digest, rather than HTTPS or the release filename, authenticates bytes.
-    const artifact = await get(`https://github.com/${repo}/releases/download/${verified.tag}/tinfoil-deployment.json`, "follow");
+    const artifact = await get(`https://github.com/${repo}/releases/download/${verified.tag}/tinfoil-deployment.json`, "follow", 2 * 1024 * 1024, {}, verified.digest);
     assert.equal(sha256(artifact), verified.digest, "TEE_PUBLIC_ARTIFACT_DIGEST_REJECTED");
-    const source = await get(`https://raw.githubusercontent.com/${repo}/${verified.commit}/tinfoil-config.yml`);
     const deployment = parseJson(artifact);
+    const source = await get(`https://raw.githubusercontent.com/${repo}/${verified.commit}/tinfoil-config.yml`, "error", 2 * 1024 * 1024, {}, sha256(Buffer.from(deployment.config, "base64")));
     assert(Buffer.from(deployment.config, "base64").equals(source), "TEE_PUBLIC_SOURCE_CONFIG_REJECTED");
     assert(deployment.cmdline.split(" ").includes(`tinfoil-config-hash=${sha256(source)}`), "TEE_PUBLIC_SOURCE_CONFIG_REJECTED");
     assert(deployment.hashes && /^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/.test(deployment.hashes.version), "TEE_CVM_BUILD_REJECTED");
     const cvmTag = deployment.hashes.version;
     const manifestName = `tinfoil-inference-${cvmTag}-manifest.json`;
-    const manifest = await get(`https://images.tinfoil.sh/cvm/${manifestName}`);
+    const manifest = await get(`https://images.tinfoil.sh/cvm/${manifestName}`, "error", 2 * 1024 * 1024, {}, undefined, true);
     // Public delivery can substitute or withhold bundles. Only the local verifier
     // can authorize the exact release workflow, source commit and artifact bytes.
     // This bounded page is a candidate set, not an assertion that every attestation
     // was examined. No matching candidate means failure, never unchecked acceptance.
-    const candidates = parseJson(await get(`https://api.github.com/repos/tinfoilsh/cvmimage/attestations/sha256:${sha256(manifest)}?per_page=100`));
+    const candidates = parseJson(await get(`https://api.github.com/repos/tinfoilsh/cvmimage/attestations/sha256:${sha256(manifest)}?per_page=100`, "error", 2 * 1024 * 1024, {}, undefined, true));
     assert(Array.isArray(candidates.attestations) && candidates.attestations.length <= 100, "TEE_CVM_BUILD_REJECTED");
     let cvm;
     for (const candidate of candidates.attestations) {
@@ -74,8 +137,8 @@ export async function verifyPublicBuildArtifacts(options: {
     const expectedCommand = `readonly=on pci=realloc,nocrs modprobe.blacklist=nouveau nouveau.modeset=0 root=/dev/mapper/root roothash=${cvm.hashes.root} tinfoil-config-hash=${sha256(source)}`;
     assert.equal(deployment.cmdline, expectedCommand, "TEE_PUBLIC_BOOT_COMMAND_REJECTED");
     const [kernel, initrd] = await Promise.all([
-      get(`https://images.tinfoil.sh/cvm/tinfoil-inference-${cvmTag}.vmlinuz`, "error", 32 * 1024 * 1024),
-      get(`https://images.tinfoil.sh/cvm/tinfoil-inference-${cvmTag}.initrd`, "error", 32 * 1024 * 1024),
+      get(`https://images.tinfoil.sh/cvm/tinfoil-inference-${cvmTag}.vmlinuz`, "error", 32 * 1024 * 1024, {}, cvm.hashes.kernel),
+      get(`https://images.tinfoil.sh/cvm/tinfoil-inference-${cvmTag}.initrd`, "error", 32 * 1024 * 1024, {}, cvm.hashes.initrd),
     ]);
     assert.equal(sha256(kernel), cvm.hashes.kernel, "TEE_PUBLIC_KERNEL_DIGEST_REJECTED");
     assert.equal(sha256(initrd), cvm.hashes.initrd, "TEE_PUBLIC_INITRD_DIGEST_REJECTED");
@@ -101,14 +164,20 @@ export async function verifyPublicBuildArtifacts(options: {
       /^[a-f0-9]{64}$/.test(selected.imageDigest), "TEE_CONTAINER_BUILD_REJECTED");
     assert(selected.subjectPredicateMatched === true && selected.codeStatementDigest === verified.codeStatementDigest, "TEE_CONTAINER_BUILD_REJECTED");
     assert.equal(runtime.imageDigest, selected.imageDigest, "TEE_RUNTIME_CONFIG_REJECTED");
-    const tokenResponse = parseJson(await get(`https://ghcr.io/token?service=ghcr.io&scope=repository:${repo}:pull`));
-    assert(typeof tokenResponse.token === "string" && tokenResponse.token.length > 0 && tokenResponse.token.length < 8192, "TEE_PUBLIC_ARTIFACT_UNAVAILABLE");
+    let registryToken: string | undefined;
     async function registryArtifact(kind: "manifests" | "blobs", digest: string) {
       assert(/^sha256:[a-f0-9]{64}$/.test(digest), "TEE_CONTAINER_BUILD_REJECTED");
+      const hit = cache?.get(digest, 128 * 1024);
+      if (hit) { assert.equal(`sha256:${sha256(hit)}`, digest); return hit; }
+      if (!registryToken) {
+        const tokenResponse = parseJson(await get(`https://ghcr.io/token?service=ghcr.io&scope=repository:${repo}:pull`));
+        assert(typeof tokenResponse.token === "string" && tokenResponse.token.length > 0 && tokenResponse.token.length < 8192, "TEE_PUBLIC_ARTIFACT_UNAVAILABLE");
+        registryToken = tokenResponse.token;
+      }
       const bytes = await get(`https://ghcr.io/v2/${repo}/${kind}/${digest}`, kind === "blobs" ? "follow" : "error", 128 * 1024, {
-        authorization: `Bearer ${tokenResponse.token}`,
+        authorization: `Bearer ${registryToken}`,
         accept: "application/vnd.oci.image.index.v1+json, application/vnd.oci.image.manifest.v1+json",
-      });
+      }, digest.slice(7));
       // Cross-origin blob redirects strip Authorization; the digest authenticates
       // public bytes regardless of the delivery origin.
       assert.equal(`sha256:${sha256(bytes)}`, digest, "TEE_CONTAINER_BUILD_REJECTED");
@@ -137,8 +206,8 @@ export async function verifyPublicBuildArtifacts(options: {
       /^[a-f0-9]{40}$/.test(container.sourceCommit) && /^[a-f0-9]{64}$/.test(container.dockerfileDigest), "TEE_CONTAINER_BUILD_REJECTED");
     assert(container.subjectPredicateMatched === true && container.codeStatementDigest === verified.codeStatementDigest, "TEE_CONTAINER_BUILD_REJECTED");
     const [sourceCommit, dockerfile] = await Promise.all([
-      get(`https://api.github.com/repos/${repo}/git/commits/${verified.commit}`).then(bytes => parseJson(bytes)),
-      get(`https://raw.githubusercontent.com/${repo}/${container.sourceCommit}/Dockerfile`),
+      get(`https://api.github.com/repos/${repo}/git/commits/${verified.commit}`, "error", 2 * 1024 * 1024, {}, undefined, true).then(bytes => parseJson(bytes)),
+      get(`https://raw.githubusercontent.com/${repo}/${container.sourceCommit}/Dockerfile`, "error", 2 * 1024 * 1024, {}, container.dockerfileDigest),
     ]);
     assert(Array.isArray(sourceCommit.parents) && sourceCommit.parents.length === 1 && sourceCommit.parents[0].sha === container.sourceCommit, "TEE_PUBLIC_CONTAINER_SOURCE_REJECTED");
     assert.equal(sha256(dockerfile), container.dockerfileDigest, "TEE_PUBLIC_CONTAINER_SOURCE_REJECTED");
@@ -155,7 +224,10 @@ export async function verifyPublicBuildArtifacts(options: {
       independentRebuild: false, inferenceQualified: false,
     };
   } catch (error) {
+    cache?.clear();
     signal.throwIfAborted();
     throw new TeeError("TEE_PUBLIC_BUILD_REJECTED");
+  } finally {
+    if (privateDirectory) await rm(privateDirectory, { recursive: true, force: true });
   }
 }
