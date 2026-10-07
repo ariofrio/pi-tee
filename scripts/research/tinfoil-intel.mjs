@@ -7,6 +7,7 @@ import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Identity } from "ehbp";
 import { pinnedTlsFetch, readBoundedBody, limitResponseBody, MAX_ENCRYPTED_RESPONSE_BYTES, MAX_RESPONSE_BYTES } from "../../packages/core/dist/index.js";
+import { parseHopperGpuMode } from "../../packages/tinfoil/dist/gpu-mode.js";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const host = "gemma4-31b-inf8-0.tinfoil.containers.tinfoil.dev";
@@ -54,7 +55,7 @@ async function gpu(evidence, nonce, label) {
     await new Promise(resolve => execFile("docker", ["rm", "--force", name], { timeout: 10000, maxBuffer: 4096, env: { PATH: process.env.PATH, HOME: process.env.HOME } }, () => resolve()));
   }
   const verdict = JSON.parse(result.stdout);
-  if (result.code !== 0 || verdict.result_code !== 0) return { accepted: false };
+  if (result.code !== 0 || verdict.result_code !== 0) return { accepted: false, verifierResult: verdict.result_code };
   requireCondition(Array.isArray(verdict.claims) && verdict.claims.length === 1, "TEE_GPU_POLICY_REJECTED");
   const c = verdict.claims[0];
   requireCondition(c.eat_nonce === nonce && c.hwmodel === "GH100 A01 GSP BROM" && c.measres === "success" && c.dbgstat === "disabled" && c.secboot === true &&
@@ -89,7 +90,9 @@ try {
   const evidence = devices.items.map(item => item.evidence);
   requireCondition(evidence[0].nonce === nonce && evidence[0].arch === "HOPPER", "TEE_GPU_POLICY_REJECTED");
   requireCondition((await gpu(evidence, nonce, "authentic")).accepted, "TEE_GPU_POLICY_REJECTED");
+  requireCondition(parseHopperGpuMode(evidence[0].evidence) === "spt", "TEE_GPU_MODE_REJECTED");
   summary.gpuVerified = true;
+  summary.gpuMode = "spt";
   if (negatives) {
     const forged = structuredClone(evidence);
     const report = Buffer.from(forged[0].evidence, "base64");
@@ -97,7 +100,27 @@ try {
     forged[0].evidence = report.toString("base64");
     summary.forgedGpuRejected = !(await gpu(forged, nonce, "forged")).accepted;
     summary.wrongGpuNonceRejected = !(await gpu(evidence, "00".repeat(32), "nonce")).accepted;
-    requireCondition(summary.forgedGpuRejected && summary.wrongGpuNonceRejected, "TEE_GPU_NEGATIVE_TEST_FAILED");
+    // Change only the signed feature field, retaining the real report format,
+    // nonce, certificates and signature. Require NVIDIA's signature error,
+    // not merely our mode guard, to establish that this field is authenticated.
+    const changedMode = structuredClone(evidence);
+    const modeReport = Buffer.from(changedMode[0].evidence, "base64");
+    let offset = 37 + 8 + modeReport.readUIntLE(42, 3) + 32;
+    const opaqueLength = modeReport.readUInt16LE(offset); offset += 2;
+    const end = offset + opaqueLength;
+    let changed = false;
+    while (offset < end) {
+      const type = modeReport.readUInt16LE(offset), length = modeReport.readUInt16LE(offset + 2);
+      offset += 4;
+      if (type === 36) { modeReport[offset] = 1; changed = true; break; }
+      offset += length;
+    }
+    requireCondition(changed, "TEE_GPU_NEGATIVE_TEST_FAILED");
+    changedMode[0].evidence = modeReport.toString("base64");
+    const tampered = await gpu(changedMode, nonce, "mode");
+    // NVAT_RC_GPU_EVIDENCE_INVALID_SIGNATURE in the pinned official nvat.h.
+    summary.forgedGpuModeSignatureRejected = !tampered.accepted && tampered.verifierResult === 508;
+    requireCondition(summary.forgedGpuRejected && summary.wrongGpuNonceRejected && summary.forgedGpuModeSignatureRejected, "TEE_GPU_NEGATIVE_TEST_FAILED");
   }
   if (infer) {
     requireCondition(process.env.TINFOIL_API_KEY, "TEE_API_KEY_REQUIRED");

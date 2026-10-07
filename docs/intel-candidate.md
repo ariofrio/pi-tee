@@ -6,7 +6,7 @@
 
 The native route passed the complete [actual Pi suite](../scripts/live-pi.ts) on 2026-10-07: compiled loading, native secret login, stored-key precedence, completion/usage, Unicode tool execution/result follow-up, reasoning/final text and RPC cancellation. A separate `--cancel-stream` run passed after a live text delta without the response-consumption barrier. Neither measures when the remote engine stops generation.
 
-The [combined research probe](../scripts/research/tinfoil-intel.mjs) also passed fresh CPU/GPU appraisal, rejected forged GPU evidence and a wrong GPU nonce, and completed one synthetic encrypted inference with usage. [Real CPU evidence tests](../tools/tinfoil-cpu/mutation_test.go) reject altered quote signatures, nonce, measurements, TLS/HPKE keys and GPU bytes even when untrusted section hashes are recomputed. A [local-helper regression](../tests/tinfoil-intel.test.ts) rejects an unpinned executable before any attestation request.
+The [combined research probe](../scripts/research/tinfoil-intel.mjs) also passed fresh CPU/GPU appraisal, rejected forged GPU evidence, a wrong GPU nonce and a mode-field substitution with NVIDIA signature-error result `508`, and completed one synthetic encrypted inference with usage. [Real CPU evidence tests](../tools/tinfoil-cpu/mutation_test.go) reject altered quote signatures, nonce, measurements, TLS/HPKE keys and GPU bytes even when untrusted section hashes are recomputed. A [local-helper regression](../tests/tinfoil-intel.test.ts) rejects an unpinned executable before any attestation request.
 
 ## Frozen artifacts and authorities
 

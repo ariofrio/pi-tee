@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Test signed GPU-mode coverage at the real NVIDIA verifier boundary: changing only SPT to MPT returns signature-error result `508`, alongside forged-signature and wrong-nonce negatives. Require SPT in the Intel research probe as well as the native candidate; the evidence-only run passes with zero inference.
+
 - Validate automatic guest-build updates with real signed CVM `v0.11.0` and `v0.14.13` artifacts under the unchanged verifier/workflow/root policy. Record both offline fixtures; this proves the guest-build stage, not a second qualified inference deployment.
 
 - Follow the authenticated Tinfoil release into its dynamic OCI image/config/provenance digests and public build-source/Dockerfile checks. Treat embedded BuildKit metadata as publisher-endorsed claims, explicitly without independent builder-signature verification. Add offline real-signature/artifact substitutions, including rehashed metadata; the combined live evidence probe passes without inference.
