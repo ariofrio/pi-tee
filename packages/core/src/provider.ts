@@ -28,6 +28,7 @@ export interface PublicBuildAdmission {
 
 export interface PublicBuildProfile {
   id: string;
+  assumptions?: readonly string[];
   authorityPolicyDigest: string;
   modelIds: readonly string[];
   baseUrl: string;
@@ -125,7 +126,7 @@ export function createTeeProvider(definition: ProviderDefinition) {
   let mode = resolvePolicy(definition.policy);
   const publicProfile = definition.publicBuildProfile && {
     ...structuredClone({ id: definition.publicBuildProfile.id, authorityPolicyDigest: definition.publicBuildProfile.authorityPolicyDigest,
-      modelIds: definition.publicBuildProfile.modelIds, baseUrl: definition.publicBuildProfile.baseUrl }),
+      modelIds: definition.publicBuildProfile.modelIds, baseUrl: definition.publicBuildProfile.baseUrl, assumptions: definition.publicBuildProfile.assumptions }),
     openSession: definition.publicBuildProfile.openSession,
   };
   let policyEpoch = 0;
@@ -259,6 +260,7 @@ export function createTeeProvider(definition: ProviderDefinition) {
   }
 
   function updateReport() {
+    report.assumptions = mode === "public-builds" && publicProfile?.assumptions ? publicProfile.assumptions : definition.assumptions;
     report.catalogModels = catalog.length;
     report.catalogCheckedAt = checkedAt;
     if (definition.requireDeclaredTee) {
@@ -291,6 +293,7 @@ export function createTeeProvider(definition: ProviderDefinition) {
       if (next !== mode) { policyEpoch++; for (const controller of active) controller.abort(); }
       mode = next;
       report.policy = next;
+      updateReport();
       report.lastRequest = "not-run";
       report.publicBuildVerification = report.closedTrustSet = "not-established";
       delete report.lastAdmission;

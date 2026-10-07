@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Select Tinfoil routes automatically by policy: owned worker admission for public builds (still gated for final wiring review), SDK router for explicit SDK policy. Report public-profile assumptions independently of SDK route assumptions; preserve explicit router rejection under public policy. State the tested OrbStack/containerd builder scope and make the setup negative robust to Node deprecation warnings.
+
 - Package locked CPU-verifier source and add `pi-tinfoil-setup` for macOS ARM64. Authenticate NVIDIA/Ubuntu archives, reproduce the pinned GPU image without RUN network access, check its OCI tar hash before loading, and reject substituted cached dependencies. Two clean image builds are byte-identical and the image passes real local NVIDIA appraisal. Clarify declared trust closure, admission records and unsupported schema/platform limits.
 
 - Add owned public-build sessions with canonical model/endpoint, authority-policy and artifact digests, fresh admission/expiry checks, policy-change cancellation and no SDK fallback. Bind the real Intel public-build chain to that contract; keep production admission disabled pending repeatable setup and final review. Add native mismatch/expiry negatives, including expiry during a Pi payload hook, and a synthetic actual-Pi candidate harness.

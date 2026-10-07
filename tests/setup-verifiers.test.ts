@@ -12,7 +12,7 @@ test("the verifier setup CLI rejects substituted cached dependencies without exe
     await writeFile(resolve(directory, "downloads", "ca-certificates_20260601~24.04.1_all.deb"), "substituted dependency");
     let result: { stdout: string; stderr: string; code?: number };
     try {
-      result = await promisify(execFile)(process.execPath, ["--import", "tsx", "packages/tinfoil/src/setup.ts", "--directory", directory, "--verify-cache-only"], {
+      result = await promisify(execFile)(process.execPath, ["--no-deprecation", "--import", "tsx", "packages/tinfoil/src/setup.ts", "--directory", directory, "--verify-cache-only"], {
         env: { PATH: "/nonexistent-builder-path" }, timeout: 15000, maxBuffer: 4096,
       });
     } catch (error) { result = error as typeof result; }

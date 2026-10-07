@@ -18,7 +18,7 @@ test("public policy uses an owned admitted session rather than its SDK transport
     parseCatalog: () => [model], catalogFetch: async () => Response.json({}), assumptions: [],
     openSdkTransport: async () => { throw new Error("SDK must not be selected"); },
     publicBuildProfile: {
-      id: "synthetic-contract", authorityPolicyDigest: "a".repeat(64), modelIds: [model.id], baseUrl: "https://worker.invalid/v1",
+      id: "synthetic-contract", authorityPolicyDigest: "a".repeat(64), modelIds: [model.id], baseUrl: "https://worker.invalid/v1", assumptions: ["Declared public publishers"],
       openSession: async ({ model: selected }) => {
         assert.equal(selected.id, model.id);
         const checkedAt = Date.now();
@@ -44,6 +44,7 @@ test("public policy uses an owned admitted session rather than its SDK transport
   await Promise.resolve();
   assert.equal(disposed, 1);
   assert.equal(integration.getReport().lastRequest, "public-build-accepted");
+  assert.deepEqual(integration.getReport().assumptions, ["Declared public publishers"]);
   assert.equal(integration.getReport().publicBuildVerification, "profile-established");
   assert.equal(integration.getReport().closedTrustSet, "profile-declared");
   assert.equal(integration.getReport().protectedSession, "not-established");

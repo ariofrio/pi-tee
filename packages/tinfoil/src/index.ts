@@ -20,12 +20,12 @@ export const TINFOIL_ASSUMPTIONS = [
 
 export function createTinfoilProvider(options: {
   policy?: PolicyMode;
-  route?: "router" | "direct" | "direct-intel" | "direct-public";
+  route?: "auto" | "router" | "direct" | "direct-intel" | "direct-public";
   catalogFetch?: typeof globalThis.fetch;
   openSdkTransport?: ProviderDefinition["openSdkTransport"];
 } = {}) {
-  const route = options.route ?? process.env.PI_TINFOIL_ROUTE ?? "router";
-  if (route !== "router" && route !== "direct" && route !== "direct-intel" && route !== "direct-public") throw new TeeError("TEE_ROUTE_INVALID");
+  const route = options.route ?? process.env.PI_TINFOIL_ROUTE ?? "auto";
+  if (route !== "auto" && route !== "router" && route !== "direct" && route !== "direct-intel" && route !== "direct-public") throw new TeeError("TEE_ROUTE_INVALID");
   const assumptions = route === "direct-public" ? [
     "Experimental SDK-policy candidate: local Pi/runtime/extensions/tools, the hash-pinned public-build helper/dependencies, Docker image/runtime and NVIDIA verifier are trusted.",
     "Intel roots, revocation, UpToDate appraisal and local floors authenticate fresh CPU-bound device and endpoint keys; named public Tinfoil workload/guest/platform/freshness workflows authorize dynamic releases.",
@@ -51,8 +51,8 @@ export function createTinfoilProvider(options: {
     id: "tinfoil", name: "Tinfoil", baseUrl: TINFOIL_BASE_URL, apiKeyEnv: "TINFOIL_API_KEY",
     policy: options.policy ?? resolvePolicy(process.env.PI_TINFOIL_POLICY),
     parseCatalog: parseTinfoilCatalog, catalogFetch: options.catalogFetch, assumptions,
-    publicBuildProfile: route === "direct-public" && PUBLIC_BUILD_PROFILE_ENABLED ? INTEL_PUBLIC_BUILD_PROFILE : undefined,
-    availableModelIds: route !== "router" ? [TINFOIL_DIRECT_PROFILE.model] : undefined,
+    publicBuildProfile: (route === "auto" || route === "direct-public") && PUBLIC_BUILD_PROFILE_ENABLED ? INTEL_PUBLIC_BUILD_PROFILE : undefined,
+    availableModelIds: route !== "router" && route !== "auto" ? [TINFOIL_DIRECT_PROFILE.model] : undefined,
     openSdkTransport: options.openSdkTransport ?? (route === "direct-public" ? ({ signal }) => openIntelTinfoilTransport(signal, "public-builds") : route === "direct-intel" ? ({ signal }) => openIntelTinfoilTransport(signal) : route === "direct" ? ({ signal }) => openDirectTinfoilTransport(signal) : async ({ signal }) => {
       const { SecureClient } = await import("tinfoil");
       signal.throwIfAborted();

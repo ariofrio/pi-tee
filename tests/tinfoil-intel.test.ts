@@ -110,3 +110,26 @@ test("a direct encrypted worker error cannot resend credentials or ciphertext", 
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+
+test("auto preserves SDK discovery while explicit router cannot admit public workloads", async () => {
+  const catalogFetch: typeof fetch = async () => Response.json({ data: ["gemma4-31b", "gpt-oss-120b"].map(id => ({
+    id, type: "chat", tool_calling: true, endpoints: ["/v1/chat/completions"], context_window: 131072,
+    pricing: { inputTokenPricePer1M: 1, outputTokenPricePer1M: 2 },
+  })) });
+  const auto = createTinfoilProvider({ route: "auto", policy: "sdk", catalogFetch });
+  await auto.initializeCatalog();
+  assert.deepEqual(auto.provider.getModels().map(m => m.id), ["gemma4-31b", "gpt-oss-120b"]);
+  let sdkOpened = 0;
+  const router = createTinfoilProvider({ route: "router", policy: "sdk", catalogFetch,
+    openSdkTransport: async () => { sdkOpened++; throw Error("must not open"); },
+  });
+  await router.initializeCatalog();
+  const model = router.provider.getModels()[0];
+  assert.ok(model);
+  router.setPolicy("public-builds");
+  assert.equal(router.provider.getModels().length, 0);
+  const result = await router.provider.streamSimple(model, normalizeContext({ messages: [{ role: "user", content: "synthetic prompt", timestamp: 1 }] }), { apiKey: "synthetic-key" }).result();
+  assert.equal(result.errorMessage, "TEE_PUBLIC_BUILD_DEPLOYMENT_UNAVAILABLE");
+  assert.equal(sdkOpened, 0);
+});
