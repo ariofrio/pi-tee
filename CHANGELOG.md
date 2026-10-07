@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add a Docker-free native NVIDIA verifier build candidate with locked SDK, Rust and dependency inputs, disabled local collectors and six-target desktop execution checks. Test real GPU nonce, report/mode signature and certificate-signature rejection. Production verification and admission remain unchanged; packaging and full qualification are unfinished.
+
 - Retry temporary helper-file locks during cleanup and handle persistent removal failures without terminating Pi. Only the executable snapshot can remain; no request data is written there.
 
 - Strengthen the isolated expiry regression with an independent loopback IPC observer. Catch a request write before a misplaced expiry check, even when the parent subsequently returns the expected error. Production transport is unchanged.

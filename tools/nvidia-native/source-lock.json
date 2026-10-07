@@ -1,0 +1,7 @@
+{
+  "sdk": { "repository": "https://github.com/NVIDIA/attestation-sdk.git", "commit": "9d12801cea8a198ea0f29640dfaf8a4017c841c5" },
+  "regorus": { "repository": "https://github.com/microsoft/regorus.git", "commit": "c7bf460bc160c96e38048296e5708943d2e43909" },
+  "vcpkg": { "repository": "https://github.com/microsoft/vcpkg.git", "commit": "02a476b3a4adaf6c4bdbb79b702458eae5f34b12" },
+  "rust": "1.90.0",
+  "regorusCargoLockSha256": "2a9be5f9abde87eecfb276d6cb5fac13f694f930380d41130bc27982e510abba"
+}
