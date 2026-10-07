@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Enforce a Gemma runtime configuration contract after authenticating the named public release: bind VM shape, guest/config boot hashes, dynamic image/model roots, literal environment, engine flags, routes and health checks. Reject host access, unknown environment, remote code, logging and ambiguous YAML/arguments. Connect it to the evidence-only live chain; standalone and combined results still deny inference qualification.
+
 - Test signed GPU-mode coverage at the real NVIDIA verifier boundary: changing only SPT to MPT returns signature-error result `508`, alongside forged-signature and wrong-nonce negatives. Require SPT in the Intel research probe as well as the native candidate; the evidence-only run passes with zero inference.
 
 - Validate automatic guest-build updates with real signed CVM `v0.11.0` and `v0.14.13` artifacts under the unchanged verifier/workflow/root policy. Record both offline fixtures; this proves the guest-build stage, not a second qualified inference deployment.

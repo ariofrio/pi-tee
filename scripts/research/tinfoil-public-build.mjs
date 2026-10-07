@@ -98,10 +98,15 @@ const envelope = JSON.parse(raw);
 const codeCollateral = envelope.collateral.filter(item => item.id === "code");
 assert.equal(codeCollateral.length, 1, "TEE_CONTAINER_BUILD_REJECTED");
 const releaseInput = { tag: verified.tag, deployment: artifact.toString("base64"), bundle: codeCollateral[0].data.sigstore_bundle };
+const runtime = await appraise(JSON.stringify(releaseInput), ["--runtime-config"]);
+assert(runtime.runtimeConstraintsVerified === true && runtime.authenticatedRelease === true && runtime.cpuVerified === false && runtime.gpuVerified === false && runtime.freshnessVerified === false && runtime.inferenceQualified === false &&
+  runtime.profile === "gemma-single-gpu-v1" && runtime.repo === repo && runtime.tag === verified.tag && runtime.releaseCommit === verified.commit && runtime.deploymentDigest === verified.digest &&
+  runtime.configDigest === sha256(source) && runtime.cvmTag === cvmTag, "TEE_RUNTIME_CONFIG_REJECTED");
 const selected = await appraise(JSON.stringify(releaseInput), ["--container-reference"]);
 assert(selected.artifactReferenceVerified === true && selected.inferenceQualified === false &&
   selected.repo === repo && selected.releaseCommit === verified.commit && selected.deploymentDigest === verified.digest &&
   /^[a-f0-9]{64}$/.test(selected.imageDigest), "TEE_CONTAINER_BUILD_REJECTED");
+assert.equal(runtime.imageDigest, selected.imageDigest, "TEE_RUNTIME_CONFIG_REJECTED");
 const tokenResponse = JSON.parse(await get(`https://ghcr.io/token?service=ghcr.io&scope=repository:${repo}:pull`));
 assert(typeof tokenResponse.token === "string" && tokenResponse.token.length > 0 && tokenResponse.token.length < 8192, "TEE_PUBLIC_ARTIFACT_UNAVAILABLE");
 async function registryArtifact(kind, digest) {
@@ -152,5 +157,6 @@ console.log(JSON.stringify({
   kernelDigestMatched: true, initrdDigestMatched: true, guestVerityRootAuthenticated: true,
   rtmr2Recomputed: rtmr2.toString("hex"),
   containerBuild: { ...container, publicSourceParentMatched: true, publicDockerfileBytesMatched: true },
+  runtimeConfig: runtime,
   independentRebuild: false, inferenceQualified: false,
 }));
