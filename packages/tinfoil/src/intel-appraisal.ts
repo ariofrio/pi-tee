@@ -4,6 +4,7 @@ import { mkdtemp, readFile, writeFile, rm } from "node:fs/promises";
 import { resolve, dirname, isAbsolute } from "node:path";
 import { TeeError, readBoundedBody } from "pi-tee-core";
 import { parseHopperGpuMode } from "./gpu-mode.js";
+import { gpuVersionsAllowed } from "./gpu-policy.js";
 import { verifyPublicBuildArtifacts } from "./public-build.js";
 
 const PUBLIC_BUILD_VERIFIER_SHA256 = "08bcbf2f96f01d46c4129c0cca2e9135e76c44e1710bc51ff5cbc0652c7af1ba";
@@ -77,7 +78,7 @@ export async function qualifyIntelCandidate(options: {
     requireCondition(checked.code === 0 && gpu.result_code === 0 && Array.isArray(gpu.claims) && gpu.claims.length === 1, "TEE_GPU_POLICY_REJECTED");
     const c = gpu.claims[0];
     requireCondition(c.eat_nonce === nonce && c.hwmodel === "GH100 A01 GSP BROM" && c.measres === "success" && c.dbgstat === "disabled" && c.secboot === true &&
-      c["x-nvidia-gpu-driver-version"] === "595.71.05" && c["x-nvidia-gpu-vbios-version"] === "96.00.D9.00.02" &&
+      gpuVersionsAllowed(c["x-nvidia-gpu-driver-version"], c["x-nvidia-gpu-vbios-version"], options.mode ?? "frozen") &&
       c["x-nvidia-gpu-attestation-report-signature-verified"] === true && c["x-nvidia-gpu-attestation-report-nonce-match"] === true, "TEE_GPU_POLICY_REJECTED");
     for (const field of ["x-nvidia-gpu-arch-check", "x-nvidia-gpu-attestation-report-parsed", "x-nvidia-gpu-attestation-report-cert-chain-fwid-match", "x-nvidia-gpu-driver-rim-fetched", "x-nvidia-gpu-driver-rim-measurements-available", "x-nvidia-gpu-driver-rim-signature-verified", "x-nvidia-gpu-driver-rim-version-match", "x-nvidia-gpu-vbios-rim-fetched", "x-nvidia-gpu-vbios-rim-measurements-available", "x-nvidia-gpu-vbios-rim-signature-verified", "x-nvidia-gpu-vbios-rim-version-match", "x-nvidia-gpu-vbios-index-no-conflict"]) {
       requireCondition(c[field] === true, "TEE_GPU_POLICY_REJECTED");

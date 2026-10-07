@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Allow newer NVIDIA driver/VBIOS versions in `direct-public` when they satisfy explicit local floors and all existing manufacturer signature, reference, revocation, nonce and SPT checks. Preserve exact versions for the frozen Intel candidate. Evidence-CLI tests check version compatibility without claiming authentication of synthetic reports.
+
 - Bind downloaded deployment/runtime/container inputs to the CPU-accepted signed predicate and statement digest. Recompute boot registers against the quote's authenticated expectations, require unambiguous collateral selection, apply security floors to an owned policy copy, enforce public platform/freshness workflow certificates, and reject JSON parser ambiguities. Add real-verifier Node delivery-substitution tests and a public inspection test of weak/strong TDX floors. Production admission remains gated.
 
 - Recompute RTMR1/RTMR2 in the shared dynamic build chain using a bounded, attributed TypeScript port of the release measurement algorithm. Reject unsupported PE layouts; test real release registers, code/command substitutions and malformed layouts without claiming build authentication. The full actual Pi suite passes with the new boot gate; the package includes the component's Apache license.

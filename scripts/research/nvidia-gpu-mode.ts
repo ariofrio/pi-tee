@@ -1,4 +1,5 @@
 import { parseHopperGpuMode } from "../../packages/tinfoil/src/gpu-mode.js";
+import { gpuVersionsAllowed } from "../../packages/tinfoil/src/gpu-policy.js";
 
 // This CLI interprets fields, without authenticating signatures or a CPU session.
 // The inference appraisal separately calls the same parser only after NVIDIA
@@ -13,8 +14,14 @@ try {
     chunks.push(bytes);
   }
   const input = JSON.parse(Buffer.concat(chunks).toString("utf8"));
-  if (!input || typeof input !== "object" || Array.isArray(input) || Object.keys(input).length !== 1 || typeof input.report !== "string") throw Error();
-  console.log(JSON.stringify({ mode: parseHopperGpuMode(input.report), gpuSignatureVerified: false, inferenceQualified: false }));
+  if (!input || typeof input !== "object" || Array.isArray(input) || Object.keys(input).some(key => key !== "report" && key !== "versions") || typeof input.report !== "string") throw Error();
+  let versionPolicyCompatible: boolean | undefined;
+  if (input.versions !== undefined) {
+    const v = input.versions;
+    if (!v || typeof v !== "object" || Array.isArray(v) || Object.keys(v).length !== 3 || !Object.hasOwn(v, "driver") || !Object.hasOwn(v, "vbios") || (v.policy !== "frozen" && v.policy !== "public-builds")) throw Error();
+    versionPolicyCompatible = gpuVersionsAllowed(v.driver, v.vbios, v.policy);
+  }
+  console.log(JSON.stringify({ mode: parseHopperGpuMode(input.report), ...(versionPolicyCompatible !== undefined ? { versionPolicyCompatible } : {}), gpuSignatureVerified: false, inferenceQualified: false }));
 } catch {
   console.log(JSON.stringify({ failure: "TEE_GPU_MODE_REJECTED", gpuSignatureVerified: false, inferenceQualified: false }));
   process.exitCode = 1;

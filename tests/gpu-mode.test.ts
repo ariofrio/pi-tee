@@ -39,3 +39,24 @@ test("the GPU evidence CLI rejects ambiguous, unsupported and truncated mode fie
     assert.deepEqual(JSON.parse(result.stdout), { failure: "TEE_GPU_MODE_REJECTED", gpuSignatureVerified: false, inferenceQualified: false });
   }
 });
+
+test("GPU version compatibility permits authenticated upgrades only above the public policy floors", () => {
+  for (const [driver, vbios, policy, compatible] of [
+    ["595.71.05", "96.00.D9.00.02", "public-builds", true],
+    ["596.10.01", "96.00.DA.00.01", "public-builds", true],
+    ["595.71.04", "96.00.D9.00.02", "public-builds", false],
+    ["594.99.99", "96.00.D9.00.02", "public-builds", false],
+    ["595.71.05", "96.00.D9.00.01", "public-builds", false],
+    ["596.10.01", "96.00.DA.00.01", "frozen", false],
+    ["595.71.05", "96.00.D9.00.02", "frozen", true],
+    ["595.71.05-extra", "96.00.D9.00.02", "public-builds", false],
+    ["595.71.05", "96.00.D9.00.02.00", "public-builds", false],
+    ["99999999999999.1.1", "96.00.D9.00.02", "public-builds", false],
+  ] as const) {
+    const result = spawnSync(process.execPath, ["--import", "tsx", "scripts/research/nvidia-gpu-mode.ts"], {
+      input: JSON.stringify({ report: report(0).toString("base64"), versions: { driver, vbios, policy } }), encoding: "utf8", timeout: 10000,
+    });
+    assert.equal(result.status, 0, result.stderr);
+    assert.deepEqual(JSON.parse(result.stdout), { mode: "spt", versionPolicyCompatible: compatible, gpuSignatureVerified: false, inferenceQualified: false });
+  }
+});
