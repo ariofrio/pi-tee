@@ -45,3 +45,23 @@ test("a direct route hides other catalog models and rejects stale selections bef
   assert.equal(result.errorMessage, "TEE_MODEL_UNAVAILABLE");
   assert.equal(opened, 0);
 });
+
+test("a per-request transport releases its resources after success, rejection or abort", async () => {
+  for (const outcome of ["success", "reject", "abort"] as const) {
+    const controller = new AbortController();
+    let closed = 0;
+    const integration = createTeeProvider({
+      id: model.provider, name: "Test TEE", baseUrl: model.baseUrl, apiKeyEnv: "TEST_API_KEY", policy: "sdk",
+      parseCatalog: () => [model], catalogFetch: async () => Response.json({}), assumptions: [],
+      openSdkTransport: async () => ({ dispose: () => { closed++; }, fetch: async () => {
+        if (outcome === "abort") { controller.abort(); throw controller.signal.reason; }
+        if (outcome === "reject") return Response.json({ error: { message: "synthetic rejection" } }, { status: 401 });
+        return new Response('data: {"id":"c1","choices":[{"index":0,"delta":{"content":"ok"},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n', { headers: { "content-type": "text/event-stream" } });
+      } }),
+    });
+    await integration.initializeCatalog();
+    const result = await integration.provider.streamSimple(model, context, { apiKey: "test-key", signal: controller.signal }).result();
+    assert.equal(result.stopReason, outcome === "success" ? "stop" : outcome === "abort" ? "aborted" : "error");
+    assert.equal(closed, 1, "The owned transport must release resources exactly once.");
+  }
+});

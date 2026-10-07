@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add an experimental native GLM direct route for NEAR SDK policy. Require fresh UpToDate CPU evidence, GPU evidence, quote-bound SPKI on one TLS socket, OHTTP and model-response signatures. Reject reconnect/resend, limit the route to GLM and dispose owned transports after terminal results. Add real TLS and native-provider cleanup regressions.
+
 - Add locked, offline CPU qualification tooling with local AMD/Intel workload and security pins. Fresh Intel appraisal and real-evidence binding negatives pass without provider reference/freshness collateral; the sampled AMD worker fails manufacturer-based firmware floors. Probe reachable alternatives and record separate Intel GPU appraisal; extension defaults and Approved gates remain unchanged.
 
 - Add an explicit pinned Gemma direct-worker route for Tinfoil SDK policy. Verify the exact artifact/tag/measurement and the attested TLS socket before transmitting credentials or EHBP ciphertext; send once and fail on rotation. The full actual Pi suite passed, including RPC cancellation; a separate streaming cancellation run passed after a live text delta without a test delay. Correct the harness's response notification path and document the response-consumption test boundary.

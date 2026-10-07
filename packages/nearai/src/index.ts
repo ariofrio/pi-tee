@@ -4,6 +4,7 @@ import {
 } from "pi-tee-core";
 import { NEAR_BASE_URL } from "./catalog.js";
 import { loadNearCatalog } from "./discovery.js";
+import { openDirectNearTransport, NEAR_DIRECT_PROFILE } from "./direct.js";
 export { NEAR_BASE_URL, parseNearCatalog } from "./catalog.js";
 
 export const NEAR_ASSUMPTIONS = [
@@ -21,16 +22,30 @@ export function assertNearRuntime() {
 
 export function createNearProvider(options: {
   policy?: PolicyMode;
+  route?: "gateway" | "direct";
   modelVisibility?: ModelVisibility;
   catalogFetch?: typeof globalThis.fetch;
   openSdkTransport?: ProviderDefinition["openSdkTransport"];
 } = {}) {
+  const route = options.route ?? process.env.PI_NEARAI_ROUTE ?? "gateway";
+  if (route !== "gateway" && route !== "direct") throw new TeeError("TEE_ROUTE_INVALID");
+  const assumptions = route === "direct" ? [
+    "Local Pi, runtime, extensions, tools and the pinned NEAR SDK are trusted.",
+    "Experimental direct mode requires UpToDate Intel evidence and NVIDIA remote GPU verdicts, with OHTTP and model field encryption.",
+    "Evidence, credentials, encrypted inference and signature retrieval use one WebPKI-authenticated TLS socket with quote-bound SPKI approval; reconnect and resend are rejected.",
+    "NEAR shared TLS keys still permit evidence relay by another key holder; the shared response signer does not identify a single approved instance.",
+    "Guest images, CPU–GPU channel binding, key service, runtime mutation controls and model artifacts lack independent qualification.",
+  ] : NEAR_ASSUMPTIONS;
   return createTeeProvider({
     id: "nearai", name: "NEAR AI", baseUrl: NEAR_BASE_URL, apiKeyEnv: "NEARAI_API_KEY",
     policy: options.policy ?? resolvePolicy(process.env.PI_NEARAI_POLICY),
     modelVisibility: options.modelVisibility ?? resolveModelVisibility(process.env.PI_NEARAI_MODEL_VISIBILITY),
-    parseCatalog: loadNearCatalog, requireDeclaredTee: true, catalogFetch: options.catalogFetch, assumptions: NEAR_ASSUMPTIONS,
-    openSdkTransport: options.openSdkTransport ?? (async ({ apiKey, signal }) => {
+    parseCatalog: loadNearCatalog, requireDeclaredTee: true, catalogFetch: options.catalogFetch, assumptions,
+    availableModelIds: route === "direct" ? [NEAR_DIRECT_PROFILE.model] : undefined,
+    openSdkTransport: options.openSdkTransport ?? (route === "direct" ? async ({ apiKey, signal }) => {
+      assertNearRuntime();
+      return openDirectNearTransport(apiKey, signal);
+    } : async ({ apiKey, signal }) => {
       assertNearRuntime();
       const { TLSSocket } = await import("node:tls");
       if (typeof TLSSocket.prototype.getPeerCertificate !== "function" || typeof TLSSocket.prototype.getPeerX509Certificate !== "function") {

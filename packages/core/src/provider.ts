@@ -10,6 +10,7 @@ export interface SdkTransport {
   /** An adapter-owned endpoint selected after canonical-model preflight. */
   baseUrl?: string;
   fetch: typeof globalThis.fetch;
+  dispose?(): void;
 }
 
 export type TeeCatalogModel = Model<"openai-completions"> & {
@@ -113,6 +114,7 @@ export function createTeeProvider(definition: ProviderDefinition) {
   ) {
     const controller = new AbortController();
     let rejection: string | undefined;
+    let transport: SdkTransport | undefined;
     const requestedTimeout = options?.timeoutMs;
     const timeout = typeof requestedTimeout === "number" && Number.isFinite(requestedTimeout) && requestedTimeout >= 0 ? Math.min(Math.floor(requestedTimeout), 600_000) : 600_000;
     const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(timeout), ...(options?.signal ? [options.signal] : [])]);
@@ -124,7 +126,7 @@ export function createTeeProvider(definition: ProviderDefinition) {
       if (!canonical || requested.provider !== definition.id || (definition.availableModelIds && !definition.availableModelIds.includes(canonical.id))) throw new TeeError("TEE_MODEL_UNAVAILABLE");
       if (definition.requireDeclaredTee && canonical.teeCapability !== "declared") throw new TeeError("TEE_MODEL_ATTESTATION_UNAVAILABLE");
       if (!options?.apiKey) throw new TeeError("TEE_API_KEY_REQUIRED");
-      const transport = await definition.openSdkTransport({ apiKey: options.apiKey, signal, model: structuredClone(canonical) });
+      transport = await definition.openSdkTransport({ apiKey: options.apiKey, signal, model: structuredClone(canonical) });
       signal.throwIfAborted();
       const baseUrl = transport.baseUrl ?? definition.baseUrl;
       const endpoint = new URL(baseUrl);
@@ -137,7 +139,10 @@ export function createTeeProvider(definition: ProviderDefinition) {
       return invoke({ ...canonical, baseUrl }, { ...options, signal, fetch, maxRetries: 0, headers: undefined, sessionId: undefined, cacheRetention: "none" });
     });
     const result = safeFailure(source, report, () => rejection, signal);
-    void result.result().then(() => active.delete(controller));
+    void result.result().then(() => {
+      active.delete(controller);
+      transport?.dispose?.();
+    });
     return result;
   }
 

@@ -267,5 +267,27 @@
     "apiKeysProvidedToVerifier": false,
     "independentApproval": false,
     "integratedIntoExtension": false
+  },
+  "nearDirectPi": {
+    "checkedAtDate": "2026-10-07",
+    "model": "z-ai/glm-5.3-flash",
+    "route": "direct",
+    "policy": "sdk",
+    "runtime": "Node 24.21.0",
+    "pi": "1.0.4",
+    "compiledExtension": true,
+    "nativeSecretLogin": true,
+    "storedKeyPrecedence": true,
+    "completionAndUsage": true,
+    "unicodeToolAndFollowup": true,
+    "reasoningAndFinal": true,
+    "rpcCancellation": "passed-at-response-consumption-barrier",
+    "cpuPolicy": "UpToDate",
+    "gpuEvidence": "required",
+    "tls": "same WebPKI-authenticated TLS 1.3 socket with quote-bound SPKI",
+    "ohttp": true,
+    "responseSignatureRequiredBeforeOutput": true,
+    "reconnectOrResendAllowed": false,
+    "independentApproval": false
   }
 }

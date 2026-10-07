@@ -2,7 +2,7 @@
 
 Observed 2026-10-07 UTC. Author: Codex. Node 24.21.0; Pi 1.0.4; NEAR SDK 0.1.0; Tinfoil SDK/verifier 1.2.2; EHBP 0.3.3.
 
-**The Tinfoil direct Gemma route now passes the complete actual Pi suite.** Fresh CPU and manufacturer-local GPU verification also passed separately. NEAR GLM supports a working direct research path, while the sampled Qwen instance still fails the strict TCB policy. A new locally pinned CPU helper accepts a reachable Intel candidate and rejects the AMD candidate against manufacturer security floors. Neither provider has an enabled independently Approved profile.
+**The Tinfoil direct Gemma route now passes the complete actual Pi suite.** Fresh CPU and manufacturer-local GPU verification also passed separately. NEAR GLM now also has an experimental native direct route, while the sampled Qwen instance still fails the strict TCB policy. A new locally pinned CPU helper accepts a reachable Intel candidate and rejects the AMD candidate against manufacturer security floors. Neither provider has an enabled independently Approved profile.
 
 ## Registered route and validation
 
@@ -41,7 +41,7 @@ The AMD worker's authenticated firmware is `1.55.40`, SNP SVN23 (`0x17`), microc
 
 A complete probe of the 35 Gemma hosts in the captured router inventory found 3 reachable AMD and 8 reachable Intel v3 endpoints; 24 connection attempts failed at that time. All 11 reachable documents passed the separate full reference-policy verifier; all 3 AMD samples had the older levels above. No inference was sent. Intel alternatives therefore exist despite earlier timeouts to other advertised endpoints. The Intel candidate's CPU-bound GPU evidence also passed the same hash-verified local NVIDIA verifier: GH100, driver `595.71.05`, VBIOS `96.00.D9.00.02`, signed/matching measurements and three good OCSP checks.
 
-The local Intel boot values were initially acquired from authenticated provider reference material and then frozen. Independent source/build approval, complete NVIDIA CC-mode/channel/reset behavior and deployment review remain required. NVIDIA's default overall verdict does not explicitly enforce a serialized CC-mode claim; the [mode claim is commented out](https://github.com/NVIDIA/attestation-sdk/blob/9d12801cea8a198ea0f29640dfaf8a4017c841c5/nv-attestation-sdk-cpp/src/gpu/claims.cpp#L194), and [secure-boot/debug claims derive from golden-measurement success](https://github.com/NVIDIA/attestation-sdk/blob/9d12801cea8a198ea0f29640dfaf8a4017c841c5/nv-attestation-sdk-cpp/src/gpu/verify.cpp#L370). Manufacturer verdict success alone is not that complete runtime proof. These helpers remain outside the registered JS SDK route.
+The local Intel boot values were initially acquired from authenticated provider reference material and then frozen. Independent source/build approval, complete NVIDIA CC-mode/channel/reset behavior and deployment review remain required. NVIDIA's default overall verdict does not explicitly enforce a serialized CC-mode claim; the [mode claim is commented out](https://github.com/NVIDIA/attestation-sdk/blob/9d12801cea8a198ea0f29640dfaf8a4017c841c5/nv-attestation-sdk-cpp/src/gpu/claims.cpp#L194), and [secure-boot/debug claims derive from golden-measurement success](https://github.com/NVIDIA/attestation-sdk/blob/9d12801cea8a198ea0f29640dfaf8a4017c841c5/nv-attestation-sdk-cpp/src/gpu/verify.cpp#L370). The [NVML collector](https://github.com/NVIDIA/attestation-sdk/blob/9d12801cea8a198ea0f29640dfaf8a4017c841c5/nv-attestation-sdk-cpp/src/gpu/nvml_client.cpp#L425) rejects devices without CC or PPCIe mode. That property depends on qualifying the measured collector and its device access; file appraisal alone does not independently establish mode or the later compute channel. Manufacturer verdict success alone is not that complete runtime proof. These helpers remain outside the registered JS SDK route.
 
 ### Artifact, key and runtime evidence
 
@@ -63,13 +63,15 @@ These establish concrete source properties, not an exhaustive audit of kernel, d
 
 The observed research trust set includes local Node/Go/Linux/container runtimes and pinned verifier dependencies; AMD hardware/endorsement/revocation authorities; NVIDIA hardware, device/RIM signing and OCSP authorities; Sigstore roots/log/timestamp processes and GitHub identities/builds; and Tinfoil's code, platform-endorsement and freshness-witness approval processes. HTTPS/WebPKI participates in initial artifact acquisition. The registered direct JS route additionally lacks fresh nonce/revocation/GPU enforcement. A locally approved immutable manifest and vendor-only appraisal can remove ongoing provider release/reference selection from authorization; delivery can still deny service. [Required complete inventory](../SECURITY.md#required-closed-inventory).
 
-## NEAR direct research
+## NEAR direct route and evidence
+
+The registered GLM direct route passed the complete actual Pi suite on 2026-10-07: compiled extension loading, native secret login, stored-key precedence, completion/usage, Unicode echo tool execution and follow-up, reasoning/final text, and RPC cancellation at the response-consumption barrier. Its verified-response buffering means visible output starts only after completion authentication. The cancellation result measures local abort/acknowledgement; it does not establish remote generation-stop timing.
 
 GLM at `glm-5-3-flash.completions.near.ai` passed CPU `UpToDate`, required GPU evidence, same-TLS SPKI binding, encrypted OHTTP inference, expected marker/usage and a verified `provider_tee` response signature. Qwen at `qwen3-6-35b.completions.near.ai` failed `policy.tcb_status_not_allowed` with `OutOfDate`, before inference. The [probe](../scripts/research/near-direct.mjs) uses one TLS 1.3 socket for quote, inference and signature lookup, and rejects reconnection. Wrong nonce and wrong SPKI reject. [Direct TLS procedure](https://docs.near.ai/cloud/verification/direct/tls), [SDK direct client](https://github.com/nearai/inference-sdk/blob/b9930893a9f560e66898e1616111c5ac2241686c/js/src/node/direct-attestation-client.ts).
 
 That closes ordinary connection changes, but a holder of the shared TLS key could still terminate a client connection and relay a quote binding the same SPKI. No quote value identifies this TLS session. NEAR's [shared model signing contract](https://docs.near.ai/cloud/verification/cloud-api/model-attestations) permits differently measured instances. A measured terminator quoting its actual TLS exporter could close evidence relay; full guest-image appraisal, key-release/mutation controls and downstream/GPU closure still require evidence. The required [GPU SDK check](https://github.com/nearai/inference-sdk/blob/b9930893a9f560e66898e1616111c5ac2241686c/js/src/utils/nvidia.ts) accepts NVIDIA's remote verdict, without proving CPU–GPU association.
 
-NEAR describes direct completions as experimental, with incomplete instance inventories and possible signature `404`s on other connections. [cloud-api#1087](https://github.com/nearai/cloud-api/issues/1087), [direct-completions documentation](https://docs.near.ai/cloud/experimental/direct-completions). The registered NEAR extension still uses its strict gateway route; its `OutOfDate` block is unchanged.
+NEAR describes direct completions as experimental, with incomplete instance inventories and possible signature `404`s on other connections. [cloud-api#1087](https://github.com/nearai/cloud-api/issues/1087), [direct-completions documentation](https://docs.near.ai/cloud/experimental/direct-completions). The default NEAR gateway route retains its `OutOfDate` block. `PI_NEARAI_POLICY=sdk PI_NEARAI_ROUTE=direct` selects only the GLM candidate through the [native adapter](../packages/nearai/src/direct.ts). The [owned channel](../packages/nearai/src/direct-channel.ts) permits the SDK's exact nonce-bearing attestation URL, one encrypted `/ohttp` POST and signature GETs on one authenticated socket. Credentials require quote-bound SPKI approval. Reconnection/resend fail closed; response bytes remain behind the signature barrier. [Real HTTPS tests](../tests/near-direct-channel.test.ts) exercise wrong-SPKI pre-send blocking, one connection, route rejection and abort during a response; [native provider tests](../tests/direct-routing.test.ts) cover resource disposal after success, rejection and cancellation.
 
 ## Reproduce and remaining implementation
 
@@ -80,12 +82,13 @@ node scripts/research/tinfoil-direct.mjs
 
 # Billable synthetic actual-Pi suite; owner-only file with the relevant key:
 PI_TINFOIL_ROUTE=direct node --env-file=/path/to/private/tinfoil.env --import tsx scripts/live-pi.ts tinfoil gemma4-31b
+PI_NEARAI_ROUTE=direct node --env-file=/path/to/private/nearai.env --import tsx scripts/live-pi.ts nearai z-ai/glm-5.3-flash
 # Append --cancel-only for cancellation at response headers, or --cancel-stream
 # to abort after a live text delta without the test consumption barrier.
 ```
 
 The initial research probes use the provider SDK; their logical request count does not account for SDK wire resends. The new registered direct route owns a single send. Worker availability and references may change; pin mismatches must remain terminal.
 
-Next, integrate fresh vendor CPU/GPU appraisal with a locally pinned manifest; finish the complete runtime/key/channel inventory and independent verifier/transport review. NEAR needs an explicit same-socket SDK candidate and, for Approved use, a demonstrated server/session contract. Whole-session protection still requires Pi's fail-closed physical-provider dispatch guard. These are separate from the working direct route and its passed live suite.
+Next, integrate fresh vendor CPU/GPU appraisal with a locally pinned manifest; finish the complete runtime/key/channel inventory and independent verifier/transport review. NEAR has the explicit same-socket SDK candidate; Approved use still needs a demonstrated server/session contract. Whole-session protection still requires Pi's fail-closed physical-provider dispatch guard. These are separate from the working direct route and its passed live suite.
 
 Written by Codex.
