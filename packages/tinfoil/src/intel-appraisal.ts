@@ -15,7 +15,7 @@ export const INTEL_CANDIDATE = Object.freeze({
   model: "gemma4-31b",
   cpuVerifierSha256: "bcfc1896c156727a7612f4ff7500993236cd648f10e0a63e46eb2f71a3d03316",
   cpuPolicySha256: "6eacea241bd6ac37901cc3cb738f62eebb513e827d28023ffdfde719d54960b2",
-  gpuImage: "sha256:b67dad12cafae0f436f21ade4b0519b5a0fb343bac4bf380d9551e96a2394b5c",
+  gpuImage: "sha256:7648914f1e3bc8c23e208247c93551391f2c121674ef99a1dfc7106311d8f707",
 });
 export const NVAT_HASHES = Object.freeze({
   "bin/nvattest": "0db6cba463aefa91a1a81c62bc8b3928ffe5c3d8347bde6561f5ea08dab156ae",

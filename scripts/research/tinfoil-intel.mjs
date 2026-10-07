@@ -11,7 +11,7 @@ import { parseHopperGpuMode } from "../../packages/tinfoil/dist/gpu-mode.js";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const host = "gemma4-31b-inf8-0.tinfoil.containers.tinfoil.dev";
-const image = "sha256:b67dad12cafae0f436f21ade4b0519b5a0fb343bac4bf380d9551e96a2394b5c";
+const image = "sha256:7648914f1e3bc8c23e208247c93551391f2c121674ef99a1dfc7106311d8f707";
 const bundle = resolve(root, "../work/nvat-gpu/libnvat-linux-sbsa-1.2.2.1780962352-archive");
 const hashes = {
   "bin/nvattest": "0db6cba463aefa91a1a81c62bc8b3928ffe5c3d8347bde6561f5ea08dab156ae",

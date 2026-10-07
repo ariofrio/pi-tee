@@ -69,7 +69,7 @@ export interface ProviderReport {
   assumptions: readonly string[];
   independentApproval: "not-established";
   protectedSession: "not-established";
-  closedTrustSet: "not-established" | "profile-established";
+  closedTrustSet: "not-established" | "profile-declared";
   publicBuildVerification: "not-established" | "profile-established";
   lastAdmission?: PublicBuildAdmission;
 }
@@ -108,7 +108,8 @@ function safeFailure(source: AssistantMessageEventStream, report: ProviderReport
         if (event.type === "done") {
           const accepted = admission();
           report.lastRequest = accepted ? "public-build-accepted" : "sdk-accepted";
-          report.publicBuildVerification = report.closedTrustSet = accepted ? "profile-established" : "not-established";
+          report.publicBuildVerification = accepted ? "profile-established" : "not-established";
+          report.closedTrustSet = accepted ? "profile-declared" : "not-established";
           report.lastAdmission = accepted ? structuredClone(accepted) : undefined;
           delete report.reason;
         }

@@ -45,6 +45,7 @@ test("public policy uses an owned admitted session rather than its SDK transport
   assert.equal(disposed, 1);
   assert.equal(integration.getReport().lastRequest, "public-build-accepted");
   assert.equal(integration.getReport().publicBuildVerification, "profile-established");
+  assert.equal(integration.getReport().closedTrustSet, "profile-declared");
   assert.equal(integration.getReport().protectedSession, "not-established");
 });
 

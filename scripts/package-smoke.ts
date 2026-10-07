@@ -17,6 +17,7 @@ try {
     assert.ok(result);
     const files = result.files.map((file) => file.path);
     for (const file of ["LICENSE", "README.md", "dist/index.js", "dist/index.d.ts", ...(name === "core" ? [] : ["dist/extension.js"])]) assert.ok(files.includes(file), `${name} includes ${file}`);
+    if (name === "tinfoil") for (const file of ["dist/setup.js", "verifier-source/main.go", "verifier-source/go.mod", "verifier-source/go.sum", "verifier-source/trusted_root.json"]) assert.ok(files.includes(file), `tinfoil includes ${file}`);
     packed.set(name, join(scratch, result.filename));
   }
   for (const name of ["nearai", "tinfoil"]) {
@@ -24,6 +25,17 @@ try {
     await mkdir(directory);
     await writeFile(join(directory, "package.json"), JSON.stringify({ name: `isolated-${name}-smoke`, private: true, type: "module" }));
     await execute("npm", ["install", "--prefer-offline", "--ignore-scripts", "--no-audit", "--no-fund", packed.get("core")!, packed.get(name)!], { cwd: directory, maxBuffer: 2 * 1024 * 1024 });
+    if (name === "tinfoil") {
+      const help = await execute(process.execPath, ["node_modules/pi-tinfoil/dist/setup.js", "--help"], { cwd: directory });
+      assert.ok(help.stdout.includes("macOS ARM64"));
+      if (process.env.PI_TEE_PACKAGE_SETUP_DIR) {
+        const setup = await execute(process.execPath, ["node_modules/.bin/pi-tinfoil-setup", "--directory", resolve(process.env.PI_TEE_PACKAGE_SETUP_DIR)], {
+          cwd: directory, env: { PATH: process.env.PATH, HOME: process.env.HOME }, timeout: 600000, maxBuffer: 1048576,
+        });
+        assert.ok(setup.stdout.includes("PASS: local verifier setup."));
+        console.log("PASS: isolated tinfoil tarball reproduces the pinned local verifiers.");
+      }
+    }
     const otherSdk = name === "nearai" ? "tinfoil" : "@nearai/inference-sdk";
     await assert.rejects(access(join(directory, "node_modules", otherSdk)), { code: "ENOENT" });
     const code = `

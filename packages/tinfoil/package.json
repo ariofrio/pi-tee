@@ -19,10 +19,11 @@
     "dist",
     "README.md",
     "LICENSE",
-    "THIRD_PARTY_LICENSES"
+    "THIRD_PARTY_LICENSES",
+    "verifier-source"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && node ../../scripts/package-verifier-source.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "engines": {
@@ -45,5 +46,8 @@
   "homepage": "https://github.com/ariofrio/pi-tee/tree/main/packages/tinfoil#readme",
   "bugs": {
     "url": "https://github.com/ariofrio/pi-tee/issues"
+  },
+  "bin": {
+    "pi-tinfoil-setup": "./dist/setup.js"
   }
 }

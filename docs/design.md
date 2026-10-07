@@ -74,7 +74,7 @@ NEAR's SDK does not appraise MRTD/RTMR0–2; its guest-written OS hash depends o
 
 Keep two separately installable provider extensions and one shared library. Native API-key `/login`, stored credentials, live catalogs, four-hour refresh, tools, reasoning, usage and cancellation already work. NEAR's TEE-only visibility filter is independent of security policy; showing a catalog entry never authorizes inference. [Provider interface](https://github.com/earendil-works/pi/blob/eb326d265ae0b88489a6d10319307780df827cdf/packages/coding-agent/docs/custom-provider.md), [shared provider](../packages/core/src/provider.ts).
 
-Admission returns an owned session containing the model, stable authority-policy digest, authenticated release digests, endpoint keys, freshness bounds and established properties. The session cannot be changed by catalog metadata, caller URLs/headers/fetch, payload hooks or routing aliases.
+Admission returns an owned session containing the model, stable authority-policy digest, authenticated release digests and freshness bounds, plus a transport constructed from the same appraisal’s quote-bound endpoint keys. The public admission record omits those keys. The session cannot be changed by catalog metadata, caller URLs/headers/fetch, payload hooks or routing aliases.
 
 1. Select the canonical model and policy; obtain evidence without sending prompts or credentials.
 2. Authenticate releases and hardware; establish the complete serving chain before releasing inference keys.

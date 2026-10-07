@@ -1,0 +1,29 @@
+{
+  "image": "sha256:7648914f1e3bc8c23e208247c93551391f2c121674ef99a1dfc7106311d8f707",
+  "nvidiaLocalAppraisal": true,
+  "gpuSignatureVerified": true,
+  "nonceMatched": true,
+  "ocspChains": 3,
+  "inferenceRequests": 0,
+  "date": "2026-10-07",
+  "scope": "macOS ARM64 / local OrbStack / Docker 29.4.0 / buildx 0.33.0",
+  "cpuHelperSha256": "08bcbf2f96f01d46c4129c0cca2e9135e76c44e1710bc51ff5cbc0652c7af1ba",
+  "ociArchiveSha256": "48d8202ed8b45bca8e1f8a7bdb189130d2e519ea1425744603cc9bfa41e7a1d0",
+  "cleanIdenticalImageBuilds": 2,
+  "ubuntuBase": "sha256:534baea6a22c03a63003dbc8dbe78fe34bc0d7e595d9a9dc9834884ff530eb55",
+  "pinnedUbuntuPackages": 5,
+  "pinnedNvidiaArchives": 1,
+  "compiledSetupSucceeded": true,
+  "independentNvidiaRebuild": false,
+  "packageInventory": "https://github.com/ariofrio/pi-tee/blob/main/packages/tinfoil/src/setup-artifacts.ts",
+  "isolatedTarballSetupSucceeded": true,
+  "actualPiCompiledCandidatePassed": true,
+  "actualPiCases": [
+    "native login",
+    "stored-key precedence",
+    "completion and usage",
+    "Unicode tools and follow-up",
+    "reasoning and final text",
+    "RPC response-barrier cancellation"
+  ]
+}
