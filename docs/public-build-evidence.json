@@ -26,6 +26,7 @@
   "kernelDigestMatched": true,
   "initrdDigestMatched": true,
   "guestVerityRootAuthenticated": true,
+  "rtmr1Recomputed": "a787299fe2e84295a406dde367abac5b40128c1e13aa81dfde4a5c2e39682e45cde7bb84cefc7f33f25ac645fc265030",
   "rtmr2Recomputed": "233677c2518eadf59ff45e8c22ee776ff828d066675dc87d86043e2bc2c4352c4f915898044bf317993749045056f811",
   "containerBuild": {
     "builderClaim": "https://github.com/tinfoilsh/confidential-gemma4-31b/actions/runs/31575376519/attempts/1",

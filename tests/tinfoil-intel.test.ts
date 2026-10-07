@@ -6,6 +6,23 @@ import { qualifyIntelCandidate } from "../packages/tinfoil/src/intel-appraisal.j
 import { createTinfoilProvider } from "../packages/tinfoil/src/index.js";
 import { normalizeContext } from "@earendil-works/pi-ai/compat";
 
+test("malformed public CPU evidence cannot reach artifact discovery or release endpoint keys", { skip: !process.env.PI_TEE_PUBLIC_BUILD_TEST_HELPER || !process.env.PI_TEE_PUBLIC_BUILD_TEST_NVAT }, async () => {
+  let metadataRequests = 0;
+  await assert.rejects(qualifyIntelCandidate({
+    cpuVerifier: process.env.PI_TEE_PUBLIC_BUILD_TEST_HELPER!, nvatDir: process.env.PI_TEE_PUBLIC_BUILD_TEST_NVAT!,
+    mode: "public-builds", signal: AbortSignal.timeout(10000),
+    evidenceFetch: async (input, options) => {
+      metadataRequests++;
+      assert.equal(metadataRequests, 1, "Invalid CPU evidence cannot authorize further discovery.");
+      assert.match(String(input), /^https:\/\/gemma4-31b-inf8-0\.tinfoil\.containers\.tinfoil\.dev\/\.well-known\/tinfoil-attestation\?nonce=[a-f0-9]{64}$/);
+      assert.equal(options?.headers, undefined);
+      assert.equal(options?.body, undefined);
+      return Response.json({});
+    },
+  }), /TEE_PUBLIC_BUILD_REJECTED/);
+  assert.equal(metadataRequests, 1);
+});
+
 test("the dynamic-build candidate rejects an untrusted helper through Pi before sending a prompt", async () => {
   await mkdir(".scratch/work", { recursive: true });
   const dir = await mkdtemp(resolve(".scratch/work/untrusted-public-verifier-"));

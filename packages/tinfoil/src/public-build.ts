@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
 import { readBoundedBody, TeeError } from "pi-tee-core";
 import assert from "node:assert/strict";
+import { computeBootMeasurements } from "./boot-measurements.js";
 
 const host = "gemma4-31b-inf8-0.tinfoil.containers.tinfoil.dev";
 const repo = "tinfoilsh/confidential-gemma4-31b";
@@ -77,12 +78,9 @@ export async function verifyPublicBuildArtifacts(options: {
     ]);
     assert.equal(sha256(kernel), cvm.hashes.kernel, "TEE_PUBLIC_KERNEL_DIGEST_REJECTED");
     assert.equal(sha256(initrd), cvm.hashes.initrd, "TEE_PUBLIC_INITRD_DIGEST_REJECTED");
-    const sha384 = (bytes: Uint8Array) => createHash("sha384").update(bytes).digest();
-    let rtmr2: Buffer = Buffer.alloc(48);
-    for (const bytes of [Buffer.from(`${expectedCommand} initrd=initrd\0`, "utf16le"), initrd]) {
-      rtmr2 = sha384(Buffer.concat([rtmr2, sha384(bytes)]));
-    }
-    assert.equal(rtmr2.toString("hex"), deployment.tdx_measurement.rtmr2, "TEE_PUBLIC_BOOT_MEASUREMENT_REJECTED");
+    const boot = computeBootMeasurements(kernel, initrd, deployment.vm_shape.memory_mb, expectedCommand);
+    assert.equal(boot.rtmr1, deployment.tdx_measurement.rtmr1, "TEE_PUBLIC_BOOT_MEASUREMENT_REJECTED");
+    assert.equal(boot.rtmr2, deployment.tdx_measurement.rtmr2, "TEE_PUBLIC_BOOT_MEASUREMENT_REJECTED");
 
     // Select the registry root through the authenticated release, not delivery
     // metadata or a mutable tag. Anonymous GHCR pull tokens authorize reads only.
@@ -146,7 +144,7 @@ export async function verifyPublicBuildArtifacts(options: {
       cvmBuildVerified: true, cvmTag, cvmCommit: cvm.commit, cvmManifestDigest: cvm.manifestDigest,
       cvmSourceUrl: `https://github.com/tinfoilsh/cvmimage/tree/${cvm.commit}`,
       kernelDigestMatched: true, initrdDigestMatched: true, guestVerityRootAuthenticated: true,
-      rtmr2Recomputed: rtmr2.toString("hex"),
+      rtmr1Recomputed: boot.rtmr1, rtmr2Recomputed: boot.rtmr2,
       containerBuild: { ...container, publicSourceParentMatched: true, publicDockerfileBytesMatched: true },
       runtimeConfig: runtime,
       independentRebuild: false, inferenceQualified: false,

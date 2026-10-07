@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Recompute RTMR1/RTMR2 in the shared dynamic build chain using a bounded, attributed TypeScript port of the release measurement algorithm. Reject unsupported PE layouts; test real release registers, code/command substitutions and malformed layouts without claiming build authentication. The full actual Pi suite passes with the new boot gate; the package includes the component's Apache license.
+
 - Add the SDK-policy `direct-public` Intel candidate: authenticate fresh dynamic release/guest/OCI/source/runtime evidence before local NVIDIA appraisal and send-once encrypted inference. Share the artifact chain with the evidence probe, reject untrusted local helpers through native Pi, and retain the default production gate. All 44 provider tests, package loader checks, the full actual Pi suite and separate live-delta cancellation pass.
 
 - Enforce a Gemma runtime configuration contract after authenticating the named public release: bind VM shape, guest/config boot hashes, dynamic image/model roots, literal environment, engine flags, routes and health checks. Reject host access, unknown environment, remote code, logging and ambiguous YAML/arguments. Connect it to the evidence-only live chain; standalone and combined results still deny inference qualification.

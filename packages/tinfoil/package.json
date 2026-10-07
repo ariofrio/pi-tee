@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "description": "Tinfoil provider for Pi with native login, live models and explicit attestation policy",
   "type": "module",
-  "license": "MIT",
+  "license": "MIT AND Apache-2.0",
   "pi": {
     "extensions": [
       "./dist/extension.js"
@@ -18,7 +18,8 @@
   "files": [
     "dist",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "THIRD_PARTY_LICENSES"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
