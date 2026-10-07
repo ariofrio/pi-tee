@@ -7,6 +7,8 @@ import { resolveModelVisibility, resolvePolicy, TeeError, type ModelVisibility, 
 import { guardChatFetch, readBoundedBody } from "./transport.js";
 
 export interface SdkTransport {
+  /** An adapter-owned endpoint selected after canonical-model preflight. */
+  baseUrl?: string;
   fetch: typeof globalThis.fetch;
 }
 
@@ -25,7 +27,8 @@ export interface ProviderDefinition {
   requireDeclaredTee?: boolean;
   modelVisibility?: ModelVisibility;
   catalogFetch?: typeof globalThis.fetch;
-  openSdkTransport(options: { apiKey: string; signal: AbortSignal }): Promise<SdkTransport>;
+  availableModelIds?: readonly string[];
+  openSdkTransport(options: { apiKey: string; signal: AbortSignal; model: TeeCatalogModel }): Promise<SdkTransport>;
   assumptions: readonly string[];
 }
 
@@ -49,7 +52,7 @@ const FOUR_HOURS = 4 * 60 * 60 * 1000;
 const terminalCodes = new Set([
   "TEE_APPROVED_DEPLOYMENT_UNAVAILABLE", "TEE_MODEL_UNAVAILABLE", "TEE_API_KEY_REQUIRED",
   "TEE_RUNTIME_UNSUPPORTED", "TEE_REQUEST_REJECTED", "TEE_RESPONSE_REJECTED", "TEE_BODY_TOO_LARGE",
-  "TEE_MODEL_ATTESTATION_UNAVAILABLE",
+  "TEE_MODEL_ATTESTATION_UNAVAILABLE", "TEE_TLS_KEY_REJECTED", "TEE_WORKLOAD_PIN_REJECTED", "TEE_ATTESTATION_REJECTED",
 ]);
 
 function safeFailure(source: AssistantMessageEventStream, report: ProviderReport, rejection: () => string | undefined, signal: AbortSignal): AssistantMessageEventStream {
@@ -118,16 +121,20 @@ export function createTeeProvider(definition: ProviderDefinition) {
       signal.throwIfAborted();
       if (mode !== "sdk") throw new TeeError("TEE_APPROVED_DEPLOYMENT_UNAVAILABLE");
       const canonical = catalog.find((entry) => entry.id === requested.id);
-      if (!canonical || requested.provider !== definition.id) throw new TeeError("TEE_MODEL_UNAVAILABLE");
+      if (!canonical || requested.provider !== definition.id || (definition.availableModelIds && !definition.availableModelIds.includes(canonical.id))) throw new TeeError("TEE_MODEL_UNAVAILABLE");
       if (definition.requireDeclaredTee && canonical.teeCapability !== "declared") throw new TeeError("TEE_MODEL_ATTESTATION_UNAVAILABLE");
       if (!options?.apiKey) throw new TeeError("TEE_API_KEY_REQUIRED");
-      const transport = await definition.openSdkTransport({ apiKey: options.apiKey, signal });
+      const transport = await definition.openSdkTransport({ apiKey: options.apiKey, signal, model: structuredClone(canonical) });
       signal.throwIfAborted();
+      const baseUrl = transport.baseUrl ?? definition.baseUrl;
+      const endpoint = new URL(baseUrl);
+      if (endpoint.protocol !== "https:" || endpoint.username || endpoint.password || endpoint.search || endpoint.hash ||
+          endpoint.pathname !== "/v1" || endpoint.href !== `${endpoint.origin}/v1`) throw new TeeError("TEE_REQUEST_REJECTED");
       const fetch = guardChatFetch({
-        fetch: transport.fetch, endpoint: `${definition.baseUrl}/chat/completions`, model: canonical.id,
+        fetch: transport.fetch, endpoint: `${baseUrl}/chat/completions`, model: canonical.id,
         apiKey: options.apiKey, signal, onRejection: () => { rejection = "TEE_REQUEST_REJECTED"; },
       });
-      return invoke(canonical, { ...options, signal, fetch, maxRetries: 0, headers: undefined, sessionId: undefined, cacheRetention: "none" });
+      return invoke({ ...canonical, baseUrl }, { ...options, signal, fetch, maxRetries: 0, headers: undefined, sessionId: undefined, cacheRetention: "none" });
     });
     const result = safeFailure(source, report, () => rejection, signal);
     void result.result().then(() => active.delete(controller));
@@ -167,7 +174,8 @@ export function createTeeProvider(definition: ProviderDefinition) {
   };
 
   function visibleCatalog() {
-    return catalog.filter((entry) => !definition.requireDeclaredTee || visibility === "all" || entry.teeCapability === "declared").map((entry) => {
+    return catalog.filter((entry) => (!definition.availableModelIds || definition.availableModelIds.includes(entry.id)) &&
+      (!definition.requireDeclaredTee || visibility === "all" || entry.teeCapability === "declared")).map((entry) => {
       if (!definition.requireDeclaredTee || entry.teeCapability === "declared") return entry;
       const label = entry.teeCapability === "unsupported" ? "non-TEE" : "TEE unknown";
       return { ...entry, name: `${entry.name} [${label}; inference blocked]` };

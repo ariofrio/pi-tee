@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add adapter-owned direct endpoint selection, route model restrictions, and TLS SPKI checks on the exact socket before HTTP transmission. Native-provider routing and real-socket rejection tests cover caller overrides, stale selections, and zero credential/body sends on a wrong TLS key.
+
 - Add evidence-only and opt-in synthetic direct-worker research probes. NEAR GLM passed strict same-TLS attestation and signed inference; Qwen remained `OutOfDate`. A Tinfoil Gemma SEV worker passed SDK verification and direct EHBP inference. Document the exact deployment artifact and remaining approval gates; registered provider routes and defaults are unchanged.
 
 - Accept Pi's text reasoning replay during tool-result follow-up; add failing-then-passing positive and structured-reasoning rejection tests. Record successful live Tinfoil completion, tools and reasoning with a corrected credential, while keeping cancellation and a complete live-suite pass unvalidated.
