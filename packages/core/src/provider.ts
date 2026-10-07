@@ -55,6 +55,7 @@ export interface ProviderDefinition {
   openSdkTransport(options: { apiKey: string; signal: AbortSignal; model: TeeCatalogModel }): Promise<SdkTransport>;
   assumptions: readonly string[];
   publicBuildProfile?: PublicBuildProfile;
+  publicBuildProfiles?: readonly PublicBuildProfile[];
 }
 
 export interface ProviderReport {
@@ -124,11 +125,24 @@ function safeFailure(source: AssistantMessageEventStream, report: ProviderReport
 
 export function createTeeProvider(definition: ProviderDefinition) {
   let mode = resolvePolicy(definition.policy);
-  const publicProfile = definition.publicBuildProfile && {
-    ...structuredClone({ id: definition.publicBuildProfile.id, authorityPolicyDigest: definition.publicBuildProfile.authorityPolicyDigest,
-      modelIds: definition.publicBuildProfile.modelIds, baseUrl: definition.publicBuildProfile.baseUrl, assumptions: definition.publicBuildProfile.assumptions }),
-    openSession: definition.publicBuildProfile.openSession,
-  };
+  const publicProfiles = [
+    ...(definition.publicBuildProfile ? [definition.publicBuildProfile] : []),
+    ...(definition.publicBuildProfiles ?? []),
+  ].map(profile => ({
+    ...structuredClone({ id: profile.id, authorityPolicyDigest: profile.authorityPolicyDigest,
+      modelIds: profile.modelIds, baseUrl: profile.baseUrl, assumptions: profile.assumptions }),
+    openSession: profile.openSession,
+  }));
+  const profilesByModel = new Map<string, typeof publicProfiles[number]>();
+  const profileIds = new Set<string>();
+  for (const profile of publicProfiles) {
+    if (profileIds.has(profile.id)) throw new TeeError("TEE_PUBLIC_PROFILE_INVALID");
+    profileIds.add(profile.id);
+    for (const id of profile.modelIds) {
+      if (profilesByModel.has(id)) throw new TeeError("TEE_PUBLIC_PROFILE_INVALID");
+      profilesByModel.set(id, profile);
+    }
+  }
   let policyEpoch = 0;
   let visibility = resolveModelVisibility(definition.modelVisibility);
   let catalog: readonly TeeCatalogModel[] = [];
@@ -165,25 +179,26 @@ export function createTeeProvider(definition: ProviderDefinition) {
     active.add(controller);
     const source = lazyStream(requested, async () => {
       signal.throwIfAborted();
-      if (requestMode === "public-builds" && !publicProfile) throw new TeeError("TEE_PUBLIC_BUILD_DEPLOYMENT_UNAVAILABLE");
+      if (requestMode === "public-builds" && publicProfiles.length === 0) throw new TeeError("TEE_PUBLIC_BUILD_DEPLOYMENT_UNAVAILABLE");
       if (requestMode === "approved") throw new TeeError("TEE_APPROVED_DEPLOYMENT_UNAVAILABLE");
       const canonical = catalog.find((entry) => entry.id === requested.id);
       if (!canonical || requested.provider !== definition.id || (definition.availableModelIds && !definition.availableModelIds.includes(canonical.id))) throw new TeeError("TEE_MODEL_UNAVAILABLE");
       if (definition.requireDeclaredTee && canonical.teeCapability !== "declared") throw new TeeError("TEE_MODEL_ATTESTATION_UNAVAILABLE");
       if (!options?.apiKey) throw new TeeError("TEE_API_KEY_REQUIRED");
       if (requestMode === "public-builds") {
-        if (!publicProfile!.modelIds.includes(canonical.id)) throw new TeeError("TEE_MODEL_UNAVAILABLE");
-        const session = await publicProfile!.openSession({ signal, model: structuredClone(canonical) });
+        const publicProfile = profilesByModel.get(canonical.id);
+        if (!publicProfile) throw new TeeError("TEE_MODEL_UNAVAILABLE");
+        const session = await publicProfile.openSession({ signal, model: structuredClone(canonical) });
         transport = session.transport;
         admission = Object.freeze(structuredClone(session.admission));
         const now = Date.now();
-        if (admission.profile !== publicProfile!.id || admission.model !== canonical.id ||
-          admission.authorityPolicyDigest !== publicProfile!.authorityPolicyDigest || !/^[a-f0-9]{64}$/.test(admission.authorityPolicyDigest) ||
+        if (admission.profile !== publicProfile.id || admission.model !== canonical.id ||
+          admission.authorityPolicyDigest !== publicProfile.authorityPolicyDigest || !/^[a-f0-9]{64}$/.test(admission.authorityPolicyDigest) ||
           ![admission.workloadDigest, admission.platformDigest, admission.cvmManifestDigest, admission.imageDigest, admission.configDigest].every(value => /^[a-f0-9]{64}$/.test(value)) ||
           !Number.isSafeInteger(admission.checkedAt) || !Number.isSafeInteger(admission.expiresAt) ||
           admission.checkedAt > now + 1000 || now - admission.checkedAt > 300000 ||
           admission.expiresAt <= now || admission.expiresAt > admission.checkedAt + 300000 ||
-          transport.baseUrl !== publicProfile!.baseUrl) throw new TeeError("TEE_PUBLIC_SESSION_REJECTED");
+          transport.baseUrl !== publicProfile.baseUrl) throw new TeeError("TEE_PUBLIC_SESSION_REJECTED");
       } else transport = await definition.openSdkTransport({ apiKey: options.apiKey, signal, model: structuredClone(canonical) });
       signal.throwIfAborted();
       const baseUrl = transport.baseUrl ?? definition.baseUrl;
@@ -246,7 +261,7 @@ export function createTeeProvider(definition: ProviderDefinition) {
 
   function selectableCatalog() {
     if (mode === "sdk") return visibleCatalog();
-    if (mode === "public-builds" && publicProfile) return visibleCatalog().filter(entry => publicProfile.modelIds.includes(entry.id));
+    if (mode === "public-builds") return visibleCatalog().filter(entry => profilesByModel.has(entry.id));
     return [];
   }
 
@@ -260,7 +275,9 @@ export function createTeeProvider(definition: ProviderDefinition) {
   }
 
   function updateReport() {
-    report.assumptions = mode === "public-builds" && publicProfile?.assumptions ? publicProfile.assumptions : definition.assumptions;
+    report.assumptions = mode === "public-builds" && publicProfiles.length ?
+      [...new Set(publicProfiles.flatMap(profile => (profile.assumptions ?? definition.assumptions).map(assumption =>
+        publicProfiles.length > 1 ? `[${profile.id}] ${assumption}` : assumption)))] : definition.assumptions;
     report.catalogModels = catalog.length;
     report.catalogCheckedAt = checkedAt;
     if (definition.requireDeclaredTee) {
