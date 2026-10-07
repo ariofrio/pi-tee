@@ -74,6 +74,24 @@ test("URL, header and fetch overrides cannot escape the registered transport", a
   assert.equal(integration.getReport().closedTrustSet, "not-established");
 });
 
+test("SDK-policy key rotation can reconstruct the same guarded body without consuming it", async () => {
+  const attempts: { url: string; authorization: string | null; body: string }[] = [];
+  const integration = await sdkProvider(async (input, init) => {
+    // An external SDK may reconstruct its request after attesting a rotated key.
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const request = new Request(input, init);
+      attempts.push({ url: request.url, authorization: request.headers.get("authorization"), body: await request.text() });
+    }
+    return new Response('data: {"id":"c1","choices":[{"index":0,"delta":{"content":"ok"},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n', { headers: { "content-type": "text/event-stream" } });
+  });
+  const result = await integration.provider.streamSimple(model, context, { apiKey: "test-key" }).result();
+  assert.equal(result.stopReason, "stop");
+  assert.deepEqual(attempts[1], attempts[0]);
+  assert.equal(attempts[1]?.url, "https://tee.example/v1/chat/completions");
+  assert.equal(attempts[1]?.authorization, "Bearer test-key");
+  assert.equal(JSON.parse(attempts[1]!.body).messages.at(-1).content, "private prompt");
+});
+
 test("changing to approved policy aborts an in-flight SDK request and hides SDK models", async () => {
   let started!: () => void;
   const ready = new Promise<void>((resolve) => { started = resolve; });

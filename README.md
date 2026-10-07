@@ -1,6 +1,6 @@
 # pi-tee
 
-**Work in progress.** Approved-workload enforcement is not implemented; Approved mode blocks all inference. Live authenticated inference through Pi has not been tested. SDK mode is an explicit opt-in with the trust limits below.
+**Work in progress.** Approved-workload enforcement is not implemented; Approved mode blocks all inference. Live Pi inference validation remains incomplete; see [Validation](#validation). SDK mode is an explicit opt-in with the trust limits below.
 
 Two provider extensions and one shared library, built together in this repository:
 
@@ -98,10 +98,15 @@ npm run smoke             # compiled entries through Pi's real loader and synthe
 npm run smoke:packages    # isolated tarball installs/loader/login; may download dependencies
 npm run smoke:catalogs    # public metadata only; no credential or inference
 npm run smoke:attestation # live Tinfoil router SDK verification; no inference
+npm run smoke:pi -- tinfoil # opt-in, billable Pi CLI/RPC tests; requires TINFOIL_API_KEY
 ```
+
+The [live Pi harness](scripts/live-pi.ts) accepts `nearai` or `tinfoil` and an optional model ID. Supply the corresponding credential in the environment, or use Node's `--env-file` with a private dotenv file, for example `node --env-file=/path/to/private/tinfoil.env --import tsx scripts/live-pi.ts tinfoil`. It uses synthetic prompts, an isolated owner-only Pi credential store and project, a harmless Unicode echo tool, capped output tokens and a two-minute deadline per CLI invocation. It checks native secret login, discovery, completion/usage, stored-key precedence, tool execution and result follow-up, reasoning where declared, and RPC cancellation. It removes its temporary store and never prints credentials or provider payloads. A terminal inference failure stops subsequent checks; it is not a successful end-to-end result.
 
 Tests exercise the real Pi OpenAI adapter with controlled external transport responses: payload/model/header/URL overrides, hosted-tool injection, both retry classifications, cancellation, policy changes, signature barriers, malformed/truncated streams, bounded buffering, Unicode tool arguments, usage, and catalog validation. These tests do not substitute for hardware evidence or a production security audit.
 
-Observed on 2026-10-06: live discovery mapped 44 NEAR chat/tool models, with **3** matching declared model-attestation capability and shown by the default filter, plus 7 Tinfoil models. Tinfoil router evidence passed the pinned SDK verifier. These are point-in-time observations, not a claim about today's full fleet. Authenticated live inference and NEAR live attestation were not run because provider credentials were unavailable.
+Observed on 2026-10-06: live discovery mapped 44 NEAR chat/tool models, with **3** matching declared model-attestation capability and shown by the default filter, plus 7 Tinfoil models. Tinfoil router evidence passed the pinned SDK verifier. These are point-in-time observations, not a claim about today's full fleet.
+
+On 2026-10-07, the live harness loaded both compiled extensions, used Pi's native secret-login API and discovered their models. Inference did not succeed: NEAR's gateway quote was rejected with `policy.tcb_status_not_allowed` because its TDX TCB status was `OutOfDate`, while this extension requires `UpToDate`. Tinfoil returned HTTP 401 `invalid_api_key`, also reproduced with the official SDK's default attested route. No successful live tool/reasoning/cancellation result is claimed. The initial Tinfoil attempt exposed a consumed-body error during SDK rotation recovery; the [request guard](packages/core/src/transport.ts) now hands off reusable validated bytes, covered by a failing-then-passing [provider regression](tests/provider.test.ts). The SDK's internal rotation resend remains an explicit SDK-policy assumption.
 
 Written by Codex.

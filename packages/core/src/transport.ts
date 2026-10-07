@@ -132,9 +132,10 @@ export function guardChatFetch(options: {
     const signal = AbortSignal.any([options.signal, request.signal]);
     signal.throwIfAborted();
     // Transport/auth headers are owned here; none of the caller's metadata headers are forwarded.
-    return options.fetch(new Request(options.endpoint, {
+    // Keep the validated bytes reusable for the SDK's documented rotation recovery.
+    return options.fetch(options.endpoint, {
       method: "POST", body: JSON.stringify(body), signal, redirect: "error",
       headers: { "content-type": "application/json", accept: "text/event-stream", authorization: `Bearer ${options.apiKey}` },
-    }));
+    });
   };
 }
