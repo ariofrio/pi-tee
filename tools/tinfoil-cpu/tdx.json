@@ -1,0 +1,41 @@
+{
+  "qualification": "candidate-only",
+  "registers": [
+    "7357a10d2e2724dffe68813e3cc4cfcde6814d749f2fb62e3953e54f6e0b50a219786afe2cd478f684b52c61837e1114",
+    "373228924767e7511e9de770d8ec0715f2426fe5ec4dbbff2d1fbae6aa79652675d394e83d149290a8209972c4b03cbb",
+    "a787299fe2e84295a406dde367abac5b40128c1e13aa81dfde4a5c2e39682e45cde7bb84cefc7f33f25ac645fc265030",
+    "233677c2518eadf59ff45e8c22ee776ff828d066675dc87d86043e2bc2c4352c4f915898044bf317993749045056f811",
+    "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+  ],
+  "cpu": {
+    "platform": "tdx",
+    "tdx": {
+      "qe_vendor_id": "939a7233f79c4ca9940a0db3957f0607",
+      "minimum_tee_tcb_svn": "03010200000000000000000000000000",
+      "mr_seam": "489e585f1c54bc5a02066c8c6ec21619ff0334ec6f21e07e2a35202c59183789c8057e7d97dd591bb08314b185819e72",
+      "td_attributes": "0000001000000000",
+      "xfam": "e702060000000000",
+      "minimum_tcb_evaluation_data_number": 20,
+      "platform_measurements": [
+        "medium_2d_new"
+      ]
+    }
+  },
+  "shape": {
+    "cpus": 16,
+    "memory_mb": 65536,
+    "gpus": 1,
+    "disks": 5
+  },
+  "platform_measurements": {
+    "medium_2d_new": {
+      "mrtd": "7357a10d2e2724dffe68813e3cc4cfcde6814d749f2fb62e3953e54f6e0b50a219786afe2cd478f684b52c61837e1114",
+      "rtmr0": "373228924767e7511e9de770d8ec0715f2426fe5ec4dbbff2d1fbae6aa79652675d394e83d149290a8209972c4b03cbb",
+      "shape": {
+        "cpus": 16,
+        "memory_mb": 65536,
+        "disks": 5
+      }
+    }
+  }
+}

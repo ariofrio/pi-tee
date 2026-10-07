@@ -197,5 +197,75 @@
     "inferenceRequests": 0,
     "apiKeysProvidedToVerifier": false,
     "integratedIntoExtension": false
+  },
+  "localCpuQualification": {
+    "observedDateUTC": "2026-10-07",
+    "helper": "tools/tinfoil-cpu/main.go",
+    "freshIntel": {
+      "host": "gemma4-31b-inf8-0.tinfoil.containers.tinfoil.dev",
+      "checkedAt": "2026-10-07T06:39:10.615Z",
+      "httpEnvelopeSha256": "428e9490c34c08935ac73e20bf53293e88971f63751af38c6f3959bf2a298a1e",
+      "cpuVerified": true,
+      "intelQeModulePlatformStatus": "UpToDate",
+      "minimumSignedTCBEvaluationDataNumber": 20,
+      "providerReferenceAndFreshnessCollateralRemovedTestPassed": true
+    },
+    "freshAMD": {
+      "host": "gemma4-31b-inf6-3.tinfoil.containers.tinfoil.dev",
+      "checkedAt": "2026-10-07T06:39:11.890Z",
+      "httpEnvelopeSha256": "93c37f484dc471f6daa10dbd8219763858d26499b126b01fa3e230614b0f1545",
+      "failure": "TEE_CPU_POLICY_REJECTED",
+      "authenticatedFirmware": "1.55.40",
+      "authenticatedSnpSVN": 23,
+      "authenticatedMicrocodeSVN": 84,
+      "authenticatedLaunchMitigationVector": 0,
+      "authenticatedCurrentMitigationVector": 0
+    },
+    "tests": {
+      "goTestAndVetPassed": true,
+      "realAmdCryptographicControlPassed": true,
+      "realIntelLocalPinsPassed": true,
+      "wrongNonceRejected": true,
+      "wrongWorkloadOrBootPinRejected": true,
+      "wellFormedKeyAndDeviceSubstitutionsRejected": true
+    },
+    "inferenceRequests": 0,
+    "runtimeProviderReferenceAuthority": false,
+    "independentApproval": false,
+    "integratedIntoExtension": false
+  },
+  "gemmaFleetProbe": {
+    "observedDateUTC": "2026-10-07",
+    "advertisedHostsAttempted": 35,
+    "reachableV3": {
+      "amd": 3,
+      "intel": 8
+    },
+    "remainingConnectionFailures": 24,
+    "fullReferenceAppraisalPassed": 11,
+    "underpatchedAmdSamples": 3,
+    "inferenceRequests": 0,
+    "reachabilityIsPointInTime": true
+  },
+  "tinfoilLocalIntelGpu": {
+    "observedDateUTC": "2026-10-07",
+    "host": "gemma4-31b-inf8-0.tinfoil.containers.tinfoil.dev",
+    "manufacturerVerifierVersion": "1.2.2.1780962352",
+    "manufacturerVerifierExitCode": 0,
+    "mode": "local; CPU-bound evidence file",
+    "gpuCount": 1,
+    "manufacturerModel": "GH100 A01 GSP BROM",
+    "driver": "595.71.05",
+    "vbios": "96.00.D9.00.02",
+    "reportSignatureVerified": true,
+    "nonceMatched": true,
+    "measurementsMatched": true,
+    "deviceOcsp": "good",
+    "driverRimOcsp": "good",
+    "vbiosRimOcsp": "good",
+    "inferenceRequests": 0,
+    "apiKeysProvidedToVerifier": false,
+    "independentApproval": false,
+    "integratedIntoExtension": false
   }
 }
