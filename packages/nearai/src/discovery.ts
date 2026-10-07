@@ -12,6 +12,7 @@ export async function loadNearCatalog(value: unknown, context: {
       context.signal.throwIfAborted();
       const model = models[next++]!;
       model.teeCapability = "unknown";
+      model.sdkTransportAvailable = false;
       if (model.id === "." || model.id === "..") continue;
       const signal = AbortSignal.any([context.signal, AbortSignal.timeout(3000)]);
       try {
@@ -21,7 +22,8 @@ export async function loadNearCatalog(value: unknown, context: {
         const detail = record(JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)));
         const metadata = record(detail.metadata);
         if (detail.modelId !== model.id || typeof metadata.providerType !== "string" || typeof metadata.attestationSupported !== "boolean") continue;
-        model.teeCapability = metadata.providerType === "vllm" && metadata.attestationSupported === true ? "declared" : "unsupported";
+        model.teeCapability = metadata.attestationSupported ? "declared" : "unsupported";
+        model.sdkTransportAvailable = metadata.providerType === "vllm" && metadata.attestationSupported;
       } catch { /* Missing or malformed capability stays unknown and hidden by default. */ }
     }
   }));

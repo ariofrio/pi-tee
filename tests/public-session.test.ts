@@ -118,7 +118,7 @@ test("public policy uses an owned admitted session rather than its SDK transport
   let disposed = 0;
   const integration = createTeeProvider({
     id: model.provider, name: "Public test", baseUrl: model.baseUrl, apiKeyEnv: "PUBLIC_TEST_KEY",
-    parseCatalog: () => [model], catalogFetch: async () => Response.json({}), assumptions: [],
+    parseCatalog: () => [{ ...model, sdkTransportAvailable: false }], catalogFetch: async () => Response.json({}), assumptions: [],
     openSdkTransport: async () => { throw new Error("SDK must not be selected"); },
     publicBuildProfile: {
       id: "synthetic-contract", authorityPolicyDigest: "a".repeat(64), modelIds: [model.id], baseUrl: "https://worker.invalid/v1", assumptions: ["Declared public publishers"],

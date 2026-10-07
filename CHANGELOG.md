@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Separate NEAR model TEE declarations from SDK protocol support. Declared Chutes models are no longer labeled non-TEE; discovery reports their unavailable transport, the default picker hides them, and show-all labels them accurately. SDK dispatch fails before setup; public profiles remain independent of SDK support. Preserve the distinction in offline snapshots.
+
 - Recheck public admission expiry after TLS setup before sending credentials or ciphertext, in both the native and portable transports. Pass the verified deadline from Tinfoil sessions; check it again inside the helper before its sole HTTP write. Add slow-handshake and post-readiness expiry negatives. Accepted response streams may continue past the dispatch deadline.
 
 - Add an optional owned Go TLS transport for portable Node/Bun integration. Authenticate the socket before passing credentials/body to the helper; snapshot hash-checked artifacts, stream bounded frames and close processes/sockets on cancellation. Add real socket, dropped-response/no-replay and Node/Bun tests plus a candidate Pi harness. Production routing and GPU-verifier dependencies are unchanged.

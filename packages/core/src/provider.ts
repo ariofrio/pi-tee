@@ -39,6 +39,8 @@ export interface PublicBuildProfile {
 export type TeeCatalogModel = Model<"openai-completions"> & {
   /** Discovery metadata only; not attestation or independent workload approval. */
   teeCapability?: "declared" | "unsupported" | "unknown";
+  /** Adapter protocol support, distinct from the provider's TEE declaration. */
+  sdkTransportAvailable?: boolean;
 };
 
 export interface ProviderDefinition {
@@ -80,7 +82,7 @@ const FOUR_HOURS = 4 * 60 * 60 * 1000;
 const terminalCodes = new Set([
   "TEE_APPROVED_DEPLOYMENT_UNAVAILABLE", "TEE_PUBLIC_BUILD_DEPLOYMENT_UNAVAILABLE", "TEE_MODEL_UNAVAILABLE", "TEE_API_KEY_REQUIRED",
   "TEE_RUNTIME_UNSUPPORTED", "TEE_REQUEST_REJECTED", "TEE_RESPONSE_REJECTED", "TEE_BODY_TOO_LARGE",
-  "TEE_MODEL_ATTESTATION_UNAVAILABLE", "TEE_TLS_KEY_REJECTED", "TEE_WORKLOAD_PIN_REJECTED", "TEE_ATTESTATION_REJECTED",
+  "TEE_MODEL_ATTESTATION_UNAVAILABLE", "TEE_MODEL_TRANSPORT_UNAVAILABLE", "TEE_TLS_KEY_REJECTED", "TEE_WORKLOAD_PIN_REJECTED", "TEE_ATTESTATION_REJECTED",
   "TEE_VERIFIER_ARTIFACT_REJECTED", "TEE_VERIFIER_PROCESS_REJECTED", "TEE_CPU_POLICY_REJECTED", "TEE_GPU_POLICY_REJECTED", "TEE_GPU_MODE_REJECTED", "TEE_PUBLIC_BUILD_REJECTED", "TEE_GPU_VERIFIER_LOCATION_REJECTED", "TEE_PUBLIC_SESSION_REJECTED",
 ]);
 
@@ -191,6 +193,7 @@ export function createTeeProvider(definition: ProviderDefinition) {
       const canonical = catalog.find((entry) => entry.id === requested.id);
       if (!canonical || requested.provider !== definition.id || (definition.availableModelIds && !definition.availableModelIds.includes(canonical.id))) throw new TeeError("TEE_MODEL_UNAVAILABLE");
       if (definition.requireDeclaredTee && canonical.teeCapability !== "declared") throw new TeeError("TEE_MODEL_ATTESTATION_UNAVAILABLE");
+      if (requestMode === "sdk" && canonical.sdkTransportAvailable === false) throw new TeeError("TEE_MODEL_TRANSPORT_UNAVAILABLE");
       if (!options?.apiKey) throw new TeeError("TEE_API_KEY_REQUIRED");
       let captured: { baseUrl?: string; fetch: typeof globalThis.fetch };
       if (requestMode === "public-builds") {
@@ -272,7 +275,7 @@ export function createTeeProvider(definition: ProviderDefinition) {
   };
 
   function selectableCatalog() {
-    if (mode === "sdk") return visibleCatalog();
+    if (mode === "sdk") return visibleCatalog().filter(entry => visibility === "all" || entry.sdkTransportAvailable !== false);
     if (mode === "public-builds") return visibleCatalog().filter(entry => profilesByModel.has(entry.id));
     return [];
   }
@@ -280,6 +283,9 @@ export function createTeeProvider(definition: ProviderDefinition) {
   function visibleCatalog() {
     return catalog.filter((entry) => (!definition.availableModelIds || definition.availableModelIds.includes(entry.id)) &&
       (!definition.requireDeclaredTee || visibility === "all" || entry.teeCapability === "declared")).map((entry) => {
+      if (mode === "sdk" && entry.teeCapability === "declared" && entry.sdkTransportAvailable === false) {
+        return { ...entry, name: `${entry.name} [TEE declared; SDK transport unavailable]` };
+      }
       if (!definition.requireDeclaredTee || entry.teeCapability === "declared") return entry;
       const label = entry.teeCapability === "unsupported" ? "non-TEE" : "TEE unknown";
       return { ...entry, name: `${entry.name} [${label}; inference blocked]` };
@@ -336,7 +342,8 @@ export function createTeeProvider(definition: ProviderDefinition) {
     getDiscoveredModels: () => visibleCatalog().map((entry) => ({
       id: entry.id, name: entry.name,
       ...(definition.requireDeclaredTee ? { teeCapability: entry.teeCapability ?? "unknown" } : {}),
-      selectable: selectableCatalog().some(model => model.id === entry.id) && (!definition.requireDeclaredTee || entry.teeCapability === "declared"),
+      ...(entry.sdkTransportAvailable !== undefined ? { sdkTransportAvailable: entry.sdkTransportAvailable } : {}),
+      selectable: (mode !== "sdk" || entry.sdkTransportAvailable !== false) && selectableCatalog().some(model => model.id === entry.id) && (!definition.requireDeclaredTee || entry.teeCapability === "declared"),
     })),
   };
 }

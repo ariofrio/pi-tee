@@ -80,3 +80,35 @@ test("mismatched and malformed per-model claims cannot classify a model as TEE-c
   integration.setModelVisibility("tee");
   assert.deepEqual(integration.provider.getModels(), []);
 });
+
+test("a Chutes TEE declaration is distinct from an unavailable NEAR SDK protocol", async () => {
+  let opened = false;
+  const integration = createNearProvider({ policy: "sdk", catalogFetch: async (input) => {
+    if (String(input).endsWith("/models")) return Response.json({ data: [{ ...rawModels[0], id: "chutes/tee" }] });
+    return Response.json({ modelId: "chutes/tee", metadata: { providerType: "chutes", attestationSupported: true } });
+  }, openSdkTransport: async () => { opened = true; throw new Error("Unsupported protocol must fail before SDK setup"); } });
+  await integration.initializeCatalog();
+  assert.equal(integration.getReport().declaredTeeModels, 1);
+  assert.deepEqual(integration.provider.getModels(), [], "Default picker must not offer an unavailable transport.");
+  assert.equal(integration.getDiscoveredModels()[0]?.teeCapability, "declared");
+  assert.equal(integration.getDiscoveredModels()[0]?.selectable, false);
+  integration.setModelVisibility("all");
+  const model = integration.provider.getModels()[0]!;
+  assert.match(model.name, /TEE declared; SDK transport unavailable/);
+  assert.doesNotMatch(model.name, /non-TEE/);
+  const result = await integration.provider.streamSimple(model, normalizeContext({
+    messages: [{ role: "user", content: "synthetic prompt", timestamp: 1 }],
+  }), { apiKey: "synthetic-key" }).result();
+  assert.equal(result.errorMessage, "TEE_MODEL_TRANSPORT_UNAVAILABLE");
+  assert.equal(opened, false);
+  const offline = createNearProvider({ policy: "sdk", catalogFetch: async () => { throw new Error("No offline fetch"); } });
+  await offline.provider.refreshModels!({
+    allowNetwork: false, signal: new AbortController().signal,
+    stored: { checkedAt: Date.now(), models: [model] },
+    publish: async (publication) => { publication.update?.(); return true; },
+  });
+  assert.deepEqual(offline.provider.getModels(), []);
+  assert.equal(offline.getDiscoveredModels()[0]?.teeCapability, "declared");
+  assert.equal(offline.getDiscoveredModels()[0]?.sdkTransportAvailable, false);
+  assert.equal(offline.getDiscoveredModels()[0]?.selectable, false);
+});
