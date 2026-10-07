@@ -44,6 +44,8 @@ The `PI_*_POLICY` variables select `approved` or `sdk`; omitted means `approved`
 ```text
 /nearai status
 /nearai models
+/nearai models tee
+/nearai models all
 /nearai models refresh
 /nearai policy sdk
 /nearai policy approved
@@ -59,7 +61,11 @@ Changing policy aborts in-flight requests and updates model availability. A stat
 
 ## Discovery and request behavior
 
-Model discovery uses each provider's public `/v1/models` endpoint. It selects chat models advertising tool support, maps input modalities, context/output limits, reasoning controls where declared, and prices. Metadata and billing remain provider claims; models that lack qualifying SDK evidence can still fail before inference. Missing price metadata is labeled, rather than presented as a known free service. NEAR's ordinary pricing tiers beyond the base costs are not modeled.
+Model discovery uses each provider's public `/v1/models` endpoint. It selects chat models advertising tool support, maps input modalities, context/output limits, reasoning controls where declared, and prices. NEAR additionally looks up public `/v1/model/{id}` metadata, with four concurrent requests, a three-second per-model timeout and a 64 KiB body limit within the overall discovery deadline. Only matching model metadata declaring `providerType: "vllm"` and `attestationSupported: true` is classified as TEE-capable. Missing, failed, mismatched and malformed metadata is unknown. This follows the SDK's model-evidence selection rule; it is not cryptographic verification.
+
+NEAR defaults to **TEE-only discovery**, hiding non-TEE and unknown models even in SDK mode. Set `PI_NEARAI_MODEL_VISIBILITY=all` at startup or run `/nearai models all` to show them; `/nearai models tee` restores the filter. In-session visibility is not persisted. Show-all labels non-TEE/unknown entries as inference-blocked and does not relax the model-attestation requirement. Their inference requests fail before SDK setup. Older stored catalogs without capability metadata stay hidden until refreshed or explicitly shown as unknown. The status report distinguishes the total catalog from `declaredTeeModels` and reports `modelVisibility`.
+
+The visibility filter is separate from **Approved policy**, which still hides all models from Pi's picker until a deployment has independent approval, regardless of visibility. Tinfoil's catalog serves its confidential-inference provider; no additional non-TEE catalog mode is implemented there. Metadata and billing remain provider claims; models that lack qualifying SDK evidence can still fail before inference. Missing price metadata is labeled, rather than presented as a known free service. NEAR's ordinary pricing tiers beyond the base costs are not modeled.
 
 The async extension factory attempts bounded startup discovery so first-run `--list-models` works. Pi's native `refreshModels`, stored catalog, and generation-checked publication APIs then provide cache restoration, forced refresh, and four-hour freshness checks. No refresh timer or separate catalog database exists. Failed refresh preserves valid cached models. Set `PI_TEE_OFFLINE=1` to skip startup network discovery and use the native stored snapshot. `pi update --models` does not load extensions; use the provider refresh commands. Startup discovery is performed on each online load, even when a native stored snapshot exists.
 
@@ -94,4 +100,4 @@ npm run smoke:attestation # live Tinfoil router SDK verification; no inference
 
 Tests exercise the real Pi OpenAI adapter with controlled external transport responses: payload/model/header/URL overrides, hosted-tool injection, both retry classifications, cancellation, policy changes, signature barriers, malformed/truncated streams, bounded buffering, Unicode tool arguments, usage, and catalog validation. These tests do not substitute for hardware evidence or a production security audit.
 
-Observed on 2026-10-06: live discovery mapped 44 NEAR and 7 Tinfoil chat/tool models; Tinfoil router evidence passed the pinned SDK verifier. These are point-in-time observations, not a claim about today's full fleet. Authenticated live inference and NEAR live attestation were not run because provider credentials were unavailable.
+Observed on 2026-10-06: live discovery mapped 44 NEAR chat/tool models, with **3** matching declared model-attestation capability and shown by the default filter, plus 7 Tinfoil models. Tinfoil router evidence passed the pinned SDK verifier. These are point-in-time observations, not a claim about today's full fleet. Authenticated live inference and NEAR live attestation were not run because provider credentials were unavailable.

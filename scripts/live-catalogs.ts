@@ -7,6 +7,6 @@ const results = await Promise.allSettled(integrations.map(async (integration) =>
   await integration.initializeCatalog(AbortSignal.timeout(15_000));
   const report = integration.getReport();
   assert.ok(report.catalogModels > 0, `${report.provider} has a validated chat/tool catalog`);
-  console.log(`${report.provider}: ${report.catalogModels} chat/tool models mapped; metadata is a provider claim.`);
+  console.log(`${report.provider}: ${report.catalogModels} chat/tool models mapped; ${integration.provider.getModels().length} shown${report.declaredTeeModels === undefined ? "" : `, ${report.declaredTeeModels} declare model attestation`}. Metadata is a provider claim.`);
 }));
 for (const result of results) if (result.status === "rejected") throw result.reason;

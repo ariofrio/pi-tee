@@ -1,0 +1,82 @@
+import assert from "node:assert/strict";
+import { test } from "node:test";
+import { createNearProvider } from "../packages/nearai/src/index.js";
+import { normalizeContext } from "@earendil-works/pi-ai/compat";
+
+const rawModels = ["local/tee", "external/zdr", "unknown/model"].map((id) => ({
+  id, name: id, context_length: 8192, supported_features: ["tools"], output_modalities: ["text"],
+}));
+const catalogFetch: typeof globalThis.fetch = async (input) => {
+  const url = String(input);
+  if (url.endsWith("/models")) return Response.json({ data: rawModels });
+  const id = decodeURIComponent(url.split("/model/")[1]!);
+  if (id === "unknown/model") return new Response(null, { status: 503 });
+  return Response.json({ modelId: id, metadata: {
+    providerType: id === "local/tee" ? "vllm" : "external", attestationSupported: id === "local/tee",
+  } });
+};
+
+test("NEAR SDK discovery hides non-TEE and unknown models by default", async () => {
+  const integration = createNearProvider({ policy: "sdk", catalogFetch });
+  await integration.initializeCatalog();
+  assert.deepEqual(integration.provider.getModels().map((model) => model.id), ["local/tee"]);
+  assert.deepEqual(integration.getDiscoveredModels().map((model) => model.id), ["local/tee"]);
+});
+
+test("show-all exposes labeled discoveries without admitting non-TEE inference or weakening Approved policy", async () => {
+  let opened = false;
+  const integration = createNearProvider({ policy: "sdk", catalogFetch,
+    openSdkTransport: async () => { opened = true; throw new Error("must not open for a non-TEE model"); },
+  });
+  await integration.initializeCatalog();
+  integration.setModelVisibility("all");
+  const models = integration.provider.getModels();
+  assert.deepEqual(models.map((model) => model.id), ["local/tee", "external/zdr", "unknown/model"]);
+  assert.match(models[1]!.name, /non-TEE; inference blocked/);
+  assert.match(models[2]!.name, /TEE unknown; inference blocked/);
+  assert.equal(integration.getDiscoveredModels()[1]?.selectable, false);
+  for (const model of models.slice(1)) {
+    const result = await integration.provider.streamSimple(model, normalizeContext({
+      messages: [{ role: "user", content: "private prompt", timestamp: 1 }],
+    }), { apiKey: "test-key" }).result();
+    assert.equal(result.errorMessage, "TEE_MODEL_ATTESTATION_UNAVAILABLE");
+  }
+  assert.equal(opened, false);
+  integration.setPolicy("approved");
+  assert.deepEqual(integration.provider.getModels(), []);
+  assert.equal(integration.getReport().modelVisibility, "all");
+  assert.equal(integration.getReport().declaredTeeModels, 1);
+});
+
+test("offline snapshots retain capability; older unclassified models stay hidden", async () => {
+  const online = createNearProvider({ policy: "sdk", catalogFetch });
+  await online.initializeCatalog();
+  const tee = online.provider.getModels()[0]!;
+  const offline = createNearProvider({ policy: "sdk", catalogFetch: async () => { throw new Error("offline must not fetch"); } });
+  await offline.provider.refreshModels!({
+    allowNetwork: false, signal: new AbortController().signal,
+    stored: { checkedAt: Date.now(), models: [tee, { ...tee, id: "legacy/model", teeCapability: undefined } as typeof tee] },
+    publish: async (publication) => { publication.update?.(); return true; },
+  });
+  assert.deepEqual(offline.provider.getModels().map((model) => model.id), ["local/tee"]);
+  offline.setModelVisibility("all");
+  assert.equal(offline.getDiscoveredModels()[1]?.teeCapability, "unknown");
+  assert.equal(offline.getDiscoveredModels()[1]?.selectable, false);
+  assert.throws(() => offline.setModelVisibility("typo"), /TEE_MODEL_VISIBILITY_INVALID/);
+  assert.equal(offline.getReport().modelVisibility, "all");
+});
+
+test("mismatched and malformed per-model claims cannot classify a model as TEE-capable", async () => {
+  const integration = createNearProvider({ policy: "sdk", modelVisibility: "all", catalogFetch: async (input) => {
+    if (String(input).endsWith("/models")) return Response.json({ data: rawModels });
+    const id = decodeURIComponent(String(input).split("/model/")[1]!);
+    return Response.json({ modelId: id === "local/tee" ? "other/model" : id,
+      metadata: { providerType: "vllm", attestationSupported: id === "local/tee" ? true : "true" },
+    });
+  } });
+  await integration.initializeCatalog();
+  assert.equal(integration.getReport().declaredTeeModels, 0);
+  assert.ok(integration.getDiscoveredModels().every((model) => model.teeCapability === "unknown" && !model.selectable));
+  integration.setModelVisibility("tee");
+  assert.deepEqual(integration.provider.getModels(), []);
+});

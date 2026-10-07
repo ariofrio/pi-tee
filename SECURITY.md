@@ -32,3 +32,5 @@ For protected sessions, implement and test a fail-closed guard after physical ro
 Ordinary reports contain status and static trust assumptions, not prompts, tokens, responses, or complete evidence. NEAR buffering is memory-only and bounded. Tinfoil uses a fresh memory-only cache secret for each request client, avoiding the SDK's default cache-secret file. Credentials are managed by Pi. No automatic evidence upload or background title/summarization integration is added.
 
 Discovery metadata, usage and prices are untrusted provider claims. Model output correctness, availability, truthful billing, traffic-analysis resistance, undocumented side-channel/physical protection and local-machine compromise are outside the claim. Authenticated SDK evidence alone does not enable production Approved workloads.
+
+NEAR's TEE-only discovery filter uses public capability claims, not security evidence. Showing all models changes visibility only. Unsupported or unknown models are rejected before SDK setup; declared capability still requires fresh SDK evidence and a model-signed response. Neither the filter nor its override enables Approved workloads.

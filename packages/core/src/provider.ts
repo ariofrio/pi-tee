@@ -3,12 +3,17 @@ import {
   openAICompletionsApi,
   type AssistantMessageEventStream, type Model, type Provider, type SimpleStreamOptions,
 } from "@earendil-works/pi-ai/compat";
-import { resolvePolicy, TeeError, type PolicyMode } from "./policy.js";
+import { resolveModelVisibility, resolvePolicy, TeeError, type ModelVisibility, type PolicyMode } from "./policy.js";
 import { guardChatFetch, readBoundedBody } from "./transport.js";
 
 export interface SdkTransport {
   fetch: typeof globalThis.fetch;
 }
+
+export type TeeCatalogModel = Model<"openai-completions"> & {
+  /** Discovery metadata only; not attestation or independent workload approval. */
+  teeCapability?: "declared" | "unsupported" | "unknown";
+};
 
 export interface ProviderDefinition {
   id: string;
@@ -16,7 +21,9 @@ export interface ProviderDefinition {
   baseUrl: string;
   apiKeyEnv: string;
   policy?: PolicyMode;
-  parseCatalog(value: unknown): Model<"openai-completions">[];
+  parseCatalog(value: unknown, context: { fetch: typeof globalThis.fetch; signal: AbortSignal }): TeeCatalogModel[] | Promise<TeeCatalogModel[]>;
+  requireDeclaredTee?: boolean;
+  modelVisibility?: ModelVisibility;
   catalogFetch?: typeof globalThis.fetch;
   openSdkTransport(options: { apiKey: string; signal: AbortSignal }): Promise<SdkTransport>;
   assumptions: readonly string[];
@@ -28,6 +35,8 @@ export interface ProviderReport {
   lastRequest: "not-run" | "blocked" | "failed" | "sdk-accepted" | "aborted";
   reason?: string;
   catalogModels: number;
+  modelVisibility?: ModelVisibility;
+  declaredTeeModels?: number;
   catalogCheckedAt?: number;
   catalogError?: "TEE_CATALOG_FAILED";
   assumptions: readonly string[];
@@ -40,6 +49,7 @@ const FOUR_HOURS = 4 * 60 * 60 * 1000;
 const terminalCodes = new Set([
   "TEE_APPROVED_DEPLOYMENT_UNAVAILABLE", "TEE_MODEL_UNAVAILABLE", "TEE_API_KEY_REQUIRED",
   "TEE_RUNTIME_UNSUPPORTED", "TEE_REQUEST_REJECTED", "TEE_RESPONSE_REJECTED", "TEE_BODY_TOO_LARGE",
+  "TEE_MODEL_ATTESTATION_UNAVAILABLE",
 ]);
 
 function safeFailure(source: AssistantMessageEventStream, report: ProviderReport, rejection: () => string | undefined, signal: AbortSignal): AssistantMessageEventStream {
@@ -75,7 +85,8 @@ function safeFailure(source: AssistantMessageEventStream, report: ProviderReport
 
 export function createTeeProvider(definition: ProviderDefinition) {
   let mode = resolvePolicy(definition.policy);
-  let catalog: readonly Model<"openai-completions">[] = [];
+  let visibility = resolveModelVisibility(definition.modelVisibility);
+  let catalog: readonly TeeCatalogModel[] = [];
   let checkedAt: number | undefined;
   const report: ProviderReport = {
     provider: definition.id, policy: mode, lastRequest: "not-run", catalogModels: 0,
@@ -83,6 +94,7 @@ export function createTeeProvider(definition: ProviderDefinition) {
   };
   const active = new Set<AbortController>();
   const api = openAICompletionsApi();
+  updateReport();
 
   const streams = {
     stream: (model: Model<"openai-completions">, context: Parameters<typeof api.stream>[1], options?: Parameters<typeof api.stream>[2]) =>
@@ -107,6 +119,7 @@ export function createTeeProvider(definition: ProviderDefinition) {
       if (mode !== "sdk") throw new TeeError("TEE_APPROVED_DEPLOYMENT_UNAVAILABLE");
       const canonical = catalog.find((entry) => entry.id === requested.id);
       if (!canonical || requested.provider !== definition.id) throw new TeeError("TEE_MODEL_UNAVAILABLE");
+      if (definition.requireDeclaredTee && canonical.teeCapability !== "declared") throw new TeeError("TEE_MODEL_ATTESTATION_UNAVAILABLE");
       if (!options?.apiKey) throw new TeeError("TEE_API_KEY_REQUIRED");
       const transport = await definition.openSdkTransport({ apiKey: options.apiKey, signal });
       signal.throwIfAborted();
@@ -128,8 +141,8 @@ export function createTeeProvider(definition: ProviderDefinition) {
   });
   const provider: Provider<"openai-completions"> = {
     ...base,
-    getModels: () => mode === "sdk" ? structuredClone(catalog) : [],
-    getAllModels: () => mode === "sdk" ? structuredClone(catalog) : [],
+    getModels: () => mode === "sdk" ? structuredClone(visibleCatalog()) : [],
+    getAllModels: () => mode === "sdk" ? structuredClone(visibleCatalog()) : [],
     refreshModels: async (context) => {
       if (context.stored && (checkedAt === undefined || (context.stored.checkedAt ?? 0) > checkedAt)) {
         // Stored metadata never chooses the transport origin or caller headers.
@@ -153,9 +166,21 @@ export function createTeeProvider(definition: ProviderDefinition) {
     },
   };
 
+  function visibleCatalog() {
+    return catalog.filter((entry) => !definition.requireDeclaredTee || visibility === "all" || entry.teeCapability === "declared").map((entry) => {
+      if (!definition.requireDeclaredTee || entry.teeCapability === "declared") return entry;
+      const label = entry.teeCapability === "unsupported" ? "non-TEE" : "TEE unknown";
+      return { ...entry, name: `${entry.name} [${label}; inference blocked]` };
+    });
+  }
+
   function updateReport() {
     report.catalogModels = catalog.length;
     report.catalogCheckedAt = checkedAt;
+    if (definition.requireDeclaredTee) {
+      report.modelVisibility = visibility;
+      report.declaredTeeModels = catalog.filter((entry) => entry.teeCapability === "declared").length;
+    }
   }
 
   async function fetchCatalog(signal: AbortSignal) {
@@ -163,7 +188,9 @@ export function createTeeProvider(definition: ProviderDefinition) {
     const response = await (definition.catalogFetch ?? globalThis.fetch)(`${definition.baseUrl}/models`, { signal: bounded, redirect: "error" });
     if (!response.ok) throw new TeeError("TEE_CATALOG_FAILED");
     const bytes = await readBoundedBody(response.body, 2 * 1024 * 1024, bounded);
-    return structuredClone(definition.parseCatalog(JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes))));
+    return structuredClone(await definition.parseCatalog(JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)), {
+      fetch: definition.catalogFetch ?? globalThis.fetch, signal: bounded,
+    }));
   }
 
   return {
@@ -183,7 +210,15 @@ export function createTeeProvider(definition: ProviderDefinition) {
       report.lastRequest = "not-run";
       delete report.reason;
     },
+    setModelVisibility(value: string) {
+      visibility = resolveModelVisibility(value);
+      updateReport();
+    },
     getReport: (): ProviderReport => structuredClone(report),
-    getDiscoveredModels: () => catalog.map((entry) => ({ id: entry.id, name: entry.name, selectable: mode === "sdk" })),
+    getDiscoveredModels: () => visibleCatalog().map((entry) => ({
+      id: entry.id, name: entry.name,
+      ...(definition.requireDeclaredTee ? { teeCapability: entry.teeCapability ?? "unknown" } : {}),
+      selectable: mode === "sdk" && (!definition.requireDeclaredTee || entry.teeCapability === "declared"),
+    })),
   };
 }
