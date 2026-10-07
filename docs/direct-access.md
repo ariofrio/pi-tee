@@ -2,7 +2,7 @@
 
 Observed 2026-10-07 UTC. Author: Codex. Node 24.21.0; Pi 1.0.4; NEAR SDK 0.1.0; Tinfoil SDK/verifier 1.2.2; EHBP 0.3.3.
 
-**The Tinfoil direct Gemma route now passes the complete actual Pi suite.** Fresh CPU and manufacturer-local GPU verification also passed separately. NEAR GLM now also has an experimental native direct route, while the sampled Qwen instance still fails the strict TCB policy. A new locally pinned CPU helper accepts a reachable Intel candidate and rejects the AMD candidate against manufacturer security floors. Neither provider has an enabled production public-build or independently Approved profile. The normal target now uses [automatic public-release verification](design.md), while this page records the experimental routes and frozen research fixtures.
+**The Tinfoil direct Gemma route now passes the complete actual Pi suite.** Fresh CPU and manufacturer-local GPU verification also passed separately. NEAR GLM now also has an experimental native direct route, while the sampled Qwen instance still fails the strict TCB policy. A new locally pinned CPU helper accepts a reachable Intel candidate and rejects the AMD candidate against manufacturer security floors. The reviewed [Tinfoil public profile](tinfoil-public-profile.md) now enables the Intel Gemma worker on its supported local setup. NEAR public builds and independently Approved workloads remain gated. The normal target now uses [automatic public-release verification](design.md), while this page records the experimental routes and frozen research fixtures.
 
 ## Registered route and validation
 

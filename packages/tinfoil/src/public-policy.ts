@@ -33,6 +33,8 @@ const authorityPolicy = {
 export const PUBLIC_BUILD_PROFILE_ID = authorityPolicy.profile;
 export const PUBLIC_BUILD_AUTHORITY_POLICY_DIGEST = createHash("sha256").update(JSON.stringify(authorityPolicy)).digest("hex");
 
-// Final combined verifier/transport review and repeatable local setup remain
-// production gates. This flag is deliberately not configurable by environment.
-export const PUBLIC_BUILD_PROFILE_ENABLED = false;
+// Enabled after the Opus 5.5 reviews of the public-build chain, owned session
+// (da48839), local verifier setup (c91d3f8) and policy routing (9840501).
+// Supported only on macOS ARM64 with the documented local setup; other
+// environments fail closed. Deliberately not configurable by environment.
+export const PUBLIC_BUILD_PROFILE_ENABLED = true;

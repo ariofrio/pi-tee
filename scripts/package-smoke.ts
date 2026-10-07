@@ -59,7 +59,7 @@ const credential = await services.modelRuntime.login('${name}', 'api_key', {
   prompt: async prompt => { assert.equal(prompt.type, 'secret'); return 'synthetic-smoke-key'; }, notify: () => undefined,
 });
 assert.equal(credential.type, 'api_key');
-console.log('PASS: isolated ${name} tarball loads and logs in; default inference remains blocked.');
+console.log('PASS: isolated ${name} tarball loads and logs in; offline catalog remains empty.');
 `;
     await writeFile(join(directory, "smoke.mjs"), code);
     const { stdout } = await execute(process.execPath, ["smoke.mjs"], {

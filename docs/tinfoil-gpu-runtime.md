@@ -1,6 +1,6 @@
 # Tinfoil single-GPU runtime evidence
 
-The target remains one direct Intel TDX worker with one Hopper GPU. These source and report observations support the [public-build serving contract](tinfoil-public-profile.md); production admission remains gated. [Current admission contract](design.md), [existing local NVIDIA appraisal](../packages/tinfoil/src/intel-appraisal.ts).
+The target remains one direct Intel TDX worker with one Hopper GPU. These source and report observations support the [public-build serving contract](tinfoil-public-profile.md); the reviewed profile is enabled on its supported macOS ARM64/OrbStack setup. [Current admission contract](design.md), [existing local NVIDIA appraisal](../packages/tinfoil/src/intel-appraisal.ts).
 
 ## GPU mode and reference appraisal
 

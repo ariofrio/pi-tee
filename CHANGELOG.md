@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Enable the reviewed Tinfoil Gemma public-build profile on the documented macOS ARM64/OrbStack setup. Default auto routing now selects the owned Intel worker under public policy; router users must explicitly choose SDK policy. Add production activation/no-fallback regressions and actual compiled-extension public-policy validation. NEAR public builds, independently Approved workloads and whole-session protection remain unavailable.
+
 - Select Tinfoil routes automatically by policy: owned worker admission for public builds (still gated for final wiring review), SDK router for explicit SDK policy. Report public-profile assumptions independently of SDK route assumptions; preserve explicit router rejection under public policy. State the tested OrbStack/containerd builder scope and make the setup negative robust to Node deprecation warnings.
 
 - Package locked CPU-verifier source and add `pi-tinfoil-setup` for macOS ARM64. Authenticate NVIDIA/Ubuntu archives, reproduce the pinned GPU image without RUN network access, check its OCI tar hash before loading, and reject substituted cached dependencies. Two clean image builds are byte-identical and the image passes real local NVIDIA appraisal. Clarify declared trust closure, admission records and unsupported schema/platform limits.

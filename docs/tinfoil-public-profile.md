@@ -1,6 +1,8 @@
 # Tinfoil public-build serving contract
 
-This contract covers one direct Intel TDX worker, one Hopper GPU in SPT mode and the `gemma-single-gpu-v1` runtime. It accepts software updates from the named public publishers below. It does not require reviewing or rebuilding each release independently. Production admission remains disabled until repeatable local setup and final implementation review are complete. [Implementation](../packages/tinfoil/src/intel-appraisal.ts), [review requirements](../CONTRIBUTING.md).
+This contract covers one direct Intel TDX worker, one Hopper GPU in SPT mode and the `gemma-single-gpu-v1` runtime. It accepts software updates from the named public publishers below. It does not require reviewing or rebuilding each release independently. Production admission is enabled on the tested macOS ARM64/OrbStack setup after the combined verifier/session, pinned setup and route-enablement reviews. [Implementation](../packages/tinfoil/src/intel-appraisal.ts), [review requirements](../CONTRIBUTING.md).
+
+Independent Opus 5.5 reviews cover the [combined verifier/session](reviews/pi-tee-public-session-opus-review.md), [pinned local setup](reviews/pi-tee-local-setup-opus-review.md) and [routing/enablement](reviews/pi-tee-enablement-opus-review.md). Their scopes and live-test limitations are recorded in those reports.
 
 ## Closed authorities
 
@@ -51,7 +53,7 @@ NVIDIA's manufacturer contract supplies SPDM authentication, protected CPU–GPU
 
 Before an inference send, an owned session binds canonical model, authority-policy digest, authenticated release/artifact digests, current freshness bounds and the quote-bound TLS/HPKE keys to the transport. TLS 1.3 SPKI is checked on the actual socket before credentials or EHBP ciphertext. The direct transport sends once, rejects rotation/reconnect/fallback and uses a fresh encrypted cache salt. Streaming output and tool calls pass authenticated decryption with bounded bodies. [Transport](../packages/tinfoil/src/direct.ts), [TLS binding](../packages/core/src/pinned-tls.ts), [payload boundary](../packages/core/src/transport.ts).
 
-The local cache retains authenticated immutable artifacts and deterministic verifier results, not CPU challenges, GPU verdicts, endpoint keys or freshness acceptance. Each dispatch obtains fresh evidence. [Cache regression](../tests/public-build-chain.test.ts). The actual Pi completion/tools/usage and live-delta cancellation tests passed with this candidate; the original route tests select explicit SDK policy. The `--public-builds-candidate` harness separately registers the compiled owned-session adapter under public policy in an isolated synthetic Pi instance. Production admission remains gated. [Harness](../scripts/live-pi.ts).
+The local cache retains authenticated immutable artifacts and deterministic verifier results, not CPU challenges, GPU verdicts, endpoint keys or freshness acceptance. Each dispatch obtains fresh evidence. [Cache regression](../tests/public-build-chain.test.ts). The actual production Pi suite and separate live-delta cancellation passed using default routing and the verifiers installed by the isolated tarball setup command. The candidate harness remains a separate adapter test. [Observed results](public-profile-validation.json), [harness](../scripts/live-pi.ts).
 
 This is a contract for these provider dispatches. Whole-session protection remains unestablished because other providers, extensions, tools, compaction and fallback need Pi-level enforcement. Availability, traffic analysis, billing truth, output correctness, undocumented side channels and local-machine compromise are outside the claim. NEAR has separate deployed shared-key/session/KMS/runtime gaps. [Pi and NEAR boundaries](design.md).
 

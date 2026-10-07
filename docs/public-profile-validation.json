@@ -1,0 +1,44 @@
+{
+  "date": "2026-10-07",
+  "scope": "macOS ARM64 / Node 24.21.0 / Pi 1.0.4 / OrbStack / Docker 29.4.0 / buildx 0.33.0 / containerd image store",
+  "provider": "tinfoil",
+  "model": "gemma4-31b",
+  "policy": "public-builds",
+  "route": "default auto (PI_TINFOIL_ROUTE unset)",
+  "entry": "packages/tinfoil/dist/extension.js",
+  "candidateRegistration": false,
+  "localArtifacts": "installed by isolated npm tarball pi-tinfoil-setup",
+  "cpuHelperSha256": "08bcbf2f96f01d46c4129c0cca2e9135e76c44e1710bc51ff5cbc0652c7af1ba",
+  "gpuImage": "sha256:7648914f1e3bc8c23e208247c93551391f2c121674ef99a1dfc7106311d8f707",
+  "nativeSuite": {
+    "tests": 62,
+    "passed": 62,
+    "skipped": 0,
+    "failed": 0
+  },
+  "freshLockedInstall": true,
+  "compiledLoaderSmoke": true,
+  "isolatedPackageSmoke": true,
+  "fullPiObservations": [
+    "PASS: tinfoil compiled extension, native secret login, and catalog (gemma4-31b).",
+    "PASS: tinfoil Pi CLI completion, usage, and stored-key precedence.",
+    "PASS: tinfoil Pi CLI Unicode tool call, execution, and result follow-up.",
+    "PASS: tinfoil Pi CLI reasoning and final text.",
+    "PASS: tinfoil Pi RPC cancellation at the response-consumption barrier."
+  ],
+  "separateStreamingCancellationObservations": [
+    "PASS: tinfoil compiled extension, native secret login, and catalog (gemma4-31b).",
+    "PASS: tinfoil Pi RPC cancellation after a live text delta, without a consumption barrier."
+  ],
+  "cancellationClaim": "Local abort and RPC acknowledgement; remote generation-stop timing not established.",
+  "independentApproval": "not-established",
+  "wholePiSessionProtection": "not-established",
+  "harness": "https://github.com/ariofrio/pi-tee/blob/main/scripts/live-pi.ts",
+  "trustContract": "https://github.com/ariofrio/pi-tee/blob/main/docs/tinfoil-public-profile.md",
+  "reviews": {
+    "session": "da48839",
+    "setup": "c91d3f8",
+    "routingAndProposedFlag": "9840501"
+  },
+  "containsCredentialsPromptsCompletionsOrQuotes": false
+}
