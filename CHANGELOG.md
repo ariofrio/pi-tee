@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Retry temporary helper-file locks during cleanup and handle persistent removal failures without terminating Pi. Only the executable snapshot can remain; no request data is written there.
+
 - Strengthen the isolated expiry regression with an independent loopback IPC observer. Catch a request write before a misplaced expiry check, even when the parent subsequently returns the expected error. Production transport is unchanged.
 
 - Limit native TLS connection setup to ten seconds without cutting off admitted response streams. Bind TLS fixtures to loopback and test the parent-side expiry check independently of the Go helper's own check.

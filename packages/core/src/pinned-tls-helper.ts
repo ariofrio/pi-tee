@@ -84,7 +84,10 @@ export function pinnedTlsHelperFetch(endpoint: string, fingerprint: string, arti
       signal.removeEventListener("abort", stop);
       child.stdin.destroy(); child.stdout.destroy(); child.kill();
       const force = setTimeout(() => child.kill("SIGKILL"), 1000);
-      void closed.finally(async () => { clearTimeout(force); await rm(directory, { recursive: true, force: true }); });
+      void closed.then(async () => {
+        clearTimeout(force);
+        await rm(directory, { recursive: true, force: true, maxRetries: 4, retryDelay: 250 });
+      }).catch(() => undefined);
     };
     signal.addEventListener("abort", stop, { once: true });
     const frames = new Frames(child.stdout);
