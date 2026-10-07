@@ -6,6 +6,9 @@ import { createAgentSessionServices } from "@earendil-works/pi-coding-agent";
 
 // Opt-in, billable tests. Credentials come from the caller's environment only.
 const provider = process.argv[2];
+const publicCandidate = process.argv.includes("--public-builds-candidate");
+assert.ok(!publicCandidate || provider === "tinfoil", "The public-build candidate is Tinfoil only.");
+const testPolicy = publicCandidate ? "public-builds" : "sdk";
 const cancelStreaming = process.argv.includes("--cancel-stream");
 const cancelOnly = process.argv.includes("--cancel-only") || cancelStreaming;
 assert.ok(provider === "nearai" || provider === "tinfoil", "Pass nearai or tinfoil, optionally followed by a model ID.");
@@ -18,7 +21,22 @@ await mkdir(".scratch/work", { recursive: true });
 const scratch = await mkdtemp(resolve(".scratch/work/pi-live-"));
 const cwd = join(scratch, "project");
 const agentDir = join(scratch, "agent");
-const entry = resolve("packages", provider, "dist/extension.js");
+const entry = publicCandidate ? join(scratch, "public-candidate.ts") : resolve("packages", provider, "dist/extension.js");
+if (publicCandidate) await writeFile(entry, `
+import { createTeeProvider } from ${JSON.stringify(resolve("packages/core/dist/index.js"))};
+import { parseTinfoilCatalog, TINFOIL_BASE_URL } from ${JSON.stringify(resolve("packages/tinfoil/dist/index.js"))};
+import { INTEL_PUBLIC_BUILD_PROFILE } from ${JSON.stringify(resolve("packages/tinfoil/dist/intel.js"))};
+export default async function(pi) {
+  // Synthetic test registration only; production's review gate remains closed.
+  const integration = createTeeProvider({
+    id:"tinfoil",name:"Tinfoil public candidate",baseUrl:TINFOIL_BASE_URL,apiKeyEnv:"TINFOIL_API_KEY",policy:"public-builds",
+    parseCatalog:parseTinfoilCatalog,assumptions:[],publicBuildProfile:INTEL_PUBLIC_BUILD_PROFILE,
+    openSdkTransport:async()=>{throw Error("No SDK fallback");},
+  });
+  await integration.initializeCatalog();
+  pi.registerProvider(integration.provider);
+}
+`);
 const testExtension = join(scratch, "synthetic.ts");
 await mkdir(cwd);
 await mkdir(agentDir, { mode: 0o700 });
@@ -53,7 +71,7 @@ export default function(pi) {
 type Event = Record<string, any>;
 
 async function runCli(model: string, prompt: string, options: { tool?: boolean; thinking?: string; cancel?: boolean } = {}) {
-  const env: NodeJS.ProcessEnv = { ...process.env, PI_CODING_AGENT_DIR: agentDir, [policyName]: "sdk", PI_NEARAI_MODEL_VISIBILITY: "tee", PI_TEE_LIVE_CANCEL: options.cancel && !cancelStreaming ? "1" : "0" };
+  const env: NodeJS.ProcessEnv = { ...process.env, PI_CODING_AGENT_DIR: agentDir, [policyName]: testPolicy, PI_NEARAI_MODEL_VISIBILITY: "tee", PI_TEE_LIVE_CANCEL: options.cancel && !cancelStreaming ? "1" : "0" };
   delete env.NEARAI_API_KEY;
   delete env.TINFOIL_API_KEY;
   // The real key is in Pi's isolated store: a successful call also checks stored-key precedence.
@@ -146,7 +164,7 @@ function accepted(assistants: Event[]) {
 const oldPolicy = process.env[policyName];
 const oldVisibility = process.env.PI_NEARAI_MODEL_VISIBILITY;
 try {
-  process.env[policyName] = "sdk";
+  process.env[policyName] = testPolicy;
   process.env.PI_NEARAI_MODEL_VISIBILITY = "tee";
   const services = await createAgentSessionServices({ cwd, agentDir, resourceLoaderOptions: {
     noExtensions: true, noSkills: true, noPromptTemplates: true, additionalExtensionPaths: [entry],
@@ -161,8 +179,8 @@ try {
   const models = services.modelRuntime.getProvider(provider)!.getModels();
   const requestedModel = process.argv[3]?.startsWith("--") ? undefined : process.argv[3];
   const model = requestedModel ?? models.find(m => m.id === (provider === "nearai" ? "Qwen/Qwen3.6-35B-A3B-FP8" : "gpt-oss-120b"))?.id ?? models[0]?.id;
-  assert.ok(model && models.some(m => m.id === model), "Chosen model is absent from the visible SDK-policy catalog.");
-  console.log(`PASS: ${provider} compiled extension, native secret login, and catalog (${model}).`);
+  assert.ok(model && models.some(m => m.id === model), "Chosen model is absent from the selected policy catalog.");
+  console.log(`PASS: ${provider} ${publicCandidate ? "compiled public-build candidate" : "compiled extension"}, native secret login, and catalog (${model}).`);
 
   if (!cancelOnly) {
     const basic = await runCli(model, "Reply with exactly PI_TEE_OK.");

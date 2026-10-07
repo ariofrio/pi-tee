@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add owned public-build sessions with canonical model/endpoint, authority-policy and artifact digests, fresh admission/expiry checks, policy-change cancellation and no SDK fallback. Bind the real Intel public-build chain to that contract; keep production admission disabled pending repeatable setup and final review. Add native mismatch/expiry negatives, including expiry during a Pi payload hook, and a synthetic actual-Pi candidate harness.
+
+- Document the closed Tinfoil public-build authority/process set, plaintext/key custody, operator inputs and publisher/manufacturer channel/reset contracts.
+
 - Reject remote or unapproved Docker verification endpoints before collecting evidence; bind NVIDIA appraisal and cleanup to the checked local Docker Desktop or OrbStack Unix socket. This assumes the local OS and socket service are trusted.
 
 - Cache immutable public-build artifacts and deterministic helper results within the Pi process, with bounded memory and fresh CPU/GPU/freshness appraisal on every request. Execute private copies of verified public-build and NVIDIA helpers, and clean them after appraisal. Add warm-cache, nonce and helper-replacement regressions through the real verifier/delivery boundary.

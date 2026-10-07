@@ -25,3 +25,5 @@ On 2026-10-07, the direct route passed the complete actual Pi CLI/RPC suite with
 Written by Codex.
 
 The Intel routes require a local Docker Desktop or OrbStack Unix socket. Remote Docker contexts are rejected before evidence collection; the local OS, CLI and daemon remain trusted verifier components. [Local verifier boundary](../../docs/intel-candidate.md).
+
+The [owned public-build session](src/intel.ts) binds the authority policy, authenticated artifacts and short-lived appraisal to its send-once transport. Production admission remains gated for repeatable local verifier setup and final implementation review. The [closed serving contract](../../docs/tinfoil-public-profile.md) names the trusted software/manufacturer processes and operator inputs. `scripts/live-pi.ts ... --public-builds-candidate` tests the compiled adapter/session through isolated synthetic Pi registration without enabling the production extension.

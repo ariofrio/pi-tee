@@ -4,7 +4,8 @@ import {
   TeeError, type PolicyMode, type ProviderDefinition,
 } from "pi-tee-core";
 import { openDirectTinfoilTransport, TINFOIL_DIRECT_PROFILE } from "./direct.js";
-import { openIntelTinfoilTransport } from "./intel.js";
+import { INTEL_PUBLIC_BUILD_PROFILE, openIntelTinfoilTransport } from "./intel.js";
+import { PUBLIC_BUILD_PROFILE_ENABLED } from "./public-policy.js";
 import { parseTinfoilCatalog, TINFOIL_BASE_URL } from "./catalog.js";
 export { parseTinfoilCatalog, TINFOIL_BASE_URL } from "./catalog.js";
 
@@ -50,6 +51,7 @@ export function createTinfoilProvider(options: {
     id: "tinfoil", name: "Tinfoil", baseUrl: TINFOIL_BASE_URL, apiKeyEnv: "TINFOIL_API_KEY",
     policy: options.policy ?? resolvePolicy(process.env.PI_TINFOIL_POLICY),
     parseCatalog: parseTinfoilCatalog, catalogFetch: options.catalogFetch, assumptions,
+    publicBuildProfile: route === "direct-public" && PUBLIC_BUILD_PROFILE_ENABLED ? INTEL_PUBLIC_BUILD_PROFILE : undefined,
     availableModelIds: route !== "router" ? [TINFOIL_DIRECT_PROFILE.model] : undefined,
     openSdkTransport: options.openSdkTransport ?? (route === "direct-public" ? ({ signal }) => openIntelTinfoilTransport(signal, "public-builds") : route === "direct-intel" ? ({ signal }) => openIntelTinfoilTransport(signal) : route === "direct" ? ({ signal }) => openDirectTinfoilTransport(signal) : async ({ signal }) => {
       const { SecureClient } = await import("tinfoil");

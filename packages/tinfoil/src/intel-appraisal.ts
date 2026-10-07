@@ -8,7 +8,7 @@ import { parseHopperGpuMode } from "./gpu-mode.js";
 import { gpuVersionsAllowed } from "./gpu-policy.js";
 import { verifyPublicBuildArtifacts } from "./public-build.js";
 
-const PUBLIC_BUILD_VERIFIER_SHA256 = "08bcbf2f96f01d46c4129c0cca2e9135e76c44e1710bc51ff5cbc0652c7af1ba";
+export const PUBLIC_BUILD_VERIFIER_SHA256 = "08bcbf2f96f01d46c4129c0cca2e9135e76c44e1710bc51ff5cbc0652c7af1ba";
 
 export const INTEL_CANDIDATE = Object.freeze({
   host: "gemma4-31b-inf8-0.tinfoil.containers.tinfoil.dev",
@@ -17,12 +17,12 @@ export const INTEL_CANDIDATE = Object.freeze({
   cpuPolicySha256: "6eacea241bd6ac37901cc3cb738f62eebb513e827d28023ffdfde719d54960b2",
   gpuImage: "sha256:b67dad12cafae0f436f21ade4b0519b5a0fb343bac4bf380d9551e96a2394b5c",
 });
-const nvatHashes = {
+export const NVAT_HASHES = Object.freeze({
   "bin/nvattest": "0db6cba463aefa91a1a81c62bc8b3928ffe5c3d8347bde6561f5ea08dab156ae",
   "lib/libnvat.so.1.2.2": "b87d4bf93dfd0f1ffd8999d7d04db3e6a44c4048ae9b8e319f2f1cab2d885776",
   "lib/libnvat.so.1": "b87d4bf93dfd0f1ffd8999d7d04db3e6a44c4048ae9b8e319f2f1cab2d885776",
   "lib/libnvat.so": "b87d4bf93dfd0f1ffd8999d7d04db3e6a44c4048ae9b8e319f2f1cab2d885776",
-};
+});
 function requireCondition(ok: unknown, code: string): asserts ok { if (!ok) throw new TeeError(code); }
 async function pinnedFile(path: string, digest: string) {
   let bytes: Buffer;
@@ -47,8 +47,13 @@ function command(file: string, args: string[], signal: AbortSignal, input?: stri
 export async function qualifyIntelCandidate(options: {
   cpuVerifier: string; nvatDir: string; signal: AbortSignal; evidenceFetch?: typeof globalThis.fetch;
   mode?: "frozen" | "public-builds";
-}): Promise<{ tls: string; hpke: string }> {
+}): Promise<{ tls: string; hpke: string; publicBuild?: {
+  checkedAt: number; expiresAt: number; workloadDigest: string; platformDigest: string;
+  cvmManifestDigest: string; imageDigest: string; configDigest: string;
+} }> {
   const { cpuVerifier, nvatDir } = options;
+  const challengeAt = Date.now();
+  let build: Awaited<ReturnType<typeof verifyPublicBuildArtifacts>> | undefined;
   const signal = AbortSignal.any([options.signal, AbortSignal.timeout(options.mode === "public-builds" ? 240000 : 90000)]);
   signal.throwIfAborted();
   requireCondition(isAbsolute(cpuVerifier) && isAbsolute(nvatDir), "TEE_VERIFIER_ARTIFACT_REJECTED");
@@ -60,7 +65,7 @@ export async function qualifyIntelCandidate(options: {
   requireCondition(context.code === 0 && Array.isArray(contexts) && contexts.length === 1 && localSockets.includes(dockerHost), "TEE_GPU_VERIFIER_LOCATION_REJECTED");
   await pinnedFile(cpuVerifier, options.mode === "public-builds" ? PUBLIC_BUILD_VERIFIER_SHA256 : INTEL_CANDIDATE.cpuVerifierSha256);
   const nvat = new Map<string, Buffer>();
-  for (const [path, digest] of Object.entries(nvatHashes)) {
+  for (const [path, digest] of Object.entries(NVAT_HASHES)) {
     const bytes = await pinnedFile(resolve(nvatDir, path), digest);
     if (path === "bin/nvattest" || path === "lib/libnvat.so.1.2.2") nvat.set(path, bytes);
   }
@@ -70,7 +75,7 @@ export async function qualifyIntelCandidate(options: {
   const raw = await readBoundedBody(response.body, 2 * 1024 * 1024, signal);
   const envelope = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(raw));
   if (options.mode === "public-builds") {
-    await verifyPublicBuildArtifacts({ helperPath: cpuVerifier, expectedHelperDigest: PUBLIC_BUILD_VERIFIER_SHA256, raw: new TextDecoder("utf-8", { fatal: true }).decode(raw), nonce, signal, evidenceFetch: options.evidenceFetch });
+    build = await verifyPublicBuildArtifacts({ helperPath: cpuVerifier, expectedHelperDigest: PUBLIC_BUILD_VERIFIER_SHA256, raw: new TextDecoder("utf-8", { fatal: true }).decode(raw), nonce, signal, evidenceFetch: options.evidenceFetch });
   } else {
     const checked = await command(cpuVerifier, [], signal, `{"nonce":${JSON.stringify(nonce)},"envelope":${new TextDecoder("utf-8", { fatal: true }).decode(raw)}}`, true);
     const cpu = JSON.parse(checked.stdout);
@@ -114,5 +119,13 @@ export async function qualifyIntelCandidate(options: {
   const tls = keys.find((k: { id: string; format: string }) => k.id === "tls" && k.format === "https://tinfoil.sh/key/spki-fp-sha256/v1");
   const hpke = keys.find((k: { id: string; format: string }) => k.id === "hpke" && k.format === "https://tinfoil.sh/key/x25519-hpke/v1");
   requireCondition(/^[a-f0-9]{64}$/.test(tls?.data ?? "") && /^[a-f0-9]{64}$/.test(hpke?.data ?? ""), "TEE_ATTESTATION_REJECTED");
-  return { tls: tls.data, hpke: hpke.data };
+  if (!build) return { tls: tls.data, hpke: hpke.data };
+  const checkedAt = Date.now();
+  const expiresAt = Math.min(checkedAt + 60000, challengeAt + 300000,
+    Date.parse(build.codeFreshness) + 7 * 86400000, Date.parse(build.platformFreshness) + 7 * 86400000);
+  requireCondition(Number.isSafeInteger(expiresAt) && expiresAt > checkedAt, "TEE_PUBLIC_SESSION_REJECTED");
+  return { tls: tls.data, hpke: hpke.data, publicBuild: {
+    checkedAt, expiresAt, workloadDigest: build.digest, platformDigest: build.platformDigest,
+    cvmManifestDigest: build.cvmManifestDigest, imageDigest: build.containerBuild.imageDigest, configDigest: build.runtimeConfig.configDigest,
+  } };
 }
