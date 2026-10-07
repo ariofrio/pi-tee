@@ -111,4 +111,6 @@ On 2026-10-07, both compiled extensions loaded through Pi and used its native se
 
 A complete live suite has **not** passed: cancellation remains unvalidated. Later runs encountered intermittent terminal transport failures; a diagnostic run traced `APIConnectionError` to `KeyConfigMismatchError` after the SDK's re-attestation resend. One cancellation attempt instead completed with `length` before abort. Official-SDK probes succeeded on both supported routes, and three fresh verified attestation/serving-key comparisons matched; these observations do not establish the intermittent failure's root cause or exclude rotation/routing races. No extra inference retry or verification bypass was added. NEAR inference remains blocked by the gateway's `OutOfDate` TDX TCB status under the required `UpToDate` policy. The SDK's internal rotation resend remains an explicit SDK-policy assumption.
 
+Separate [direct-worker research](docs/direct-access.md) on 2026-10-07 succeeded with NEAR GLM under strict CPU/GPU checks, same-TLS SPKI binding and a verified response signature, and with a Tinfoil Gemma SEV worker through SDK-verified EHBP. Qwen's direct quote remained `OutOfDate`. The reproducible probes are not registered Pi routes or Approved profiles; the gateway/router paths and defaults above remain unchanged.
+
 Written by Codex.

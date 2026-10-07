@@ -14,6 +14,8 @@ Additional trust remains in Intel/NVIDIA verification and remote-verdict/JWKS po
 
 These limits cannot be closed solely by checking another report or matching a shared certificate/signature. A qualifying backend contract and independent deployment inventory are required. [Model signer contract](https://docs.near.ai/cloud/verification/cloud-api/model-attestations), [SDK Intel fields](https://github.com/nearai/inference-sdk/blob/b9930893a9f560e66898e1616111c5ac2241686c/js/src/utils/intel.ts#L101).
 
-NEAR refuses Bun and Node 22 in this release. Browser OAuth and independently approved deployment profiles are not implemented. The 2026-10-07 live Pi check loaded the extension, exercised native secret login and discovered models, but the gateway quote was rejected for TDX TCB status `OutOfDate`; the required `UpToDate` policy was preserved. Successful live completion, model-signature verification, tools, reasoning and cancellation remain unvalidated. See the [live harness and validation record](../../README.md#validation).
+NEAR refuses Bun and Node 22 in this release. Browser OAuth and independently approved deployment profiles are not implemented. The 2026-10-07 live Pi check loaded the extension, exercised native secret login and discovered models, but the gateway quote was rejected for TDX TCB status `OutOfDate`; the required `UpToDate` policy was preserved. Successful live completion, model-signature verification, tools, reasoning and cancellation through this Pi provider remain unvalidated. See the [live harness and validation record](../../README.md#validation).
+
+Separate [direct-worker research](../../docs/direct-access.md) succeeded with GLM: strict CPU/GPU evidence, attested SPKI and signed inference on one TLS connection, using the existing API key. Qwen's direct quote remained `OutOfDate`. The research transport is not wired into this extension and does not close shared-key, guest-image or runtime approval gaps.
 
 Written by Codex.

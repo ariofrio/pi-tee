@@ -14,4 +14,6 @@ A fresh memory-only cache secret is supplied to each request client. Caller URL/
 
 Browser OAuth and independently approved deployment profiles are not implemented. Router evidence passed a live SDK verification smoke. On 2026-10-07, a corrected credential enabled actual Pi CLI completion/usage, stored-key precedence, Unicode tool execution/result follow-up, and reasoning/final-text checks with `gpt-oss-120b` across separate runs. Text reasoning replay is supported and structured reasoning is rejected before transmission. Cancellation and a complete live-suite pass remain unvalidated: later runs encountered intermittent transport failures, including a key-configuration mismatch after the SDK's own re-attestation resend. No extra retry or verification bypass was added. See the [live harness and validation record](../../README.md#validation).
 
+Separate [direct-worker research](../../docs/direct-access.md) verified a reachable Gemma SEV worker and completed EHBP inference directly with the existing user key. Its exact authenticated deployment artifact is recorded for review. This bypasses the decrypting router in the research probe; the extension still uses its existing route, and no independently approved profile is enabled.
+
 Written by Codex.

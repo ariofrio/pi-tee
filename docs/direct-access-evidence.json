@@ -1,0 +1,120 @@
+{
+  "scope": "Point-in-time research probes; SDK acceptance, not independent approval or direct Pi E2E",
+  "runtime": "Node 24.21.0",
+  "sdkVersions": {
+    "nearai": "0.1.0",
+    "tinfoil": "1.2.2",
+    "tinfoilVerifier": "1.2.2"
+  },
+  "nearEvidence": {
+    "domain": "glm-5-3-flash.completions.near.ai",
+    "model": "z-ai/glm-5.3-flash",
+    "mode": "evidence-only",
+    "checkedAt": "2026-10-07T05:16:56.719Z",
+    "verified": true,
+    "tlsBinding": "attested",
+    "cpu": ["UpToDate"],
+    "gpu": ["verified"],
+    "returnedReports": 1,
+    "nonceMismatchRejected": true,
+    "peerMismatchRejected": true,
+    "secondRequestOnSameSocket": true,
+    "reconnectRejected": true,
+    "tlsConnectionAttempts": 1,
+    "logicalChatRequests": 0,
+    "paths": ["/v1/attestation/report", "/v1/models"]
+  },
+  "nearInference": {
+    "domain": "glm-5-3-flash.completions.near.ai",
+    "model": "z-ai/glm-5.3-flash",
+    "mode": "synthetic-inference",
+    "checkedAt": "2026-10-07T05:18:21.239Z",
+    "httpStatus": 200,
+    "responseSignatureVerified": true,
+    "syntheticMarker": true,
+    "usageReturned": true,
+    "cpu": ["UpToDate"],
+    "gpu": ["verified"],
+    "tlsBinding": "attested",
+    "reconnectRejected": true,
+    "tlsConnectionAttempts": 1,
+    "logicalChatRequests": 1,
+    "paths": ["/v1/attestation/report", "/ohttp", "/v1/signature/{id}"]
+  },
+  "nearRejectedCandidate": {
+    "domain": "qwen3-6-35b.completions.near.ai",
+    "model": "Qwen/Qwen3.6-35B-A3B-FP8",
+    "mode": "evidence-only",
+    "checkedAt": "2026-10-07T05:21:00.849Z",
+    "errorClass": "VerificationError",
+    "failure": "policy.tcb_status_not_allowed",
+    "tcbStatus": "OutOfDate",
+    "tlsConnectionAttempts": 1,
+    "logicalChatRequests": 0,
+    "paths": ["/v1/attestation/report"]
+  },
+  "tinfoilEvidence": {
+    "host": "gemma4-31b-inf6-3.tinfoil.containers.tinfoil.dev",
+    "repo": "tinfoilsh/confidential-gemma4-31b",
+    "model": "gemma4-31b",
+    "checkedAt": "2026-10-07T05:16:46.551Z",
+    "mode": "evidence-only",
+    "logicalChatRequests": 0,
+    "sdkVerified": true,
+    "verifiedPlatform": "https://tinfoil.sh/predicate/sev-snp-guest/v2",
+    "releaseTag": "v0.0.25",
+    "releaseDigest": "65f2dfa59ced010aeba841fc909880ac3434282cf2b43e90d5c3a3e543b3ccf0",
+    "status": 200,
+    "modelMetadataMatches": true
+  },
+  "tinfoilInference": {
+    "host": "gemma4-31b-inf6-3.tinfoil.containers.tinfoil.dev",
+    "repo": "tinfoilsh/confidential-gemma4-31b",
+    "model": "gemma4-31b",
+    "checkedAt": "2026-10-07T05:18:19.682Z",
+    "mode": "synthetic-inference",
+    "logicalChatRequests": 1,
+    "sdkVerified": true,
+    "verifiedPlatform": "https://tinfoil.sh/predicate/sev-snp-guest/v2",
+    "releaseTag": "v0.0.25",
+    "releaseDigest": "65f2dfa59ced010aeba841fc909880ac3434282cf2b43e90d5c3a3e543b3ccf0",
+    "status": 200,
+    "syntheticMarker": true,
+    "usageReturned": true,
+    "finishReason": "stop"
+  },
+  "tinfoilFreshDeviceEvidenceProbe": {
+    "host": "gemma4-31b-inf6-3.tinfoil.containers.tinfoil.dev",
+    "checkedAt": "2026-10-07T05:05:13.542Z",
+    "route": "/.well-known/tinfoil-attestation/v3?nonce={fresh32bytes}",
+    "status": 404,
+    "formatHeader": "https://tinfoil.sh/predicate/sev-snp-guest/v2",
+    "gpuVerified": false,
+    "inferenceRequests": 0
+  },
+  "tinfoilOtherCandidates": {
+    "observedDateUTC": "2026-10-07",
+    "platformClaim": "TDXGuestV2 in SDK-verified router metadata; not local worker verification",
+    "directAttempts": [
+      {
+        "host": "gpt-oss-120b-inf12-0.tinfoil.containers.tinfoil.dev",
+        "connectionTimeoutSeconds": 20,
+        "inferenceRequests": 0
+      },
+      {
+        "host": "gemma4-31b-inf10-0.tinfoil.containers.tinfoil.dev",
+        "connectionTimeoutSeconds": 20,
+        "inferenceRequests": 0
+      }
+    ],
+    "relayProbe": {
+      "host": "inference.tinfoil.sh",
+      "route": "/.well-known/tinfoil-attestation",
+      "requestedWorkerHeader": "gpt-oss-120b-inf12-0.tinfoil.containers.tinfoil.dev",
+      "returnedFormat": "SEV-SNP-v2",
+      "opaqueWorkerRelayEstablished": false,
+      "inferenceRequests": 0
+    }
+  },
+  "counterCaveat": "logicalChatRequests is a caller-operation count, not Tinfoil SDK-internal wire resend accounting"
+}
