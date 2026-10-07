@@ -13,10 +13,10 @@ export default async function tinfoil(pi: ExtensionAPI) {
   pi.on("model_select", async (_event, ctx) => show(ctx));
   pi.on("message_end", async (_event, ctx) => show(ctx));
   pi.registerCommand("tinfoil", {
-    description: "Tinfoil policy/report; /tinfoil policy sdk|approved; /tinfoil models refresh",
+    description: "Tinfoil policy/report; /tinfoil policy public-builds|sdk|approved; /tinfoil models refresh",
     handler: async (args, ctx) => {
       try {
-        if (args === "policy sdk" || args === "policy approved") {
+        if (args === "policy public-builds" || args === "policy sdk" || args === "policy approved") {
           integration.setPolicy(args.slice(7));
           await ctx.modelRegistry.refresh({ providers: ["tinfoil"], allowNetwork: false });
         }
@@ -28,7 +28,7 @@ export default async function tinfoil(pi: ExtensionAPI) {
           const result = await ctx.modelRegistry.refresh({ providers: ["tinfoil"], force: true, allowNetwork: true });
           if (result.errors.has("tinfoil")) ctx.ui.notify("Tinfoil model refresh failed; cached catalog retained.", "warning");
         } else if (args && args !== "status") {
-          ctx.ui.notify("Use /tinfoil status, /tinfoil policy sdk|approved, or /tinfoil models refresh.", "warning");
+          ctx.ui.notify("Use /tinfoil status, /tinfoil policy public-builds|sdk|approved, or /tinfoil models refresh.", "warning");
           return;
         }
         const report = integration.getReport();

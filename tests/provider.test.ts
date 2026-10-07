@@ -92,7 +92,7 @@ test("SDK-policy key rotation can reconstruct the same guarded body without cons
   assert.equal(JSON.parse(attempts[1]!.body).messages.at(-1).content, "private prompt");
 });
 
-test("changing to approved policy aborts an in-flight SDK request and hides SDK models", async () => {
+for (const policy of ["approved", "public-builds"]) test(`changing to ${policy} policy aborts an in-flight SDK request and hides SDK models`, async () => {
   let started!: () => void;
   const ready = new Promise<void>((resolve) => { started = resolve; });
   const integration = await sdkProvider(async (input, init) => {
@@ -102,7 +102,7 @@ test("changing to approved policy aborts an in-flight SDK request and hides SDK 
   });
   const completion = integration.provider.streamSimple(model, context, { apiKey: "test-key" }).result();
   await ready;
-  integration.setPolicy("approved");
+  integration.setPolicy(policy);
   assert.equal((await completion).stopReason, "aborted");
   assert.equal(integration.provider.getModels().length, 0);
 });
@@ -217,7 +217,10 @@ test("default policy blocks before the SDK or inference endpoint receives a prom
     assumptions: ["test SDK acceptance"],
   });
   const result = await integration.provider.streamSimple(model, context, { apiKey: "test-key" }).result();
-  assert.equal(result.errorMessage, "TEE_APPROVED_DEPLOYMENT_UNAVAILABLE");
+  assert.equal(result.errorMessage, "TEE_PUBLIC_BUILD_DEPLOYMENT_UNAVAILABLE");
+  assert.equal(integration.getReport().policy, "public-builds");
+  assert.equal(integration.getReport().lastRequest, "blocked");
+  assert.equal(isRetryableAssistantError(result), false);
   assert.equal(opened, false);
 });
 

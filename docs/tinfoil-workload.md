@@ -1,6 +1,6 @@
 # Tinfoil workload qualification
 
-The Intel direct candidate has working local CPU/GPU appraisal and an attested encrypted transport. Qualification is unfinished, rather than blocked on credentials or provider permission. This page separates checked source properties from the evidence still needed to admit a production Approved profile. [Hardware policy and local artifacts](intel-candidate.md), [security contract](../SECURITY.md).
+The Intel direct candidate has working local CPU/GPU appraisal and an attested encrypted transport. Qualification is unfinished, rather than blocked on credentials or provider permission. This page separates checked source properties from remaining production hardware/serving-path qualification. Its fixed artifacts are research fixtures; the [normal public-build policy](design.md) accepts updates from named public release/build authorities rather than requiring independent approval of each release. [Hardware policy and local artifacts](intel-candidate.md), [security contract](../SECURITY.md).
 
 ## Boot-artifact trace
 

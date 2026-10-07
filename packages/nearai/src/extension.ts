@@ -13,10 +13,10 @@ export default async function nearai(pi: ExtensionAPI) {
   pi.on("model_select", async (_event, ctx) => show(ctx));
   pi.on("message_end", async (_event, ctx) => show(ctx));
   pi.registerCommand("nearai", {
-    description: "NEAR AI policy/report; /nearai policy sdk|approved; /nearai models tee|all|refresh",
+    description: "NEAR AI policy/report; /nearai policy public-builds|sdk|approved; /nearai models tee|all|refresh",
     handler: async (args, ctx) => {
       try {
-        if (args === "policy sdk" || args === "policy approved") {
+        if (args === "policy public-builds" || args === "policy sdk" || args === "policy approved") {
           integration.setPolicy(args.slice(7));
           await ctx.modelRegistry.refresh({ providers: ["nearai"], allowNetwork: false });
         }
@@ -32,7 +32,7 @@ export default async function nearai(pi: ExtensionAPI) {
           const result = await ctx.modelRegistry.refresh({ providers: ["nearai"], force: true, allowNetwork: true });
           if (result.errors.has("nearai")) ctx.ui.notify("NEAR AI model refresh failed; cached catalog retained.", "warning");
         } else if (args && args !== "status") {
-          ctx.ui.notify("Use /nearai status, /nearai policy sdk|approved, or /nearai models tee|all|refresh.", "warning");
+          ctx.ui.notify("Use /nearai status, /nearai policy public-builds|sdk|approved, or /nearai models tee|all|refresh.", "warning");
           return;
         }
         const report = integration.getReport();

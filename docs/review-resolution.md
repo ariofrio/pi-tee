@@ -2,7 +2,7 @@
 
 Date: 2026-10-06. Author: Codex. [Revised design](design.md). [Independent Opus 5.5 review](design-review.md), completed by Opus 5.5.
 
-The assessment/design is complete. Basic provider integration can be implemented as extensions. Production Approved workloads remains gated for both services until a specific deployment satisfies the stated evidence and enforcement requirements. This resolution records design changes, not implementation or security-test results.
+The assessment/design is complete. Basic provider integration can be implemented as extensions. Production Approved workloads remains gated for both services until a specific deployment satisfies the stated evidence and enforcement requirements. This resolution records the original design changes, not implementation or security-test results. The owner subsequently selected [automatic public-build verification](design.md); the review did not assess that policy revision.
 
 | Finding | Resolution in the design |
 | --- | --- |

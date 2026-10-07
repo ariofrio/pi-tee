@@ -1,4 +1,4 @@
-export type PolicyMode = "approved" | "sdk";
+export type PolicyMode = "public-builds" | "approved" | "sdk";
 export type ModelVisibility = "tee" | "all";
 
 export class TeeError extends Error {
@@ -9,7 +9,8 @@ export class TeeError extends Error {
 }
 
 export function resolvePolicy(value?: string): PolicyMode {
-  if (value === undefined || value === "approved") return "approved";
+  if (value === undefined || value === "public-builds") return "public-builds";
+  if (value === "approved") return "approved";
   if (value === "sdk") return "sdk";
   throw new TeeError("TEE_POLICY_INVALID");
 }

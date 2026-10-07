@@ -53,7 +53,7 @@ test("a superseded native publication cannot change the active catalog", async (
   assert.equal(integration.provider.getModels()[0]?.id, "first");
 });
 
-test("offline restoration fixes transport fields and approved policy still hides the restored catalog", async () => {
+test("offline restoration fixes transport fields and public-build policy still hides the restored catalog", async () => {
   const integration = createTeeProvider({
     id: model.provider, name: "Catalog test", baseUrl: model.baseUrl, apiKeyEnv: "TEST_API_KEY",
     parseCatalog: () => [], catalogFetch: async () => { throw new Error("offline refresh must not fetch"); },

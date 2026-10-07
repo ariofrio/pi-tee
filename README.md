@@ -2,7 +2,7 @@
 
 NEAR AI and Tinfoil providers for Pi, with native API-key login, live model discovery, tools, usage accounting and encrypted inference.
 
-**Work in progress.** Default `approved` mode hides models and blocks inference because this release enables no independently approved production profile. `sdk` mode explicitly accepts each route's reported trust assumptions; it does not establish a manufacturer-only trust set.
+**Work in progress.** Default `public-builds` mode targets automatic updates from named public source/build workflows, with hardware and serving-path checks. It currently hides models and blocks inference because no complete profile is enabled. `sdk` mode enables experimental routes under their reported assumptions. Neither policy claims manufacturer-only trust.
 
 | Package | Purpose |
 | --- | --- |
@@ -51,23 +51,23 @@ Direct routes bind inference to the attested TLS key and reject reconnect/resend
 
 ### Commands and policy
 
-`PI_NEARAI_POLICY` and `PI_TINFOIL_POLICY` accept `approved` or `sdk`. Omitted values select `approved`; unknown values reject extension loading. Session commands change policy without persisting it:
+`PI_NEARAI_POLICY` and `PI_TINFOIL_POLICY` accept `public-builds`, `sdk` or `approved`. Omitted values select `public-builds`; unknown values reject extension loading. `approved` retains optional independent frozen-workload semantics, with no implemented profile. Session commands change policy without persisting it:
 
 ```text
 /nearai status
 /nearai models
 /nearai models refresh
 /nearai policy sdk
-/nearai policy approved
+/nearai policy public-builds
 
 /tinfoil status
 /tinfoil models
 /tinfoil models refresh
 /tinfoil policy sdk
-/tinfoil policy approved
+/tinfoil policy public-builds
 ```
 
-Changing policy aborts active requests and updates model availability. Status reports list trust assumptions and mark independent approval, a closed trust set and whole-session protection as unestablished. Provider footers apply only to the selected provider. Ordinary logs exclude prompts, credentials, completions and quote bodies.
+Changing policy aborts active requests and updates model availability. Status reports list route assumptions and mark public-build verification, independent approval, a closed trust set and whole-session protection as unestablished for current inference. Provider footers apply only to the selected provider. Ordinary logs exclude prompts, credentials, completions and quote bodies.
 
 ## Model discovery
 
@@ -75,7 +75,7 @@ Both providers discover chat models advertising tool support through public `/v1
 
 NEAR defaults to **TEE-only discovery**. Matching per-model metadata must declare `providerType: "vllm"` and `attestationSupported: true`. Non-TEE models, failed lookups and unknown entries are hidden. Older snapshots without capability metadata are treated as unknown.
 
-Set `PI_NEARAI_MODEL_VISIBILITY=all` or run `/nearai models all` to show labeled, inference-blocked entries. `/nearai models tee` restores the filter; session choices are not persisted. Showing an entry does not authorize inference: unsupported and unknown models fail before SDK setup. Declared capability still requires verification. Approved mode hides all picker models regardless of this setting.
+Set `PI_NEARAI_MODEL_VISIBILITY=all` or run `/nearai models all` to show labeled, inference-blocked entries. `/nearai models tee` restores the filter; session choices are not persisted. Showing an entry does not authorize inference: unsupported and unknown models fail before SDK setup. Declared capability still requires verification. Public-build and Approved modes currently hide all picker models regardless of this setting.
 
 Online startup fetches the catalog. Pi stores snapshots and uses four-hour freshness checks for refreshes; failed refresh preserves cached models. Set `PI_TEE_OFFLINE=1` to skip startup discovery and restore the stored catalog. Use the commands above to force refresh: `pi update --models` does not load extensions. [Discovery implementation](packages/nearai/src/discovery.ts).
 
@@ -89,7 +89,7 @@ NEAR holds response bytes in memory until the model signature is verified, delay
 
 **Protection applies to these providers' requests, not the entire Pi conversation.** Other providers, model switches, fallback, compaction, extensions and tools can access or transmit plaintext. Local code remains trusted. Registering another extension under the same provider ID can replace its implementation.
 
-Approved mode remains blocked pending independent software/build approval and complete hardware, key-custody and runtime qualification. NEAR also needs a serving-session binding beyond shared certificates and model signers. Whole-session protection requires a guard after Pi resolves the physical provider, including summaries and fallback. Public source and successful SDK checks do not satisfy these requirements. See the [security contract](SECURITY.md), [design](docs/design.md) and [Intel candidate inventory](docs/intel-candidate.md).
+Public-build mode accepts ongoing authority from named source maintainers, release workflows and hosted build processes. Deployment hashes come from authenticated evidence; the extension will not maintain per-release vendor pins. The [automatic Tinfoil public-release/CPU probe](tools/tinfoil-public-build/README.md) passed against live evidence and public artifact/source bytes without a built-in deployment digest. It does not yet authorize inference: the guest/container/model provenance chain, GPU-channel/reset, key/runtime qualification and transport integration remain open. NEAR also needs a serving-session binding beyond shared certificates and model signers. See the [security contract](SECURITY.md), [current design](docs/design.md) and [Intel candidate inventory](docs/intel-candidate.md).
 
 ## Validation
 
@@ -101,7 +101,7 @@ npm run smoke:catalogs    # public metadata; no credentials or inference
 npm run smoke:attestation # Tinfoil router SDK verification; no inference
 ```
 
-On 2026-10-07, **39 automated tests**, compiled-loader checks and isolated-package checks passed. Tarball loading does not qualify newly resolved verifier dependencies. The full actual Pi suite covers login, stored-key precedence, completion/usage, Unicode tools and follow-up, reasoning and RPC cancellation.
+On 2026-10-07, **40 automated tests**, compiled-loader checks and isolated-package checks passed. Tarball loading does not qualify newly resolved verifier dependencies. The full actual Pi suite covers login, stored-key precedence, completion/usage, Unicode tools and follow-up, reasoning and RPC cancellation.
 
 | Actual Pi route | Result |
 | --- | --- |

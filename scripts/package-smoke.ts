@@ -51,7 +51,7 @@ console.log('PASS: isolated ${name} tarball loads and logs in; default inference
 `;
     await writeFile(join(directory, "smoke.mjs"), code);
     const { stdout } = await execute(process.execPath, ["smoke.mjs"], {
-      cwd: directory, env: { ...process.env, PI_TEE_OFFLINE: "1", PI_NEARAI_POLICY: "approved", PI_TINFOIL_POLICY: "approved" },
+      cwd: directory, env: { ...process.env, PI_TEE_OFFLINE: "1", PI_NEARAI_POLICY: "public-builds", PI_TINFOIL_POLICY: "public-builds" },
     });
     process.stdout.write(stdout);
   }

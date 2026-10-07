@@ -47,11 +47,12 @@ export interface ProviderReport {
   independentApproval: "not-established";
   protectedSession: "not-established";
   closedTrustSet: "not-established";
+  publicBuildVerification: "not-established";
 }
 
 const FOUR_HOURS = 4 * 60 * 60 * 1000;
 const terminalCodes = new Set([
-  "TEE_APPROVED_DEPLOYMENT_UNAVAILABLE", "TEE_MODEL_UNAVAILABLE", "TEE_API_KEY_REQUIRED",
+  "TEE_APPROVED_DEPLOYMENT_UNAVAILABLE", "TEE_PUBLIC_BUILD_DEPLOYMENT_UNAVAILABLE", "TEE_MODEL_UNAVAILABLE", "TEE_API_KEY_REQUIRED",
   "TEE_RUNTIME_UNSUPPORTED", "TEE_REQUEST_REJECTED", "TEE_RESPONSE_REJECTED", "TEE_BODY_TOO_LARGE",
   "TEE_MODEL_ATTESTATION_UNAVAILABLE", "TEE_TLS_KEY_REJECTED", "TEE_WORKLOAD_PIN_REJECTED", "TEE_ATTESTATION_REJECTED",
   "TEE_VERIFIER_ARTIFACT_REJECTED", "TEE_VERIFIER_PROCESS_REJECTED", "TEE_CPU_POLICY_REJECTED", "TEE_GPU_POLICY_REJECTED",
@@ -72,7 +73,7 @@ function safeFailure(source: AssistantMessageEventStream, report: ProviderReport
         const known = event.error.errorMessage && terminalCodes.has(event.error.errorMessage) ? event.error.errorMessage : undefined;
         const aborted = signal.aborted || event.reason === "aborted";
         const code = aborted ? "TEE_REQUEST_ABORTED" : rejection() ?? known ?? "TEE_REQUEST_FAILED";
-        report.lastRequest = aborted ? "aborted" : code === "TEE_APPROVED_DEPLOYMENT_UNAVAILABLE" ? "blocked" : "failed";
+        report.lastRequest = aborted ? "aborted" : code === "TEE_APPROVED_DEPLOYMENT_UNAVAILABLE" || code === "TEE_PUBLIC_BUILD_DEPLOYMENT_UNAVAILABLE" ? "blocked" : "failed";
         report.reason = code;
         output.push({ ...event, reason: aborted ? "aborted" : "error", error: { ...event.error, content: [], stopReason: aborted ? "aborted" : "error", errorMessage: code } });
       } else {
@@ -95,7 +96,7 @@ export function createTeeProvider(definition: ProviderDefinition) {
   let checkedAt: number | undefined;
   const report: ProviderReport = {
     provider: definition.id, policy: mode, lastRequest: "not-run", catalogModels: 0,
-    assumptions: definition.assumptions, independentApproval: "not-established", protectedSession: "not-established", closedTrustSet: "not-established",
+    assumptions: definition.assumptions, independentApproval: "not-established", protectedSession: "not-established", closedTrustSet: "not-established", publicBuildVerification: "not-established",
   };
   const active = new Set<AbortController>();
   const api = openAICompletionsApi();
@@ -122,7 +123,8 @@ export function createTeeProvider(definition: ProviderDefinition) {
     active.add(controller);
     const source = lazyStream(requested, async () => {
       signal.throwIfAborted();
-      if (mode !== "sdk") throw new TeeError("TEE_APPROVED_DEPLOYMENT_UNAVAILABLE");
+      if (mode === "public-builds") throw new TeeError("TEE_PUBLIC_BUILD_DEPLOYMENT_UNAVAILABLE");
+      if (mode === "approved") throw new TeeError("TEE_APPROVED_DEPLOYMENT_UNAVAILABLE");
       const canonical = catalog.find((entry) => entry.id === requested.id);
       if (!canonical || requested.provider !== definition.id || (definition.availableModelIds && !definition.availableModelIds.includes(canonical.id))) throw new TeeError("TEE_MODEL_UNAVAILABLE");
       if (definition.requireDeclaredTee && canonical.teeCapability !== "declared") throw new TeeError("TEE_MODEL_ATTESTATION_UNAVAILABLE");
