@@ -18,6 +18,10 @@ Three settings are explicit:
 
 Optional frozen workloads would use user-supplied manifests. Existing pinned workers and helper policies remain research fixtures for the explicit experimental routes. They are not the normal update mechanism. No policy falls back to `sdk` after failure, and no result is labeled “fully TEE verified.”
 
+## Client portability
+
+The client target covers Pi's macOS/Linux/Windows x64 and ARM64 releases, Android/Termux, and both Node and Bun runtimes, without a container runtime or user-installed compiler. The [portable verifier plan](portable-verification.md) records the native NVIDIA feasibility probe, platform build results and remaining qualification work. Production support remains the tested macOS ARM64/OrbStack setup until that replacement is reviewed and tested.
+
 ## Trust declarations
 
 The local policy fixes authorities and verification rules; release evidence fixes the artifact bytes used in one session. Changing a repository, workflow path, attestation root, required security property or authorized recipient requires an explicit policy change. Ordinary releases within an accepted identity can update automatically.
