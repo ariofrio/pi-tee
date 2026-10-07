@@ -65,6 +65,8 @@ The observed research trust set includes local Node/Go/Linux/container runtimes 
 
 ## NEAR direct route and evidence
 
+For the remaining public-build work, see [NEAR status](nearai-status.md): client implementation, deployment investigation and backend protocol requirements are separate categories. The observations below qualify only the experimental SDK route.
+
 The registered GLM direct route passed the complete actual Pi suite on 2026-10-07: compiled extension loading, native secret login, stored-key precedence, completion/usage, Unicode echo tool execution and follow-up, reasoning/final text, and RPC cancellation at the response-consumption barrier. Its verified-response buffering means visible output starts only after completion authentication. The cancellation result measures local abort/acknowledgement; it does not establish remote generation-stop timing.
 
 GLM at `glm-5-3-flash.completions.near.ai` passed CPU `UpToDate`, required GPU evidence, same-TLS SPKI binding, encrypted OHTTP inference, expected marker/usage and a verified `provider_tee` response signature. Qwen at `qwen3-6-35b.completions.near.ai` failed `policy.tcb_status_not_allowed` with `OutOfDate`, before inference. The [probe](../scripts/research/near-direct.mjs) uses one TLS 1.3 socket for quote, inference and signature lookup, and rejects reconnection. Wrong nonce and wrong SPKI reject. [Direct TLS procedure](https://docs.near.ai/cloud/verification/direct/tls), [SDK direct client](https://github.com/nearai/inference-sdk/blob/b9930893a9f560e66898e1616111c5ac2241686c/js/src/node/direct-attestation-client.ts).

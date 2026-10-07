@@ -2,7 +2,7 @@
 
 NEAR AI and Tinfoil providers for Pi, with native API-key login, live model discovery, tools, reasoning, usage accounting and encrypted inference.
 
-**Work in progress; packages are unpublished.** The default `public-builds` policy supports Tinfoil `gemma4-31b` on the tested macOS ARM64/OrbStack setup. NEAR requires explicit experimental `sdk` policy because its public-build guarantees need server changes. [Provider assessment](docs/design.md#provider-assessment).
+**Work in progress; packages are unpublished.** The default `public-builds` policy supports Tinfoil `gemma4-31b` on the tested macOS ARM64/OrbStack setup. NEAR's experimental direct `sdk` route works; its public-build profile needs more client implementation, deployment evidence and backend bindings. [What is missing for NEAR](docs/nearai-status.md).
 
 | Package | Purpose |
 | --- | --- |
@@ -84,9 +84,9 @@ Public-build policy trusts the named public maintainers, workflows and build pro
 
 The final request guard fixes model, endpoint and authentication after Pi's payload hooks, rejecting transport overrides, hosted tools, remote media and unsupported fields. Direct routes bind the actual TLS socket before credentials or ciphertext, send once and reject reconnect/resend. Pi provider retries are disabled; terminal security errors also suppress Pi 1.0.4's turn/summarization retries. The SDK router retains its disclosed rotation resend.
 
-NEAR buffers bounded response bytes in memory until signature verification; Tinfoil streams authenticated encrypted responses. Ordinary logs exclude credentials, prompts, completions and quote bodies. [Limits and security contract](SECURITY.md).
+NEAR buffers bounded response bytes in memory until signature verification; Tinfoil streams authenticated encrypted responses. Ordinary logs exclude credentials, prompts, completions and quote bodies. [Security guarantees and limits](SECURITY.md).
 
-**These extensions protect their own requests, not the entire Pi conversation.** Other providers, fallback, compaction, extensions and tools can access or transmit plaintext. Local code remains trusted. NEAR's shared-key/session, key-release and runtime gaps remain [server-side requirements](docs/design.md#provider-assessment).
+**These extensions protect their own requests, not the entire Pi conversation.** Other providers, fallback, compaction, extensions and tools can access or transmit plaintext. Local code remains trusted. The [NEAR assessment](docs/nearai-status.md) explains which remaining guarantees need client work, deployment investigation or server support.
 
 ## Validation
 
