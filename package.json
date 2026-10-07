@@ -15,6 +15,7 @@
     "smoke": "node --import tsx scripts/smoke.ts",
     "smoke:packages": "node --import tsx scripts/package-smoke.ts",
     "smoke:catalogs": "node --import tsx scripts/live-catalogs.ts",
+    "smoke:workers": "node --import tsx scripts/live-tinfoil-workers.ts",
     "smoke:attestation": "node --import tsx scripts/live-tinfoil-attestation.ts",
     "smoke:pi": "node --import tsx scripts/live-pi.ts"
   },

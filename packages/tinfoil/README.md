@@ -28,6 +28,8 @@ The owned session binds authority/artifact digests and short-lived appraisal to 
 
 `PI_TINFOIL_POLICY` and `/tinfoil policy` accept `public-builds`, `sdk` and `approved`. Policy changes abort active requests and are not persisted. `approved` has no implemented profile. `/tinfoil models`, `/tinfoil models refresh` and `/tinfoil status` inspect discovery/reporting; `PI_TEE_OFFLINE=1` restores Pi's catalog snapshot without startup discovery.
 
+Maintainers can run `npm run smoke:workers` in the locked checkout to discover and collect nonce-bearing public evidence from every advertised worker for the current seven chat workloads. The [discovery module](src/worker-discovery.ts) fixes the delivery services and confines candidates to the Tinfoil worker namespace; the caller supplies its expected publisher repository. It ignores delivery-supplied keys and measurements. The probe reports unverified evidence, never sends inference, and does not alter production routing. `-- --save-evidence` saves private research captures under ignored `.scratch/work/worker-discovery-evidence` with owner-only permissions.
+
 Routes are selected at startup:
 
 | `PI_TINFOIL_ROUTE` | Behavior |

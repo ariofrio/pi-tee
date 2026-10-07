@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add public Tinfoil worker discovery and an evidence-only probe covering every advertised candidate for the seven current chat workloads. Fix delivery services, compare the expected publisher repository, bound results and reject arbitrary hosts/releases; ignore claimed keys and measurements. Support worker hostname aliases independently of catalog IDs. Production routing and admission are unchanged.
+
 - Separate NEAR model TEE declarations from SDK protocol support. Declared Chutes models are no longer labeled non-TEE; discovery reports their unavailable transport, the default picker hides them, and show-all labels them accurately. SDK dispatch fails before setup; public profiles remain independent of SDK support. Preserve the distinction in offline snapshots.
 
 - Recheck public admission expiry after TLS setup before sending credentials or ciphertext, in both the native and portable transports. Pass the verified deadline from Tinfoil sessions; check it again inside the helper before its sole HTTP write. Add slow-handshake and post-readiness expiry negatives. Accepted response streams may continue past the dispatch deadline.
