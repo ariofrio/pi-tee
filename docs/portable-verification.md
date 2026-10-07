@@ -1,6 +1,6 @@
 # Portable local verification
 
-The target is a Docker-free client across Pi's supported platforms. This is a proposed replacement for the current verifier setup; the enabled production profile still requires the tested macOS ARM64/OrbStack environment.
+The target is a Docker-free client across Pi's supported platforms. The owned portable TLS helper is implemented and being qualified; native GPU artifact packaging is unfinished. The enabled production profile still requires the tested macOS ARM64/OrbStack environment.
 
 ## Platform and runtime scope
 
@@ -18,7 +18,9 @@ The extension verifies the selected artifact hashes and executes private snapsho
 
 Preserve the exact CPU-bound GPU report, nonce, signed NVIDIA references, all three certificate/revocation chains, local version floors and authenticated SPT-mode interpretation. The CPU/public-build chain and its freshness rules remain unchanged. Replacing local appraisal with NVIDIA's [remote verifier](https://docs.nvidia.com/attestation/nv-attestation-sdk-cpp/latest/api/group__gpu__verifier.html) would require a separate declared service/key-bootstrap contract and proof that its signed verdict applies to the exact CPU-bound report. It is not an automatic fallback.
 
-The transport must also work in both Pi runtimes. Test their actual socket behavior rather than accepting a runtime name or version as proof. If Bun cannot support the existing Node Agent integration, move the owned pinned-TLS request into the portable Go helper behind a bounded pipe protocol. Keep EHBP encryption and response authentication, exact key binding before HTTP, one dispatch with no redirect/reconnect/replay, streaming and cancellation. This transport change requires its own tests and independent review.
+The [owned Go transport](../tools/pinned-tls/README.md) now authenticates its socket before accepting credentials/body from the parent, sends once without redirect/reconnect/replay, and streams over bounded pipes. Its TypeScript adapter executes a hash-checked private binary snapshot and terminates it on cancellation. The candidate Tinfoil route retains EHBP encryption and response authentication. It passed real socket tests under Node 24 and Bun 1.3.13, plus actual Gemma completion, tools, reasoning, usage and cancellation in the Node CLI and official Bun-compiled Pi 1.0.4 macOS ARM64 binary. A separate compiled-binary run cancelled after a live text delta. These are host observations, not production activation or qualification of other targets.
+
+The [transport workflow](../.github/workflows/pinned-tls.yml) runs native Node/Bun socket tests and repeated Go builds on all six desktop targets, including Windows ARM64. Its [runner labels](https://docs.github.com/en/actions/reference/runners/github-hosted-runners) and each client's architecture are checked explicitly. Results must be observed before claiming target support. Android execution and final platform artifact packaging remain unfinished.
 
 Client artifact hashes vary by platform and client release. They authenticate the verifier installation; they do not freeze Tinfoil's workload releases. An ordinary attester update within the existing public publisher policy still requires no new deployment pin.
 

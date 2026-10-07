@@ -1,12 +1,14 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { mkdir, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { createHash } from "node:crypto";
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { isAbsolute, join, resolve } from "node:path";
 import { createAgentSessionServices } from "@earendil-works/pi-coding-agent";
 
 // Opt-in, billable tests. Credentials come from the caller's environment only.
 const provider = process.argv[2];
-const publicCandidate = process.argv.includes("--public-builds-candidate");
+const portableTlsCandidate = process.argv.includes("--portable-tls-candidate");
+const publicCandidate = process.argv.includes("--public-builds-candidate") || portableTlsCandidate;
 assert.ok(!publicCandidate || provider === "tinfoil", "The public-build candidate is Tinfoil only.");
 const publicProduction = process.argv.includes("--public-builds");
 assert.ok(!publicProduction || (provider === "tinfoil" && !publicCandidate), "Select the production Tinfoil public policy separately from candidate registration.");
@@ -19,20 +21,41 @@ const key = process.env[keyName];
 assert.ok(key, `Set ${keyName} without placing it in command arguments.`);
 const policyName = provider === "nearai" ? "PI_NEARAI_POLICY" : "PI_TINFOIL_POLICY";
 const root = process.cwd();
+const piBinary = process.env.PI_TEE_LIVE_PI_BINARY;
+assert.ok(!piBinary || isAbsolute(piBinary), "A test Pi binary must use an absolute path.");
 await mkdir(".scratch/work", { recursive: true });
 const scratch = await mkdtemp(resolve(".scratch/work/pi-live-"));
 const cwd = join(scratch, "project");
 const agentDir = join(scratch, "agent");
 const entry = publicCandidate ? join(scratch, "public-candidate.ts") : resolve("packages", provider, "dist/extension.js");
+const tlsArtifact = portableTlsCandidate ? {
+  helperPath: resolve(process.env.PI_TEE_PINNED_TLS_TEST_HELPER ?? ""),
+  sha256: createHash("sha256").update(await readFile(process.env.PI_TEE_PINNED_TLS_TEST_HELPER ?? "")).digest("hex"),
+} : undefined;
 if (publicCandidate) await writeFile(entry, `
 import { createTeeProvider } from ${JSON.stringify(resolve("packages/core/dist/index.js"))};
 import { parseTinfoilCatalog, TINFOIL_BASE_URL } from ${JSON.stringify(resolve("packages/tinfoil/dist/index.js"))};
 import { INTEL_PUBLIC_BUILD_PROFILE } from ${JSON.stringify(resolve("packages/tinfoil/dist/intel.js"))};
+import { INTEL_CANDIDATE, qualifyIntelCandidate } from ${JSON.stringify(resolve("packages/tinfoil/dist/intel-appraisal.js"))};
+import { openEncryptedWorkerTransport } from ${JSON.stringify(resolve("packages/tinfoil/dist/direct.js"))};
+const artifact = ${JSON.stringify(tlsArtifact) ?? "undefined"};
+const profile = artifact ? {
+  ...INTEL_PUBLIC_BUILD_PROFILE,
+  id: INTEL_PUBLIC_BUILD_PROFILE.id + "-portable-tls-candidate",
+  authorityPolicyDigest: ${JSON.stringify(tlsArtifact ? createHash("sha256").update("pi-tee-portable-tls-candidate-v1\0" + tlsArtifact.sha256).digest("hex") : "")},
+  assumptions: [...INTEL_PUBLIC_BUILD_PROFILE.assumptions, "Experimental local TLS helper artifact: " + artifact.sha256],
+  async openSession({signal,model}) {
+    const keys = await qualifyIntelCandidate({cpuVerifier:process.env.PI_TINFOIL_PUBLIC_BUILD_VERIFIER,nvatDir:process.env.PI_TINFOIL_NVAT_DIR,signal,mode:"public-builds"});
+    if(!keys.publicBuild) throw Error("TEE_PUBLIC_SESSION_REJECTED");
+    return {admission:{profile:profile.id,model:model.id,authorityPolicyDigest:profile.authorityPolicyDigest,...keys.publicBuild},
+      transport:await openEncryptedWorkerTransport(signal,INTEL_CANDIDATE.host,keys,"cache_salt",artifact)};
+  },
+} : INTEL_PUBLIC_BUILD_PROFILE;
 export default async function(pi) {
-  // Synthetic test registration only; production's review gate remains closed.
+  // Synthetic candidate registration; it does not change production routing.
   const integration = createTeeProvider({
     id:"tinfoil",name:"Tinfoil public candidate",baseUrl:TINFOIL_BASE_URL,apiKeyEnv:"TINFOIL_API_KEY",policy:"public-builds",
-    parseCatalog:parseTinfoilCatalog,assumptions:[],publicBuildProfile:INTEL_PUBLIC_BUILD_PROFILE,
+    parseCatalog:parseTinfoilCatalog,assumptions:[],publicBuildProfile:profile,
     openSdkTransport:async()=>{throw Error("No SDK fallback");},
   });
   await integration.initializeCatalog();
@@ -78,7 +101,7 @@ async function runCli(model: string, prompt: string, options: { tool?: boolean; 
   delete env.TINFOIL_API_KEY;
   // The real key is in Pi's isolated store: a successful call also checks stored-key precedence.
   env[keyName] = "synthetic-invalid-environment-key";
-  const args = [resolve(root, "node_modules/@earendil-works/pi-coding-agent/dist/cli.js"),
+  const args = [...(piBinary ? [] : [resolve(root, "node_modules/@earendil-works/pi-coding-agent/dist/cli.js")]),
     "--provider", provider!, "--model", model, "--thinking", options.thinking ?? "off",
     "--no-session", "--no-extensions", "--no-skills", "--no-prompt-templates", "--no-mcp",
     "--system-prompt", "Follow the user's synthetic test instructions concisely.",
@@ -86,7 +109,7 @@ async function runCli(model: string, prompt: string, options: { tool?: boolean; 
     ...(options.tool ? ["--tools", "synthetic_echo"] : ["--no-tools"]),
     "--mode", options.cancel ? "rpc" : "json", ...(options.cancel ? [] : ["-p", prompt]),
   ];
-  const child = spawn(process.execPath, args, { cwd, env, stdio: ["pipe", "pipe", "pipe", "pipe"] });
+  const child = spawn(piBinary ?? process.execPath, args, { cwd, env, stdio: ["pipe", "pipe", "pipe", "pipe"] });
   const events: Event[] = [];
   let pending = "";
   let bytes = 0;
