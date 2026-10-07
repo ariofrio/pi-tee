@@ -6,6 +6,7 @@ import { createAgentSessionServices } from "@earendil-works/pi-coding-agent";
 
 // Opt-in, billable tests. Credentials come from the caller's environment only.
 const provider = process.argv[2];
+const cancelOnly = process.argv.includes("--cancel-only");
 assert.ok(provider === "nearai" || provider === "tinfoil", "Pass nearai or tinfoil, optionally followed by a model ID.");
 const keyName = provider === "nearai" ? "NEARAI_API_KEY" : "TINFOIL_API_KEY";
 const key = process.env[keyName];
@@ -22,6 +23,7 @@ await mkdir(cwd);
 await mkdir(agentDir, { mode: 0o700 });
 await writeFile(join(agentDir, "settings.json"), JSON.stringify({ compaction: { enabled: false }, retry: { enabled: false } }));
 await writeFile(testExtension, `
+import { writeSync } from "node:fs";
 export default function(pi) {
   let requests = 0;
   pi.on("before_provider_request", event => {
@@ -31,7 +33,11 @@ export default function(pi) {
       ...(++requests > 4 ? { model: "live-test-request-limit" } : {}),
     };
   });
-  pi.on("after_provider_response", () => { process.stdout.write(JSON.stringify({type:"live_response_headers"}) + "\\n"); });
+  pi.on("after_provider_response", async event => {
+    writeSync(3, JSON.stringify({type:"live_response_headers",status:event.status}) + "\\n");
+    // A test-only response-consumption barrier lets RPC abort reach a fast stream.
+    if (process.env.PI_TEE_LIVE_CANCEL === "1") await new Promise(resolve => setTimeout(resolve, 1000));
+  });
   pi.registerTool({
     name: "synthetic_echo", label: "Synthetic echo", description: "Echo the synthetic test value.",
     parameters: { type: "object", properties: {value: {type:"string"}}, required:["value"], additionalProperties:false },
@@ -46,7 +52,7 @@ export default function(pi) {
 type Event = Record<string, any>;
 
 async function runCli(model: string, prompt: string, options: { tool?: boolean; thinking?: string; cancel?: boolean } = {}) {
-  const env: NodeJS.ProcessEnv = { ...process.env, PI_CODING_AGENT_DIR: agentDir, [policyName]: "sdk", PI_NEARAI_MODEL_VISIBILITY: "tee" };
+  const env: NodeJS.ProcessEnv = { ...process.env, PI_CODING_AGENT_DIR: agentDir, [policyName]: "sdk", PI_NEARAI_MODEL_VISIBILITY: "tee", PI_TEE_LIVE_CANCEL: options.cancel ? "1" : "0" };
   delete env.NEARAI_API_KEY;
   delete env.TINFOIL_API_KEY;
   // The real key is in Pi's isolated store: a successful call also checks stored-key precedence.
@@ -59,14 +65,13 @@ async function runCli(model: string, prompt: string, options: { tool?: boolean; 
     ...(options.tool ? ["--tools", "synthetic_echo"] : ["--no-tools"]),
     "--mode", options.cancel ? "rpc" : "json", ...(options.cancel ? [] : ["-p", prompt]),
   ];
-  const child = spawn(process.execPath, args, { cwd, env, stdio: ["pipe", "pipe", "pipe"] });
+  const child = spawn(process.execPath, args, { cwd, env, stdio: ["pipe", "pipe", "pipe", "pipe"] });
   const events: Event[] = [];
   let pending = "";
   let bytes = 0;
   let timedOut = false;
   let abortSent = false;
   let headersSeen = false;
-  let abortTimer: ReturnType<typeof setTimeout> | undefined;
   let forceTimer: ReturnType<typeof setTimeout> | undefined;
   const terminate = () => {
     child.kill("SIGTERM");
@@ -91,9 +96,25 @@ async function runCli(model: string, prompt: string, options: { tool?: boolean; 
       if (!event || typeof event !== "object") continue;
       events.push(event);
       if (!options.cancel) continue;
-      if (event.type === "message_start" && event.message?.role === "assistant") abortTimer ??= setTimeout(abort, 15_000);
-      if (event.type === "live_response_headers") { headersSeen = true; abort(); }
       if (event.type === "agent_end" || (event.type === "response" && event.id === "cancel")) child.stdin.end();
+    }
+  });
+  // Pi redirects extension stdout to stderr in RPC mode. Use a dedicated metadata pipe.
+  let metadata = "";
+  const metadataPipe = child.stdio[3] as import("node:stream").Readable;
+  metadataPipe.setEncoding("utf8");
+  metadataPipe.on("data", (chunk: string) => {
+    metadata += chunk;
+    if (metadata.length > 4096) { timedOut = true; terminate(); return; }
+    let newline: number;
+    while ((newline = metadata.indexOf("\n")) !== -1) {
+      const line = metadata.slice(0, newline); metadata = metadata.slice(newline + 1);
+      let event: Event;
+      try { event = JSON.parse(line); } catch { continue; }
+      if (event.type === "live_response_headers" && event.status === 200) {
+        headersSeen = true;
+        if (options.cancel) abort();
+      }
     }
   });
   // Consume diagnostics without writing provider data or credentials to ordinary logs.
@@ -102,7 +123,7 @@ async function runCli(model: string, prompt: string, options: { tool?: boolean; 
   else child.stdin.end();
   let exitCode: number | null;
   try { exitCode = await new Promise<number | null>((resolve, reject) => { child.once("close", resolve); child.once("error", reject); }); }
-  finally { clearTimeout(deadline); if (abortTimer) clearTimeout(abortTimer); if (forceTimer) clearTimeout(forceTimer); }
+  finally { clearTimeout(deadline); if (forceTimer) clearTimeout(forceTimer); }
   assert.ok(!timedOut, "Pi live test timed out or exceeded its output cap.");
   assert.equal(exitCode, 0, "Pi CLI did not exit cleanly.");
   const assistants = events.filter(e => e.type === "message_end" && e.message?.role === "assistant").map(e => e.message);
@@ -132,33 +153,39 @@ try {
   assert.equal(credential.type, "api_key");
   assert.equal((await stat(join(agentDir, "auth.json"))).mode & 0o777, 0o600, "Pi credential file must be owner-only.");
   const models = services.modelRuntime.getProvider(provider)!.getModels();
-  const model = process.argv[3] ?? models.find(m => m.id === (provider === "nearai" ? "Qwen/Qwen3.6-35B-A3B-FP8" : "gpt-oss-120b"))?.id ?? models[0]?.id;
+  const requestedModel = process.argv[3]?.startsWith("--") ? undefined : process.argv[3];
+  const model = requestedModel ?? models.find(m => m.id === (provider === "nearai" ? "Qwen/Qwen3.6-35B-A3B-FP8" : "gpt-oss-120b"))?.id ?? models[0]?.id;
   assert.ok(model && models.some(m => m.id === model), "Chosen model is absent from the visible SDK-policy catalog.");
   console.log(`PASS: ${provider} compiled extension, native secret login, and catalog (${model}).`);
 
-  const basic = await runCli(model, "Reply with exactly PI_TEE_OK.");
-  accepted(basic.assistants);
-  assert.ok(basic.assistants.some(m => m.content?.some((p: Event) => p.type === "text" && p.text.trim() === "PI_TEE_OK")), "Synthetic completion marker missing.");
-  console.log(`PASS: ${provider} Pi CLI completion, usage, and stored-key precedence.`);
+  if (!cancelOnly) {
+    const basic = await runCli(model, "Reply with exactly PI_TEE_OK.");
+    accepted(basic.assistants);
+    assert.ok(basic.assistants.some(m => m.content?.some((p: Event) => p.type === "text" && p.text.trim() === "PI_TEE_OK")), "Synthetic completion marker missing.");
+    console.log(`PASS: ${provider} Pi CLI completion, usage, and stored-key precedence.`);
 
-  const tools = await runCli(model, 'Call synthetic_echo exactly once with value "pi-tee-π". After reading the tool result, reply with exactly PI_TEE_TOOL_OK.', { tool: true });
-  accepted(tools.assistants);
-  assert.equal(tools.events.filter(e => e.type === "tool_execution_end" && e.toolName === "synthetic_echo" && !e.isError).length, 1, "Expected one successful synthetic tool execution.");
-  assert.ok(tools.assistants.some(m => m.content?.some((p: Event) => p.type === "text" && p.text.trim() === "PI_TEE_TOOL_OK")), "Tool result follow-up marker missing.");
-  console.log(`PASS: ${provider} Pi CLI Unicode tool call, execution, and result follow-up.`);
+    const tools = await runCli(model, 'Call synthetic_echo exactly once with value "pi-tee-π". After reading the tool result, reply with exactly PI_TEE_TOOL_OK.', { tool: true });
+    accepted(tools.assistants);
+    assert.equal(tools.events.filter(e => e.type === "tool_execution_end" && e.toolName === "synthetic_echo" && !e.isError).length, 1, "Expected one successful synthetic tool execution.");
+    assert.ok(tools.assistants.some(m => m.content?.some((p: Event) => p.type === "text" && p.text.trim() === "PI_TEE_TOOL_OK")), "Tool result follow-up marker missing.");
+    console.log(`PASS: ${provider} Pi CLI Unicode tool call, execution, and result follow-up.`);
 
-  if (models.find(m => m.id === model)?.reasoning) {
-    const reasoning = await runCli(model, "What is 17 times 19? Reason briefly, then reply with exactly 323.", { thinking: "low" });
-    accepted(reasoning.assistants);
-    assert.ok(reasoning.assistants.some(m => m.content?.some((p: Event) => p.type === "thinking" && p.thinking.trim())), "No reasoning content was observed.");
-    assert.ok(reasoning.assistants.some(m => m.content?.some((p: Event) => p.type === "text" && p.text.includes("323"))), "Expected arithmetic answer missing.");
-    console.log(`PASS: ${provider} Pi CLI reasoning and final text.`);
+    if (models.find(m => m.id === model)?.reasoning) {
+      const reasoning = await runCli(model, "What is 17 times 19? Reason briefly, then reply with exactly 323.", { thinking: "low" });
+      accepted(reasoning.assistants);
+      assert.ok(reasoning.assistants.some(m => m.content?.some((p: Event) => p.type === "thinking" && p.thinking.trim())), "No reasoning content was observed.");
+      assert.ok(reasoning.assistants.some(m => m.content?.some((p: Event) => p.type === "text" && p.text.includes("323"))), "Expected arithmetic answer missing.");
+      console.log(`PASS: ${provider} Pi CLI reasoning and final text.`);
+    }
   }
 
   const cancelled = await runCli(model, "Count slowly from one to one thousand, one number per line. Do not use tools.", { cancel: true });
+  const failure = cancelled.assistants.find(m => m.stopReason === "error");
+  assert.ok(!failure, `Cancellation request failed before abort: ${/^TEE_[A-Z_]+$/.test(failure?.errorMessage ?? "") ? failure!.errorMessage : "unspecified terminal error"}`);
+  assert.equal(cancelled.headersSeen, true, "Cancellation response instrumentation was not observed.");
   assert.equal(cancelled.assistants.at(-1)?.stopReason, "aborted", "RPC cancellation did not abort the request.");
   assert.ok(cancelled.events.some(e => e.type === "response" && e.id === "cancel" && e.success), "RPC abort was not acknowledged.");
-  console.log(`PASS: ${provider} Pi RPC cancellation (${cancelled.headersSeen ? "after response headers" : "during request setup"}).`);
+  console.log(`PASS: ${provider} Pi RPC cancellation at the response-consumption barrier.`);
 } catch (error) {
   // Credential synchronization errors can retain credentials; never print the error object.
   console.error(error instanceof assert.AssertionError ? error.message : `FAIL: ${provider} live Pi setup/test failed.`);

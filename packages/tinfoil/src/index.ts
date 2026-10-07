@@ -1,8 +1,9 @@
 import { randomBytes } from "node:crypto";
 import {
   createTeeProvider, resolvePolicy, withAbort,
-  type PolicyMode, type ProviderDefinition,
+  TeeError, type PolicyMode, type ProviderDefinition,
 } from "pi-tee-core";
+import { openDirectTinfoilTransport, TINFOIL_DIRECT_PROFILE } from "./direct.js";
 import { parseTinfoilCatalog, TINFOIL_BASE_URL } from "./catalog.js";
 export { parseTinfoilCatalog, TINFOIL_BASE_URL } from "./catalog.js";
 
@@ -17,14 +18,25 @@ export const TINFOIL_ASSUMPTIONS = [
 
 export function createTinfoilProvider(options: {
   policy?: PolicyMode;
+  route?: "router" | "direct";
   catalogFetch?: typeof globalThis.fetch;
   openSdkTransport?: ProviderDefinition["openSdkTransport"];
 } = {}) {
+  const route = options.route ?? process.env.PI_TINFOIL_ROUTE ?? "router";
+  if (route !== "router" && route !== "direct") throw new TeeError("TEE_ROUTE_INVALID");
+  const assumptions = route === "direct" ? [
+    "Local Pi, runtime, extensions, tools, the pinned JS verifier and EHBP are trusted.",
+    "This direct SDK-policy candidate pins one worker, artifact digest and launch measurement; it is not independently approved.",
+    "The AMD Genoa JS verifier supplies no revocation checks or independent GPU appraisal; fresh v3 evidence is not yet enforced.",
+    "API credentials and encrypted prompts use the exact socket presenting the attested TLS SPKI; rotation fails without a resend.",
+    "Runtime integrity, GPU channel assurance and model integrity still require qualification of the pinned guest and model artifacts.",
+  ] : TINFOIL_ASSUMPTIONS;
   return createTeeProvider({
     id: "tinfoil", name: "Tinfoil", baseUrl: TINFOIL_BASE_URL, apiKeyEnv: "TINFOIL_API_KEY",
     policy: options.policy ?? resolvePolicy(process.env.PI_TINFOIL_POLICY),
-    parseCatalog: parseTinfoilCatalog, catalogFetch: options.catalogFetch, assumptions: TINFOIL_ASSUMPTIONS,
-    openSdkTransport: options.openSdkTransport ?? (async ({ signal }) => {
+    parseCatalog: parseTinfoilCatalog, catalogFetch: options.catalogFetch, assumptions,
+    availableModelIds: route === "direct" ? [TINFOIL_DIRECT_PROFILE.model] : undefined,
+    openSdkTransport: options.openSdkTransport ?? (route === "direct" ? ({ signal }) => openDirectTinfoilTransport(signal) : async ({ signal }) => {
       const { SecureClient } = await import("tinfoil");
       signal.throwIfAborted();
       const client = new SecureClient({ baseURL: TINFOIL_BASE_URL, transport: "ehbp", userCacheSecret: randomBytes(32).toString("hex") });

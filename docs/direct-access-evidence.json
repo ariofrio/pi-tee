@@ -1,5 +1,5 @@
 {
-  "scope": "Point-in-time research probes; SDK acceptance, not independent approval or direct Pi E2E",
+  "scope": "Point-in-time direct SDK route Pi E2E and separate CPU/GPU qualification; not independently Approved",
   "runtime": "Node 24.21.0",
   "sdkVersions": {
     "nearai": "0.1.0",
@@ -13,8 +13,12 @@
     "checkedAt": "2026-10-07T05:16:56.719Z",
     "verified": true,
     "tlsBinding": "attested",
-    "cpu": ["UpToDate"],
-    "gpu": ["verified"],
+    "cpu": [
+      "UpToDate"
+    ],
+    "gpu": [
+      "verified"
+    ],
     "returnedReports": 1,
     "nonceMismatchRejected": true,
     "peerMismatchRejected": true,
@@ -22,7 +26,10 @@
     "reconnectRejected": true,
     "tlsConnectionAttempts": 1,
     "logicalChatRequests": 0,
-    "paths": ["/v1/attestation/report", "/v1/models"]
+    "paths": [
+      "/v1/attestation/report",
+      "/v1/models"
+    ]
   },
   "nearInference": {
     "domain": "glm-5-3-flash.completions.near.ai",
@@ -33,13 +40,21 @@
     "responseSignatureVerified": true,
     "syntheticMarker": true,
     "usageReturned": true,
-    "cpu": ["UpToDate"],
-    "gpu": ["verified"],
+    "cpu": [
+      "UpToDate"
+    ],
+    "gpu": [
+      "verified"
+    ],
     "tlsBinding": "attested",
     "reconnectRejected": true,
     "tlsConnectionAttempts": 1,
     "logicalChatRequests": 1,
-    "paths": ["/v1/attestation/report", "/ohttp", "/v1/signature/{id}"]
+    "paths": [
+      "/v1/attestation/report",
+      "/ohttp",
+      "/v1/signature/{id}"
+    ]
   },
   "nearRejectedCandidate": {
     "domain": "qwen3-6-35b.completions.near.ai",
@@ -51,7 +66,9 @@
     "tcbStatus": "OutOfDate",
     "tlsConnectionAttempts": 1,
     "logicalChatRequests": 0,
-    "paths": ["/v1/attestation/report"]
+    "paths": [
+      "/v1/attestation/report"
+    ]
   },
   "tinfoilEvidence": {
     "host": "gemma4-31b-inf6-3.tinfoil.containers.tinfoil.dev",
@@ -90,7 +107,8 @@
     "status": 404,
     "formatHeader": "https://tinfoil.sh/predicate/sev-snp-guest/v2",
     "gpuVerified": false,
-    "inferenceRequests": 0
+    "inferenceRequests": 0,
+    "interpretation": "Wrong path; superseded by the correct nonce-query route"
   },
   "tinfoilOtherCandidates": {
     "observedDateUTC": "2026-10-07",
@@ -116,5 +134,62 @@
       "inferenceRequests": 0
     }
   },
-  "counterCaveat": "logicalChatRequests is a caller-operation count, not Tinfoil SDK-internal wire resend accounting"
+  "counterCaveat": "logicalChatRequests is a caller-operation count, not Tinfoil SDK-internal wire resend accounting",
+  "tinfoilDirectPi": {
+    "route": "PI_TINFOIL_ROUTE=direct",
+    "observedDateUTC": "2026-10-07",
+    "model": "gemma4-31b",
+    "compiledLoading": true,
+    "nativeSecretLogin": true,
+    "storedKeyPrecedence": true,
+    "completionAndUsage": true,
+    "unicodeToolAndFollowup": true,
+    "reasoningAndFinalText": true,
+    "rpcCancellation": true,
+    "cancellationBoundary": "test-only response-consumption barrier after HTTP 200",
+    "singleSuitePass": true,
+    "transportWirePolicy": "one send; no rotation recovery or fallback"
+  },
+  "tinfoilFreshV3": {
+    "checkedAt": "2026-10-07T05:57:49.495Z",
+    "route": "/.well-known/tinfoil-attestation?nonce={fresh32bytes}",
+    "status": 200,
+    "format": "https://tinfoil.sh/predicate/attestation/v3",
+    "httpEnvelopeSha256": "2b63cb7a5ac3352c4cd69c0f996d841a68517105615a5ba6ca10a07a502fc207",
+    "gpuCount": 1,
+    "inferenceRequests": 0,
+    "cpuSignatureRevocationAndReferencePolicyVerified": true,
+    "codeAndMeasurementPinned": true,
+    "goVerifierCommit": "23734b7c6b9acf5359087412b03ebb524c2fb2f1",
+    "olderVerifierCommit": "ff634ede9513",
+    "olderVerifierFailure": "unknown object member \"iommu_write_safe\"",
+    "wrongNonceRejected": true,
+    "changedKeysRejected": true,
+    "changedDeviceEvidenceRejected": true,
+    "providerReferenceAndFreshnessAuthoritiesRetained": true,
+    "independentApproval": false
+  },
+  "tinfoilLocalGpu": {
+    "observedDateUTC": "2026-10-07",
+    "manufacturerVerifierVersion": "1.2.2.1780962352",
+    "manufacturerArtifactSha256": "720455eb71d3aca50dc9fbd0900b0fa72fe36b6500fb5c5d453e7f4e9300187c",
+    "mode": "local verifier; file-sourced CPU-bound evidence",
+    "gpuCount": 1,
+    "manufacturerModel": "GH100 A01 GSP BROM",
+    "driver": "595.71.05",
+    "vbios": "96.00.D0.00.03",
+    "reportSignatureVerified": true,
+    "nonceMatched": true,
+    "measurementsMatched": true,
+    "deviceOcsp": "good",
+    "driverRimOcsp": "good",
+    "vbiosRimOcsp": "good",
+    "driverRimSignatureVerified": true,
+    "vbiosRimSignatureVerified": true,
+    "forgedSignatureRejected": "GPU Evidence Invalid Signature",
+    "wrongNonceRejected": "GPU Evidence Nonce Mismatch",
+    "inferenceRequests": 0,
+    "apiKeysProvidedToVerifier": false,
+    "integratedIntoExtension": false
+  }
 }

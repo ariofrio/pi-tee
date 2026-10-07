@@ -28,6 +28,7 @@
     "node": ">=22.19.0"
   },
   "dependencies": {
+    "ehbp": "0.3.3",
     "pi-tee-core": "0.1.0",
     "tinfoil": "1.2.2"
   },
