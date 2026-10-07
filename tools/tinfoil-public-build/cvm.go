@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"crypto/sha256"
 	"crypto/x509"
 	_ "embed"
@@ -53,16 +52,7 @@ type cvmResult struct {
 }
 
 func decodeOne(raw []byte, value any) error {
-	d := json.NewDecoder(bytes.NewReader(raw))
-	d.DisallowUnknownFields()
-	if err := d.Decode(value); err != nil {
-		return err
-	}
-	var trailing any
-	if d.Decode(&trailing) != io.EOF {
-		return errors.New("trailing JSON")
-	}
-	return nil
+	return strictDecode(raw, value, false)
 }
 
 func authenticateCVM(i *cvmInput) (*cvmResult, error) {

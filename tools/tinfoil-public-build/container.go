@@ -69,17 +69,11 @@ func validDescriptor(d ociDescriptor) bool {
 func authenticatedContainerReference(tag, deployment64 string, releaseBundle []byte) (*provenance.Code, string, error) {
 	rejected := errors.New("TEE_CONTAINER_BUILD_REJECTED")
 	deployment, err := bytes64(deployment64)
-	if err != nil || requireCodeWorkflow(releaseBundle, tag) != nil {
-		return nil, "", rejected
-	}
-	code, err := provenance.AuthenticateCode(releaseBundle, codeRepo, tag, digest256(deployment))
 	if err != nil {
 		return nil, "", rejected
 	}
-	var release struct {
-		Config string `json:"config"`
-	}
-	if json.Unmarshal(deployment, &release) != nil {
+	code, release, _, err := authenticateDeployment(tag, deployment, releaseBundle)
+	if err != nil {
 		return nil, "", rejected
 	}
 	config, err := bytes64(release.Config)
@@ -114,7 +108,7 @@ func authenticateContainer(i *containerInput) (map[string]any, error) {
 		return nil, rejected
 	}
 	var index ociDocument
-	if json.Unmarshal(indexRaw, &index) != nil || index.SchemaVersion != 2 || index.MediaType != ociIndex || len(index.Manifests) != 2 {
+	if decodeOne(indexRaw, &index) != nil || index.SchemaVersion != 2 || index.MediaType != ociIndex || len(index.Manifests) != 2 {
 		return nil, rejected
 	}
 	var engine, attestation *ociDescriptor
@@ -143,7 +137,7 @@ func authenticateContainer(i *containerInput) (map[string]any, error) {
 		return nil, rejected
 	}
 	var im, am ociDocument
-	if json.Unmarshal(imageRaw, &im) != nil || json.Unmarshal(attestationRaw, &am) != nil || im.SchemaVersion != 2 || am.SchemaVersion != 2 || im.MediaType != ociImage || am.MediaType != ociImage || len(im.Layers) == 0 || len(im.Layers) > 256 || len(am.Layers) != 1 {
+	if decodeOne(imageRaw, &im) != nil || decodeOne(attestationRaw, &am) != nil || im.SchemaVersion != 2 || am.SchemaVersion != 2 || im.MediaType != ociImage || am.MediaType != ociImage || len(im.Layers) == 0 || len(im.Layers) > 256 || len(am.Layers) != 1 {
 		return nil, rejected
 	}
 	for _, layer := range im.Layers {
@@ -166,7 +160,7 @@ func authenticateContainer(i *containerInput) (map[string]any, error) {
 			Labels map[string]string `json:"Labels"`
 		} `json:"config"`
 	}
-	if json.Unmarshal(configRaw, &imageConfig) != nil || imageConfig.Architecture != "amd64" || imageConfig.OS != "linux" {
+	if strictDecode(configRaw, &imageConfig, true) != nil || imageConfig.Architecture != "amd64" || imageConfig.OS != "linux" {
 		return nil, rejected
 	}
 	var statement struct {
@@ -212,7 +206,7 @@ func authenticateContainer(i *containerInput) (map[string]any, error) {
 			} `json:"runDetails"`
 		} `json:"predicate"`
 	}
-	if json.Unmarshal(proofRaw, &statement) != nil || statement.Type != "https://in-toto.io/Statement/v1" || statement.PredicateType != slsaV1 || len(statement.Subject) == 0 || len(statement.Subject) > 16 {
+	if strictDecode(proofRaw, &statement, true) != nil || statement.Type != "https://in-toto.io/Statement/v1" || statement.PredicateType != slsaV1 || len(statement.Subject) == 0 || len(statement.Subject) > 16 {
 		return nil, rejected
 	}
 	for _, subject := range statement.Subject {
@@ -242,7 +236,12 @@ func authenticateContainer(i *containerInput) (map[string]any, error) {
 	if err != nil {
 		return nil, rejected
 	}
+	_, statementDigest, err := codePredicate(i.Bundle, code)
+	if err != nil {
+		return nil, rejected
+	}
 	return map[string]any{
+		"subjectPredicateMatched": true, "codeStatementDigest": statementDigest,
 		"publisherEndorsedBuildMetadata": true, "independentBuilderVerified": false, "freshnessVerified": false,
 		"cpuVerified": false, "gpuVerified": false, "inferenceQualified": false,
 		"repo": codeRepo, "tag": code.Tag, "releaseCommit": code.Commit, "deploymentDigest": code.Digest,
@@ -283,7 +282,8 @@ func runContainerReference(reader io.Reader, writer io.Writer) int {
 	if err == nil && len(raw) <= maxInputBytes && decodeOne(raw, &input) == nil {
 		code, digest, checked := authenticatedContainerReference(input.Tag, input.Deployment, input.Bundle)
 		if checked == nil {
-			if json.NewEncoder(writer).Encode(map[string]any{"artifactReferenceVerified": true, "freshnessVerified": false, "inferenceQualified": false, "repo": code.Repo, "tag": code.Tag, "releaseCommit": code.Commit, "deploymentDigest": code.Digest, "imageDigest": digest}) == nil {
+			_, statementDigest, err := codePredicate(input.Bundle, code)
+			if err == nil && json.NewEncoder(writer).Encode(map[string]any{"artifactReferenceVerified": true, "subjectPredicateMatched": true, "codeStatementDigest": statementDigest, "freshnessVerified": false, "inferenceQualified": false, "repo": code.Repo, "tag": code.Tag, "releaseCommit": code.Commit, "deploymentDigest": code.Digest, "imageDigest": digest}) == nil {
 				return 0
 			}
 		}

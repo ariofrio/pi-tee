@@ -111,6 +111,18 @@ func TestRuntimeAuthenticatesRelease(t *testing.T) {
 	if json.Unmarshal(out.Bytes(), &result) != nil || result["authenticatedRelease"] != true || result["runtimeConstraintsVerified"] != true || result["inferenceQualified"] != false || result["freshnessVerified"] != false || result["cpuVerified"] != false || result["releaseCommit"] != "43dc8f6d1c4d9c1504559ab181cf9dfe00ad239b" || result["deploymentDigest"] != "65f2dfa59ced010aeba841fc909880ac3434282cf2b43e90d5c3a3e543b3ccf0" {
 		t.Fatalf("incorrect authenticated scope: %s", out.String())
 	}
+	if result["subjectPredicateMatched"] != true || result["codeStatementDigest"] == nil {
+		t.Fatal("runtime constraints must bind to the same signed predicate as the CPU quote")
+	}
+	for _, ambiguous := range []string{
+		strings.TrimSuffix(string(encoded), "}") + `,"tag":"v0.0.25"}`,
+		strings.Replace(string(encoded), `"tag":`, `"Tag":`, 1),
+	} {
+		var rejected bytes.Buffer
+		if runRuntimeRelease(strings.NewReader(ambiguous), &rejected) != 1 {
+			t.Fatal("accepted ambiguous release input")
+		}
+	}
 	for _, name := range []string{"tag", "deployment", "bundle", "repo"} {
 		t.Run("substituted "+name, func(t *testing.T) {
 			var changed map[string]any

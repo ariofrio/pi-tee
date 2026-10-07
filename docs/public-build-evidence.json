@@ -13,6 +13,15 @@
   "platformDigest": "0cba58535ac96b734d02f9ebd5db6e90f51c193e9d27c4432c8fc5a363f83d64",
   "codeFreshness": "2026-10-05T13:13:09Z",
   "platformFreshness": "2026-10-02T21:04:36Z",
+  "codeStatementDigest": "3788d27fdd2d385c9a810b7fb4fd19ae4ad6f142c3c907ba3e9f87523836f0c7",
+  "rtmr1": "a787299fe2e84295a406dde367abac5b40128c1e13aa81dfde4a5c2e39682e45cde7bb84cefc7f33f25ac645fc265030",
+  "rtmr2": "233677c2518eadf59ff45e8c22ee776ff828d066675dc87d86043e2bc2c4352c4f915898044bf317993749045056f811",
+  "vmShape": {
+    "cpus": 16,
+    "memory_mb": 65536,
+    "gpus": 1,
+    "disks": 5
+  },
   "host": "gemma4-31b-inf8-0.tinfoil.containers.tinfoil.dev",
   "publicArtifactDigestMatched": true,
   "publicSourceConfigMatched": true,
@@ -30,6 +39,7 @@
   "rtmr2Recomputed": "233677c2518eadf59ff45e8c22ee776ff828d066675dc87d86043e2bc2c4352c4f915898044bf317993749045056f811",
   "containerBuild": {
     "builderClaim": "https://github.com/tinfoilsh/confidential-gemma4-31b/actions/runs/31575376519/attempts/1",
+    "codeStatementDigest": "3788d27fdd2d385c9a810b7fb4fd19ae4ad6f142c3c907ba3e9f87523836f0c7",
     "cpuVerified": false,
     "deploymentDigest": "65f2dfa59ced010aeba841fc909880ac3434282cf2b43e90d5c3a3e543b3ccf0",
     "dockerfileDigest": "6b097efe99c68966509662bd68566331cc3581791da091fb1127782265adcfd0",
@@ -44,6 +54,7 @@
     "releaseCommit": "43dc8f6d1c4d9c1504559ab181cf9dfe00ad239b",
     "repo": "tinfoilsh/confidential-gemma4-31b",
     "sourceCommit": "bff40cb8bd650c01be92e0f4cd98c960dbb222d9",
+    "subjectPredicateMatched": true,
     "tag": "v0.0.25",
     "publicSourceParentMatched": true,
     "publicDockerfileBytesMatched": true
@@ -83,7 +94,9 @@
     "repo": "tinfoilsh/confidential-gemma4-31b",
     "tag": "v0.0.25",
     "releaseCommit": "43dc8f6d1c4d9c1504559ab181cf9dfe00ad239b",
-    "deploymentDigest": "65f2dfa59ced010aeba841fc909880ac3434282cf2b43e90d5c3a3e543b3ccf0"
+    "deploymentDigest": "65f2dfa59ced010aeba841fc909880ac3434282cf2b43e90d5c3a3e543b3ccf0",
+    "codeStatementDigest": "3788d27fdd2d385c9a810b7fb4fd19ae4ad6f142c3c907ba3e9f87523836f0c7",
+    "subjectPredicateMatched": true
   },
   "independentRebuild": false
 }

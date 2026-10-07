@@ -6,7 +6,7 @@ import { TeeError, readBoundedBody } from "pi-tee-core";
 import { parseHopperGpuMode } from "./gpu-mode.js";
 import { verifyPublicBuildArtifacts } from "./public-build.js";
 
-const PUBLIC_BUILD_VERIFIER_SHA256 = "dae400da525dc621f55aa6f6825726e8d67dfdf4cc770e5b1958f0b2a74cc37e";
+const PUBLIC_BUILD_VERIFIER_SHA256 = "08bcbf2f96f01d46c4129c0cca2e9135e76c44e1710bc51ff5cbc0652c7af1ba";
 
 export const INTEL_CANDIDATE = Object.freeze({
   host: "gemma4-31b-inf8-0.tinfoil.containers.tinfoil.dev",

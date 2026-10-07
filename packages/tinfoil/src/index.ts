@@ -29,7 +29,7 @@ export function createTinfoilProvider(options: {
     "Experimental SDK-policy candidate: local Pi/runtime/extensions/tools, the hash-pinned public-build helper/dependencies, Docker image/runtime and NVIDIA verifier are trusted.",
     "Intel roots, revocation, UpToDate appraisal and local floors authenticate fresh CPU-bound device and endpoint keys; named public Tinfoil workload/guest/platform/freshness workflows authorize dynamic releases.",
     "GitHub Actions OIDC/hosted builds and the finite Sigstore roots are trusted; the named release publisher endorses OCI build/source claims, without an independent builder signature or rebuild.",
-    "Public source, authenticated guest/kernel/initrd/OCI artifacts, RTMR2 and the constrained Gemma runtime configuration are checked before GPU appraisal or inference; full running key/channel/reset qualification and implementation review remain incomplete.",
+    "Public source, authenticated guest/kernel/initrd/OCI artifacts, RTMR1/RTMR2 and the constrained Gemma runtime configuration are bound to the CPU-accepted signed predicate before GPU appraisal or inference; full running key/channel/reset qualification and implementation review remain incomplete.",
     "Exactly one CPU-bound Hopper report must pass local NVIDIA signed references, revocation, nonce, secure-boot/debug and authenticated SPT checks; driver/VBIOS still use the experimental candidate's fixed policy.",
     "TLS SPKI authenticates the inference socket before credentials/EHBP ciphertext; send once, reject rotation and encrypt a fresh cache salt. Tinfoil retains availability and credential/billing authority.",
   ] : route === "direct-intel" ? [

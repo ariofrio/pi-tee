@@ -57,6 +57,12 @@ The [boot calculator](../../packages/tinfoil/src/boot-measurements.ts) is a boun
 
 [Design and remaining inference gates](../../docs/design.md).
 
+The deployment subject must equal the signed measurement predicate across all fields. The CPU result exports the accepted RTMR1/RTMR2 and VM shape; boot recomputation uses those expectations. Runtime and container results carry the same signed-statement digest, and both languages require one conventional code collateral entry. Deployment and OCI descriptor parsing rejects duplicate, case-variant and unknown fields. OCI configuration and SLSA projections permit extension fields, while rejecting duplicates and case variants of consumed fields. [Binding implementation](release.go), [JSON rules](json.go).
+
+`--inspect-tdx-policy` accepts an unsigned `artifact` object and its `identity`. It exercises the same copied-policy floor application as quote assembly and reports the effective SVN/collateral floors without authenticating that policy or qualifying inference. [Inspection tests](policy_test.go) cover raising weak floors, preserving stronger ones and leaving publisher input unchanged.
+
+The [Node-chain tests](../../tests/public-build-chain.test.ts) replay real signed CPU/release evidence and public artifacts through the delivery seam. Set `PI_TEE_PUBLIC_BUILD_TEST_EVIDENCE`, `PI_TEE_PUBLIC_BUILD_TEST_HELPER` and `PI_TEE_BOOT_TEST_DIR` to private evidence, the built helper and the real kernel/initrd directory. Without those inputs the test explicitly skips. Tampered deployment, source, manifest, discovery, boot, registry and source-parent/Dockerfile responses must fail before GPU appraisal or inference.
+
 The evidence probe and SDK-policy `direct-public` candidate share the [artifact-chain implementation](../../packages/tinfoil/src/public-build.ts). The candidate verifies the local helper hash before fetching evidence, then appraises the same CPU-bound GPU bytes and releases endpoint keys to the send-once encrypted transport. Its full actual Pi suite and separate live-delta cancellation passed on 2026-10-07. This connects artifact verification to experimental inference; it does not enable the default production policy. [Candidate setup and limits](../../packages/tinfoil/README.md).
 
 Written by Codex.

@@ -84,10 +84,12 @@ type runtimeResult struct {
 	Tag                        string      `json:"tag,omitempty"`
 	ReleaseCommit              string      `json:"releaseCommit,omitempty"`
 	DeploymentDigest           string      `json:"deploymentDigest,omitempty"`
+	CodeStatementDigest        string      `json:"codeStatementDigest,omitempty"`
+	SubjectPredicateMatched    bool        `json:"subjectPredicateMatched"`
 }
 
-// Decode the same constrained, literal configuration semantics used by the
-// measured Go guest. Do not expand aliases, merges, external env or new fields.
+// Accept a strict subset of the guest's configuration language. Inherited
+// environment strings, aliases, merges and unsupported fields are rejected.
 func inspectRuntimeConfig(raw []byte) (*runtimeResult, error) {
 	reject := errors.New("TEE_RUNTIME_CONFIG_REJECTED")
 	if len(raw) == 0 || len(raw) > 128*1024 {
@@ -341,19 +343,12 @@ func authenticateRuntimeRelease(input *containerReferenceInput) (*runtimeResult,
 	if err != nil {
 		return nil, reject
 	}
-	deployment, err := bytes64(input.Deployment)
+	deploymentRaw, err := bytes64(input.Deployment)
 	if err != nil {
 		return nil, reject
 	}
-	var release struct {
-		Config  string `json:"config"`
-		Command string `json:"cmdline"`
-		Hashes  struct {
-			Version string `json:"version"`
-			Root    string `json:"root"`
-		} `json:"hashes"`
-	}
-	if json.Unmarshal(deployment, &release) != nil {
+	var release deployment
+	if decodeOne(deploymentRaw, &release) != nil {
 		return nil, reject
 	}
 	config, err := bytes64(release.Config)
@@ -374,5 +369,10 @@ func authenticateRuntimeRelease(input *containerReferenceInput) (*runtimeResult,
 	}
 	checked.AuthenticatedRelease = true
 	checked.Repo, checked.Tag, checked.ReleaseCommit, checked.DeploymentDigest = code.Repo, code.Tag, code.Commit, code.Digest
+	_, statementDigest, err := codePredicate(input.Bundle, code)
+	if err != nil {
+		return nil, reject
+	}
+	checked.SubjectPredicateMatched, checked.CodeStatementDigest = true, statementDigest
 	return checked, nil
 }

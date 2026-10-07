@@ -44,6 +44,10 @@ func TestPublicBuildEvidence(t *testing.T) {
 	if result["repo"] != "tinfoilsh/confidential-gemma4-31b" || result["workflow"] != "tinfoil-release-publish.yml" {
 		t.Fatal("unexpected release authority")
 	}
+	if result["rtmr1"] != "a787299fe2e84295a406dde367abac5b40128c1e13aa81dfde4a5c2e39682e45cde7bb84cefc7f33f25ac645fc265030" ||
+		result["rtmr2"] != "233677c2518eadf59ff45e8c22ee776ff828d066675dc87d86043e2bc2c4352c4f915898044bf317993749045056f811" || result["codeStatementDigest"] == nil {
+		t.Fatal("missing quote-authenticated boot expectations and statement identity")
+	}
 	for _, tc := range []struct {
 		name   string
 		change func(map[string]any)
@@ -53,6 +57,14 @@ func TestPublicBuildEvidence(t *testing.T) {
 			d["nonce"] = "0101010101010101010101010101010101010101010101010101010101010101"
 		}, now},
 		{"missing provenance", func(d map[string]any) { d["envelope"].(map[string]any)["collateral"] = []any{} }, now},
+		{"ambiguous code selection", func(d map[string]any) {
+			for _, c := range d["envelope"].(map[string]any)["collateral"].([]any) {
+				m := c.(map[string]any)
+				if m["id"] == "code" {
+					m["id"] = "code-shadow"
+				}
+			}
+		}, now},
 		{"stale witness", func(d map[string]any) {}, now.Add(8 * 24 * time.Hour)},
 		{"future witness", func(d map[string]any) {}, now.Add(-8 * 24 * time.Hour)},
 		{"substituted digest", func(d map[string]any) {

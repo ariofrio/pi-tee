@@ -39,6 +39,7 @@ export async function verifyPublicBuildArtifacts(options: {
     assert(/^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/.test(verified.tag));
     assert(/^[a-f0-9]{40}$/.test(verified.commit));
     assert(/^[a-f0-9]{64}$/.test(verified.digest));
+    assert(/^[a-f0-9]{64}$/.test(verified.codeStatementDigest));
 
     // GitHub's public asset redirects carry no credentials. The authenticated
     // subject digest, rather than HTTPS or the release filename, authenticates bytes.
@@ -78,24 +79,27 @@ export async function verifyPublicBuildArtifacts(options: {
     ]);
     assert.equal(sha256(kernel), cvm.hashes.kernel, "TEE_PUBLIC_KERNEL_DIGEST_REJECTED");
     assert.equal(sha256(initrd), cvm.hashes.initrd, "TEE_PUBLIC_INITRD_DIGEST_REJECTED");
-    const boot = computeBootMeasurements(kernel, initrd, deployment.vm_shape.memory_mb, expectedCommand);
-    assert.equal(boot.rtmr1, deployment.tdx_measurement.rtmr1, "TEE_PUBLIC_BOOT_MEASUREMENT_REJECTED");
-    assert.equal(boot.rtmr2, deployment.tdx_measurement.rtmr2, "TEE_PUBLIC_BOOT_MEASUREMENT_REJECTED");
+    const boot = computeBootMeasurements(kernel, initrd, verified.vmShape.memory_mb, expectedCommand);
+    assert.equal(boot.rtmr1, verified.rtmr1, "TEE_PUBLIC_BOOT_MEASUREMENT_REJECTED");
+    assert.equal(boot.rtmr2, verified.rtmr2, "TEE_PUBLIC_BOOT_MEASUREMENT_REJECTED");
 
     // Select the registry root through the authenticated release, not delivery
     // metadata or a mutable tag. Anonymous GHCR pull tokens authorize reads only.
     const envelope = parseJson(raw);
-    const codeCollateral = envelope.collateral.filter((item: any) => item.id === "code");
+    const codeCollateral = envelope.collateral.filter((item: any) => item.format === "https://tinfoil.sh/collateral/sigstore-code/v1");
     assert.equal(codeCollateral.length, 1, "TEE_CONTAINER_BUILD_REJECTED");
+    assert(codeCollateral[0].id === "code" && codeCollateral[0].role === "reference-values", "TEE_CONTAINER_BUILD_REJECTED");
     const releaseInput = { tag: verified.tag, deployment: artifact.toString("base64"), bundle: codeCollateral[0].data.sigstore_bundle };
     const runtime = await appraise(JSON.stringify(releaseInput), ["--runtime-config"]);
     assert(runtime.runtimeConstraintsVerified === true && runtime.authenticatedRelease === true && runtime.cpuVerified === false && runtime.gpuVerified === false && runtime.freshnessVerified === false && runtime.inferenceQualified === false &&
       runtime.profile === "gemma-single-gpu-v1" && runtime.repo === repo && runtime.tag === verified.tag && runtime.releaseCommit === verified.commit && runtime.deploymentDigest === verified.digest &&
       runtime.configDigest === sha256(source) && runtime.cvmTag === cvmTag, "TEE_RUNTIME_CONFIG_REJECTED");
+    assert(runtime.subjectPredicateMatched === true && runtime.codeStatementDigest === verified.codeStatementDigest, "TEE_RUNTIME_CONFIG_REJECTED");
     const selected = await appraise(JSON.stringify(releaseInput), ["--container-reference"]);
     assert(selected.artifactReferenceVerified === true && selected.inferenceQualified === false &&
       selected.repo === repo && selected.releaseCommit === verified.commit && selected.deploymentDigest === verified.digest &&
       /^[a-f0-9]{64}$/.test(selected.imageDigest), "TEE_CONTAINER_BUILD_REJECTED");
+    assert(selected.subjectPredicateMatched === true && selected.codeStatementDigest === verified.codeStatementDigest, "TEE_CONTAINER_BUILD_REJECTED");
     assert.equal(runtime.imageDigest, selected.imageDigest, "TEE_RUNTIME_CONFIG_REJECTED");
     const tokenResponse = parseJson(await get(`https://ghcr.io/token?service=ghcr.io&scope=repository:${repo}:pull`));
     assert(typeof tokenResponse.token === "string" && tokenResponse.token.length > 0 && tokenResponse.token.length < 8192, "TEE_PUBLIC_ARTIFACT_UNAVAILABLE");
@@ -131,6 +135,7 @@ export async function verifyPublicBuildArtifacts(options: {
     assert(container.publisherEndorsedBuildMetadata === true && container.independentBuilderVerified === false && container.inferenceQualified === false &&
       container.deploymentDigest === verified.digest && container.releaseCommit === verified.commit && container.imageDigest === selected.imageDigest &&
       /^[a-f0-9]{40}$/.test(container.sourceCommit) && /^[a-f0-9]{64}$/.test(container.dockerfileDigest), "TEE_CONTAINER_BUILD_REJECTED");
+    assert(container.subjectPredicateMatched === true && container.codeStatementDigest === verified.codeStatementDigest, "TEE_CONTAINER_BUILD_REJECTED");
     const [sourceCommit, dockerfile] = await Promise.all([
       get(`https://api.github.com/repos/${repo}/git/commits/${verified.commit}`).then(bytes => parseJson(bytes)),
       get(`https://raw.githubusercontent.com/${repo}/${container.sourceCommit}/Dockerfile`),
