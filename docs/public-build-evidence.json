@@ -18,7 +18,16 @@
   "publicSourceConfigMatched": true,
   "sourceUrl": "https://github.com/tinfoilsh/confidential-gemma4-31b/blob/43dc8f6d1c4d9c1504559ab181cf9dfe00ad239b/tinfoil-config.yml",
   "releaseUrl": "https://github.com/tinfoilsh/confidential-gemma4-31b/releases/tag/v0.0.25",
+  "cvmBuildVerified": true,
+  "cvmTag": "v0.11.0",
+  "cvmCommit": "a4dbce07f5b0efbee1df678026db538eba66a613",
+  "cvmManifestDigest": "a7560566ca6c533f8391d3fc41df966d893b2f1d0ac7da04af8efa18ab9067f8",
+  "cvmSourceUrl": "https://github.com/tinfoilsh/cvmimage/tree/a4dbce07f5b0efbee1df678026db538eba66a613",
+  "kernelDigestMatched": true,
+  "initrdDigestMatched": true,
+  "guestVerityRootAuthenticated": true,
+  "rtmr2Recomputed": "233677c2518eadf59ff45e8c22ee776ff828d066675dc87d86043e2bc2c4352c4f915898044bf317993749045056f811",
   "independentRebuild": false,
   "observedAt": "2026-10-07",
-  "verificationScope": "Public workload/platform provenance and freshness; Intel CPU appraisal; public deployment digest and source-config comparison. No GPU, inference, independent rebuild or full runtime qualification."
+  "verificationScope": "Public workload/platform provenance and freshness; Intel CPU appraisal; public deployment and source-config comparison; authenticated CVM build manifest/kernel/initrd/disk subjects; downloaded kernel/initrd and RTMR2 checks. No GPU, inference, independent rebuild or full runtime qualification."
 }

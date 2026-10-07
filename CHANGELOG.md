@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Authenticate Tinfoil guest builds through the exact public CVM release workflow, source commit and signed manifest/kernel/initrd/disk subjects. Derive guest versions dynamically, check downloaded kernel/initrd bytes and the verity/config-bound boot command, and recompute RTMR2 in the live public-build probe. Add offline real-signature substitution tests; inference qualification remains separate.
+
 - Select `public-builds` as the default policy target: authenticated updates from named public release/build authorities, without maintained deployment pins. Keep inference blocked until a complete serving profile qualifies; preserve explicit SDK routes and optional Approved semantics. Add a separate automatic Tinfoil public-release/CPU verifier and live artifact/source probe, with exact workflow identities, signed freshness, local hardware floors and real-evidence rejection tests. Fresh locked install, build/types, 40 provider tests, compiled/isolated package login checks, Go tests/vet and the live public-artifact probe pass; no inference is sent by the probe.
 
 - Trace the Intel candidate's boot artifacts to the fixed configuration/root hash, recompute RTMR1/RTMR2, and add an offline RTMR2/artifact check with real-artifact mutation validation. Document checked runtime source paths and the remaining workload qualification work.
