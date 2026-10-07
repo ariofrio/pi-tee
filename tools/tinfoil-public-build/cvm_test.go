@@ -73,3 +73,29 @@ func TestPublicCVMBuild(t *testing.T) {
 		})
 	}
 }
+
+// A second authentic release exercises automatic updates under unchanged
+// workflow/root policy. Neither historical build result admits inference.
+func TestAnotherPublicCVMReleaseWithoutPolicyEdit(t *testing.T) {
+	manifest, err := os.ReadFile("testdata/cvm-v0.14.13-manifest.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	bundle, err := os.ReadFile("testdata/cvm-v0.14.13.bundle.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := json.Marshal(map[string]any{"tag": "v0.14.13", "manifest": base64.StdEncoding.EncodeToString(manifest), "bundle": json.RawMessage(bundle)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	if runCVM(bytes.NewReader(raw), &out) != 0 {
+		t.Fatalf("another authentic release rejected: %s", out.String())
+	}
+	var result map[string]any
+	if json.Unmarshal(out.Bytes(), &result) != nil || result["cvmBuildVerified"] != true || result["inferenceQualified"] != false || result["repo"] != "tinfoilsh/cvmimage" || result["workflow"] != "release.yml" ||
+		result["commit"] != "c3b4860d72e78baf61140778b92986b102716b87" || result["manifestDigest"] != "2707da2aad2ea55f18dfac5172b845c66f65288ac438f7bbc35ff8dc444de938" {
+		t.Fatalf("incorrect second-release scope: %s", out.String())
+	}
+}
