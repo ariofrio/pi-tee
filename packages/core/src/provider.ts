@@ -28,7 +28,7 @@ export interface PublicBuildAdmission {
 
 export interface PublicBuildProfile {
   id: string;
-  assumptions?: readonly string[];
+  assumptions: readonly string[];
   authorityPolicyDigest: string;
   modelIds: readonly string[];
   baseUrl: string;
@@ -136,6 +136,13 @@ export function createTeeProvider(definition: ProviderDefinition) {
   const profilesByModel = new Map<string, typeof publicProfiles[number]>();
   const profileIds = new Set<string>();
   for (const profile of publicProfiles) {
+    let endpoint: URL;
+    try { endpoint = new URL(profile.baseUrl); } catch { throw new TeeError("TEE_PUBLIC_PROFILE_INVALID"); }
+    if (!profile.id?.trim() || !/^[a-f0-9]{64}$/.test(profile.authorityPolicyDigest) ||
+        !profile.modelIds?.length || !profile.modelIds.every(id => typeof id === "string" && id.trim()) ||
+        !profile.assumptions?.length || !profile.assumptions.every(value => typeof value === "string" && value.trim()) ||
+        endpoint.protocol !== "https:" || endpoint.username || endpoint.password || endpoint.search || endpoint.hash ||
+        endpoint.href !== `${endpoint.origin}/v1`) throw new TeeError("TEE_PUBLIC_PROFILE_INVALID");
     if (profileIds.has(profile.id)) throw new TeeError("TEE_PUBLIC_PROFILE_INVALID");
     profileIds.add(profile.id);
     for (const id of profile.modelIds) {
@@ -185,11 +192,13 @@ export function createTeeProvider(definition: ProviderDefinition) {
       if (!canonical || requested.provider !== definition.id || (definition.availableModelIds && !definition.availableModelIds.includes(canonical.id))) throw new TeeError("TEE_MODEL_UNAVAILABLE");
       if (definition.requireDeclaredTee && canonical.teeCapability !== "declared") throw new TeeError("TEE_MODEL_ATTESTATION_UNAVAILABLE");
       if (!options?.apiKey) throw new TeeError("TEE_API_KEY_REQUIRED");
+      let captured: { baseUrl?: string; fetch: typeof globalThis.fetch };
       if (requestMode === "public-builds") {
         const publicProfile = profilesByModel.get(canonical.id);
         if (!publicProfile) throw new TeeError("TEE_MODEL_UNAVAILABLE");
         const session = await publicProfile.openSession({ signal, model: structuredClone(canonical) });
         transport = session.transport;
+        captured = { baseUrl: transport.baseUrl, fetch: transport.fetch };
         admission = Object.freeze(structuredClone(session.admission));
         const now = Date.now();
         if (admission.profile !== publicProfile.id || admission.model !== canonical.id ||
@@ -198,14 +207,17 @@ export function createTeeProvider(definition: ProviderDefinition) {
           !Number.isSafeInteger(admission.checkedAt) || !Number.isSafeInteger(admission.expiresAt) ||
           admission.checkedAt > now + 1000 || now - admission.checkedAt > 300000 ||
           admission.expiresAt <= now || admission.expiresAt > admission.checkedAt + 300000 ||
-          transport.baseUrl !== publicProfile.baseUrl) throw new TeeError("TEE_PUBLIC_SESSION_REJECTED");
-      } else transport = await definition.openSdkTransport({ apiKey: options.apiKey, signal, model: structuredClone(canonical) });
+          captured.baseUrl !== publicProfile.baseUrl) throw new TeeError("TEE_PUBLIC_SESSION_REJECTED");
+      } else {
+        transport = await definition.openSdkTransport({ apiKey: options.apiKey, signal, model: structuredClone(canonical) });
+        captured = { baseUrl: transport.baseUrl, fetch: transport.fetch };
+      }
       signal.throwIfAborted();
-      const baseUrl = transport.baseUrl ?? definition.baseUrl;
+      const baseUrl = captured.baseUrl ?? definition.baseUrl;
       const endpoint = new URL(baseUrl);
       if (endpoint.protocol !== "https:" || endpoint.username || endpoint.password || endpoint.search || endpoint.hash ||
           endpoint.pathname !== "/v1" || endpoint.href !== `${endpoint.origin}/v1`) throw new TeeError("TEE_REQUEST_REJECTED");
-      const ownedFetch = transport.fetch;
+      const ownedFetch = captured.fetch;
       const fetch = guardChatFetch({
         fetch: async (input, init) => {
           signal.throwIfAborted();
@@ -276,7 +288,7 @@ export function createTeeProvider(definition: ProviderDefinition) {
 
   function updateReport() {
     report.assumptions = mode === "public-builds" && publicProfiles.length ?
-      [...new Set(publicProfiles.flatMap(profile => (profile.assumptions ?? definition.assumptions).map(assumption =>
+      [...new Set(publicProfiles.flatMap(profile => profile.assumptions.map(assumption =>
         publicProfiles.length > 1 ? `[${profile.id}] ${assumption}` : assumption)))] : definition.assumptions;
     report.catalogModels = catalog.length;
     report.catalogCheckedAt = checkedAt;

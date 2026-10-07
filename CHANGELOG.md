@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Allow separate public-build profiles for different models in one provider. Bind each admission, authority digest and endpoint to its canonical model; reject ambiguous profile ownership and cross-profile endpoints before transmission. Existing production coverage is unchanged.
+- Allow separate public-build profiles for different models in one provider. Bind each admission, authority digest and expected endpoint to its canonical model; reject ambiguous profile ownership and inconsistent session endpoints before transmission. Each profile declares its own trust assumptions. Adapters sharing a URL must isolate workloads through their attested connections. Existing production coverage is unchanged.
 
 - Clarify NEAR gateway coverage: 20 fresh evidence-only checks distinguished two measured instance IDs, both `OutOfDate`. Record the evidence and avoid extrapolating to the entire fleet; verification policy is unchanged.
 

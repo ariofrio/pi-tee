@@ -10,10 +10,29 @@ const model: Model<"openai-completions"> = {
 };
 const context = normalizeContext({ messages: [{ role: "user", content: "synthetic public session", timestamp: 1 }] });
 
+test("public profiles declare their own trust assumptions and canonical configuration", () => {
+  const profile = {
+    id: "contract", authorityPolicyDigest: "a".repeat(64), modelIds: [model.id],
+    baseUrl: "https://worker.invalid/v1", assumptions: ["Public publisher"],
+    openSession: async () => { throw new Error("Must not open"); },
+  };
+  const definition = {
+    id: model.provider, name: "Public test", baseUrl: model.baseUrl, apiKeyEnv: "PUBLIC_TEST_KEY",
+    parseCatalog: () => [model], assumptions: ["SDK authority"],
+    openSdkTransport: async () => { throw new Error("SDK fallback"); },
+  };
+  for (const change of [
+    { assumptions: [] }, { assumptions: [""] }, { id: "" }, { modelIds: [] },
+    { modelIds: [""] }, { authorityPolicyDigest: "bad" }, { baseUrl: "http://worker.invalid/v1" },
+    { baseUrl: "https://worker.invalid/v1?override" },
+  ]) assert.throws(() => createTeeProvider({ ...definition, publicBuildProfile: { ...profile, ...change } }), /TEE_PUBLIC_PROFILE_INVALID/);
+  assert.throws(() => createTeeProvider({ ...definition, publicBuildProfiles: [profile, { ...profile, modelIds: ["other"] }] }), /TEE_PUBLIC_PROFILE_INVALID/);
+});
+
 test("overlapping public workload profiles reject before catalog or session work", () => {
   let calls = 0;
   const makeProfile = (id: string) => ({
-    id, authorityPolicyDigest: "a".repeat(64), modelIds: [model.id], baseUrl: `https://${id}.invalid/v1`,
+    id, authorityPolicyDigest: "a".repeat(64), modelIds: [model.id], baseUrl: `https://${id}.invalid/v1`, assumptions: ["Public publisher"],
     openSession: async () => { calls++; throw new Error("Must not open"); },
   });
   assert.throws(() => createTeeProvider({
@@ -28,6 +47,7 @@ test("overlapping public workload profiles reject before catalog or session work
 test("public policy binds each catalog model to its own profile, authority and endpoint", async () => {
   const second = { ...model, id: "second-public-model", name: "Second public model" };
   const sends: string[] = [];
+  let endpointReads = 0;
   const profiles = [model, second].map((entry, index) => ({
     id: `contract-${index}`, authorityPolicyDigest: String(index + 1).repeat(64), modelIds: [entry.id],
     baseUrl: `https://worker-${index}.invalid/v1`, assumptions: [`Publisher ${index}`],
@@ -38,7 +58,7 @@ test("public policy binds each catalog model to its own profile, authority and e
         admission: { profile: `contract-${index}`, model: selected.id, authorityPolicyDigest: String(index + 1).repeat(64),
           checkedAt, expiresAt: checkedAt + 60000, workloadDigest: "b".repeat(64), platformDigest: "c".repeat(64),
           cvmManifestDigest: "d".repeat(64), imageDigest: "e".repeat(64), configDigest: "f".repeat(64) },
-        transport: { baseUrl: `https://worker-${index}.invalid/v1`, fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
+        transport: { get baseUrl() { endpointReads++; return `https://worker-${index}.invalid/v1`; }, fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
           const request = new Request(input, init);
           assert.equal(request.url, `https://worker-${index}.invalid/v1/chat/completions`);
           assert.equal((await request.json()).model, entry.id);
@@ -62,6 +82,7 @@ test("public policy binds each catalog model to its own profile, authority and e
     assert.equal(integration.getReport().lastAdmission?.model, entry.id);
   }
   assert.deepEqual(sends, [model.id, second.id]);
+  assert.equal(endpointReads, 2, "Each admitted endpoint is captured once before validation and dispatch.");
 });
 
 test("a public session cannot borrow another workload profile's endpoint", async () => {
@@ -72,7 +93,7 @@ test("a public session cannot borrow another workload profile's endpoint", async
     parseCatalog: () => [model, second], catalogFetch: async () => Response.json({}), assumptions: [],
     openSdkTransport: async () => { throw new Error("SDK fallback"); },
     publicBuildProfiles: [{
-      id: "first-contract", authorityPolicyDigest: "a".repeat(64), modelIds: [model.id], baseUrl: "https://first.invalid/v1",
+      id: "first-contract", authorityPolicyDigest: "a".repeat(64), modelIds: [model.id], baseUrl: "https://first.invalid/v1", assumptions: ["Public publisher"],
       openSession: async () => {
         const checkedAt = Date.now();
         return { admission: {
@@ -81,7 +102,7 @@ test("a public session cannot borrow another workload profile's endpoint", async
         }, transport: { baseUrl: "https://second.invalid/v1", fetch: async () => { sends++; throw new Error("Unexpected send"); } } };
       },
     }, {
-      id: "second-contract", authorityPolicyDigest: "b".repeat(64), modelIds: [second.id], baseUrl: "https://second.invalid/v1",
+      id: "second-contract", authorityPolicyDigest: "b".repeat(64), modelIds: [second.id], baseUrl: "https://second.invalid/v1", assumptions: ["Other publisher"],
       openSession: async () => { throw new Error("Wrong profile selected"); },
     }],
   });
@@ -146,7 +167,7 @@ for (const [name, change] of [
     parseCatalog: () => [model], catalogFetch: async () => Response.json({}), assumptions: [],
     openSdkTransport: async () => { throw new Error("SDK fallback"); },
     publicBuildProfile: {
-      id: "synthetic-contract", authorityPolicyDigest: "a".repeat(64), modelIds: [model.id], baseUrl: "https://worker.invalid/v1",
+      id: "synthetic-contract", authorityPolicyDigest: "a".repeat(64), modelIds: [model.id], baseUrl: "https://worker.invalid/v1", assumptions: ["Public publisher"],
       openSession: async () => {
         opened++;
         const checkedAt = Date.now();
@@ -176,7 +197,7 @@ test("expiry during a Pi payload hook prevents a send at the final transport bou
       parseCatalog: () => [model], catalogFetch: async () => Response.json({}), assumptions: [],
       openSdkTransport: async () => { throw new Error("SDK fallback"); },
       publicBuildProfile: {
-        id: "synthetic-contract", authorityPolicyDigest: "a".repeat(64), modelIds: [model.id], baseUrl: "https://worker.invalid/v1",
+        id: "synthetic-contract", authorityPolicyDigest: "a".repeat(64), modelIds: [model.id], baseUrl: "https://worker.invalid/v1", assumptions: ["Public publisher"],
         openSession: async () => ({ admission: {
           profile: "synthetic-contract", model: model.id, authorityPolicyDigest: "a".repeat(64), checkedAt: now, expiresAt: now + 60000,
           workloadDigest: "b".repeat(64), platformDigest: "c".repeat(64), cvmManifestDigest: "d".repeat(64), imageDigest: "e".repeat(64), configDigest: "f".repeat(64),
