@@ -34,6 +34,8 @@ These observations apply to CVM commit `a4dbce07f5b0efbee1df678026db538eba66a613
 
 NVIDIA documents driver–GPU SPDM key establishment, encrypted single-GPU bounce buffers and state cleanup in [WP-12554-001 v1.3, pages 11–13](https://docs.nvidia.com/nvidia-secure-ai-with-blackwell-and-hopper-gpus-whitepaper.pdf). Its earlier [H100 paper, page 28](https://images.nvidia.com/aem-dam/en-zz/Solutions/data-center/HCC-Whitepaper-v1.0.pdf) explains persistence and reset/scrubbing requirements. These identify mechanisms to check in the pinned stack; neither document is proof of the worker's complete runtime behavior.
 
+The [current GPU runtime assessment](tinfoil-gpu-runtime.md) records the live signed-mode field, a mismatch between NVIDIA's C++ and Python mode numbering, omitted C++ JSON mode output, exact driver SPDM/UVM/fatal-error paths and manufacturer devtools/compatibility evidence. It identifies the additional client mode enforcement still needed.
+
 ## Work still required
 
 Finish the source/artifact and runtime checks above, apply any required enforcement changes, run adversarial tests at their real boundaries, then obtain the independent implementation/verifier/transport review required by [CONTRIBUTING.md](../CONTRIBUTING.md). The earlier Opus review covered the design. Neither these checks nor successful inference authorize a production profile by themselves.
