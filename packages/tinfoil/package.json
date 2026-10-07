@@ -1,0 +1,14 @@
+{
+  "name": "@ariofrio/pi-tinfoil",
+  "version": "0.1.0",
+  "description": "Tinfoil provider for Pi with native login, live models and explicit attestation policy",
+  "type": "module",
+  "license": "MIT",
+  "pi": {"extensions": ["./dist/extension.js"]},
+  "exports": {".": {"types": "./dist/index.d.ts", "import": "./dist/index.js"}},
+  "files": ["dist", "README.md", "LICENSE"],
+  "scripts": {"build": "tsc -p tsconfig.json", "typecheck": "tsc --noEmit -p tsconfig.json"},
+  "engines": {"node": ">=22.19.0"},
+  "dependencies": {"@ariofrio/pi-tee-core": "0.1.0", "tinfoil": "1.2.2"},
+  "peerDependencies": {"@earendil-works/pi-ai": "1.0.4", "@earendil-works/pi-coding-agent": "1.0.4"}
+}

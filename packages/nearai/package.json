@@ -1,0 +1,14 @@
+{
+  "name": "@ariofrio/pi-nearai",
+  "version": "0.1.0",
+  "description": "NEAR AI provider for Pi with native login, live models and explicit attestation policy",
+  "type": "module",
+  "license": "MIT",
+  "pi": {"extensions": ["./dist/extension.js"]},
+  "exports": {".": {"types": "./dist/index.d.ts", "import": "./dist/index.js"}},
+  "files": ["dist", "README.md", "LICENSE"],
+  "scripts": {"build": "tsc -p tsconfig.json", "typecheck": "tsc --noEmit -p tsconfig.json"},
+  "engines": {"node": ">=24"},
+  "dependencies": {"@ariofrio/pi-tee-core": "0.1.0", "@nearai/inference-sdk": "0.1.0"},
+  "peerDependencies": {"@earendil-works/pi-ai": "1.0.4", "@earendil-works/pi-coding-agent": "1.0.4"}
+}

@@ -1,0 +1,12 @@
+{
+  "name": "@ariofrio/pi-tee-core",
+  "version": "0.1.0",
+  "description": "Shared policy, catalog and guarded transport for Pi confidential inference providers",
+  "type": "module",
+  "license": "MIT",
+  "exports": {".": {"types": "./dist/index.d.ts", "import": "./dist/index.js"}},
+  "files": ["dist", "README.md", "LICENSE"],
+  "scripts": {"build": "tsc -p tsconfig.json", "typecheck": "tsc --noEmit -p tsconfig.json"},
+  "engines": {"node": ">=22.19.0"},
+  "peerDependencies": {"@earendil-works/pi-ai": "1.0.4"}
+}
