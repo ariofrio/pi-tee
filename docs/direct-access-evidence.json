@@ -148,7 +148,13 @@
     "rpcCancellation": true,
     "cancellationBoundary": "test-only response-consumption barrier after HTTP 200",
     "singleSuitePass": true,
-    "transportWirePolicy": "one send; no rotation recovery or fallback"
+    "transportWirePolicy": "one send; no rotation recovery or fallback",
+    "separateStreamingCancellation": {
+      "passed": true,
+      "abortTrigger": "actual Pi text_delta event",
+      "testConsumptionBarrier": false,
+      "remoteGenerationStopTimingMeasured": false
+    }
   },
   "tinfoilFreshV3": {
     "checkedAt": "2026-10-07T05:57:49.495Z",

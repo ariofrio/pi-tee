@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Add an explicit pinned Gemma direct-worker route for Tinfoil SDK policy. Verify the exact artifact/tag/measurement and the attested TLS socket before transmitting credentials or EHBP ciphertext; send once and fail on rotation. The full actual Pi suite passed, including RPC cancellation. Correct the harness's response notification path and document the response-consumption test boundary.
+- Add an explicit pinned Gemma direct-worker route for Tinfoil SDK policy. Verify the exact artifact/tag/measurement and the attested TLS socket before transmitting credentials or EHBP ciphertext; send once and fail on rotation. The full actual Pi suite passed, including RPC cancellation; a separate streaming cancellation run passed after a live text delta without a test delay. Correct the harness's response notification path and document the response-consumption test boundary.
 
 - Add adapter-owned direct endpoint selection, route model restrictions, and TLS SPKI checks on the exact socket before HTTP transmission. Native-provider routing and real-socket rejection tests cover caller overrides, stale selections, and zero credential/body sends on a wrong TLS key.
 

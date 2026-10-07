@@ -6,7 +6,8 @@ import { createAgentSessionServices } from "@earendil-works/pi-coding-agent";
 
 // Opt-in, billable tests. Credentials come from the caller's environment only.
 const provider = process.argv[2];
-const cancelOnly = process.argv.includes("--cancel-only");
+const cancelStreaming = process.argv.includes("--cancel-stream");
+const cancelOnly = process.argv.includes("--cancel-only") || cancelStreaming;
 assert.ok(provider === "nearai" || provider === "tinfoil", "Pass nearai or tinfoil, optionally followed by a model ID.");
 const keyName = provider === "nearai" ? "NEARAI_API_KEY" : "TINFOIL_API_KEY";
 const key = process.env[keyName];
@@ -52,7 +53,7 @@ export default function(pi) {
 type Event = Record<string, any>;
 
 async function runCli(model: string, prompt: string, options: { tool?: boolean; thinking?: string; cancel?: boolean } = {}) {
-  const env: NodeJS.ProcessEnv = { ...process.env, PI_CODING_AGENT_DIR: agentDir, [policyName]: "sdk", PI_NEARAI_MODEL_VISIBILITY: "tee", PI_TEE_LIVE_CANCEL: options.cancel ? "1" : "0" };
+  const env: NodeJS.ProcessEnv = { ...process.env, PI_CODING_AGENT_DIR: agentDir, [policyName]: "sdk", PI_NEARAI_MODEL_VISIBILITY: "tee", PI_TEE_LIVE_CANCEL: options.cancel && !cancelStreaming ? "1" : "0" };
   delete env.NEARAI_API_KEY;
   delete env.TINFOIL_API_KEY;
   // The real key is in Pi's isolated store: a successful call also checks stored-key precedence.
@@ -72,6 +73,7 @@ async function runCli(model: string, prompt: string, options: { tool?: boolean; 
   let timedOut = false;
   let abortSent = false;
   let headersSeen = false;
+  let streamSeen = false;
   let forceTimer: ReturnType<typeof setTimeout> | undefined;
   const terminate = () => {
     child.kill("SIGTERM");
@@ -96,6 +98,10 @@ async function runCli(model: string, prompt: string, options: { tool?: boolean; 
       if (!event || typeof event !== "object") continue;
       events.push(event);
       if (!options.cancel) continue;
+      if (cancelStreaming && event.type === "message_update" && event.assistantMessageEvent?.type === "text_delta") {
+        streamSeen = true;
+        abort();
+      }
       if (event.type === "agent_end" || (event.type === "response" && event.id === "cancel")) child.stdin.end();
     }
   });
@@ -113,7 +119,7 @@ async function runCli(model: string, prompt: string, options: { tool?: boolean; 
       try { event = JSON.parse(line); } catch { continue; }
       if (event.type === "live_response_headers" && event.status === 200) {
         headersSeen = true;
-        if (options.cancel) abort();
+        if (options.cancel && !cancelStreaming) abort();
       }
     }
   });
@@ -128,7 +134,7 @@ async function runCli(model: string, prompt: string, options: { tool?: boolean; 
   assert.equal(exitCode, 0, "Pi CLI did not exit cleanly.");
   const assistants = events.filter(e => e.type === "message_end" && e.message?.role === "assistant").map(e => e.message);
   assert.ok(assistants.length > 0, "Pi produced no completed assistant message.");
-  return { events, assistants, headersSeen };
+  return { events, assistants, headersSeen, streamSeen };
 }
 
 function accepted(assistants: Event[]) {
@@ -183,9 +189,10 @@ try {
   const failure = cancelled.assistants.find(m => m.stopReason === "error");
   assert.ok(!failure, `Cancellation request failed before abort: ${/^TEE_[A-Z_]+$/.test(failure?.errorMessage ?? "") ? failure!.errorMessage : "unspecified terminal error"}`);
   assert.equal(cancelled.headersSeen, true, "Cancellation response instrumentation was not observed.");
+  if (cancelStreaming) assert.equal(cancelled.streamSeen, true, "Cancellation did not exercise a streaming text delta.");
   assert.equal(cancelled.assistants.at(-1)?.stopReason, "aborted", "RPC cancellation did not abort the request.");
   assert.ok(cancelled.events.some(e => e.type === "response" && e.id === "cancel" && e.success), "RPC abort was not acknowledged.");
-  console.log(`PASS: ${provider} Pi RPC cancellation at the response-consumption barrier.`);
+  console.log(`PASS: ${provider} Pi RPC cancellation ${cancelStreaming ? "after a live text delta, without a consumption barrier" : "at the response-consumption barrier"}.`);
 } catch (error) {
   // Credential synchronization errors can retain credentials; never print the error object.
   console.error(error instanceof assert.AssertionError ? error.message : `FAIL: ${provider} live Pi setup/test failed.`);

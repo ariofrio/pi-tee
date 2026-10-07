@@ -10,7 +10,7 @@ Observed 2026-10-07 UTC. Author: Codex. Node 24.21.0; Pi 1.0.4; NEAR SDK 0.1.0; 
 
 The adapter uses lower-level `Verifier.verifyBundle` and EHBP instead of `SecureClient.fetch`. [TLS binding](../packages/core/src/pinned-tls.ts) checks the attested SPKI on the exact TLS 1.3 socket before transmitting API credentials or encrypted inference bytes. It sends once and rejects rotation or error responses without re-attestation, retry or fallback. The default router route remains unchanged, including its disclosed [SDK rotation resend](https://github.com/tinfoilsh/tinfoil-js/blob/eac102f50ad3c1bfc3fd3cefe8a615671d86fa52/packages/tinfoil/src/secure-client.ts#L370).
 
-The direct route passed compiled loading, native secret login, stored-key precedence, completion/usage, Unicode tool execution/result follow-up, reasoning/final text and RPC cancellation in one [actual Pi suite](../scripts/live-pi.ts). A separate router cancellation retry passed with `gpt-oss-120b`. The harness now uses a dedicated metadata pipe because [Pi redirects extension stdout](https://github.com/earendil-works/pi/blob/eb326d265ae0b88489a6d10319307780df827cdf/packages/coding-agent/src/core/output-guard.ts) in RPC mode. A test-only one-second barrier after HTTP 200 tests response-consumption cancellation and abort acknowledgement; remote generation-stop timing is not established. Local overload was observed, but does not establish the cause of the router's intermittent key mismatch.
+The direct route passed compiled loading, native secret login, stored-key precedence, completion/usage, Unicode tool execution/result follow-up, reasoning/final text and RPC cancellation in one [actual Pi suite](../scripts/live-pi.ts). A separate router cancellation retry passed with `gpt-oss-120b`. The harness now uses a dedicated metadata pipe because [Pi redirects extension stdout](https://github.com/earendil-works/pi/blob/eb326d265ae0b88489a6d10319307780df827cdf/packages/coding-agent/src/core/output-guard.ts) in RPC mode. The full suite uses a test-only one-second barrier after HTTP 200. A separate `--cancel-stream` run passed RPC abort after an actual live text delta, with that barrier disabled. This validates Pi cancellation while consuming the direct stream; remote generation-stop timing is not established. Local overload was observed, but does not establish the cause of the router's intermittent key mismatch.
 
 A fresh locked install passed **35 tests**, full build/typechecking, compiled-loader/native-login smoke and isolated tarball smoke. [Real-socket tests](../tests/pinned-tls.test.ts) prove wrong-key rejection before any HTTP transmission; [routing tests](../tests/direct-routing.test.ts) cover canonical endpoints and stale selections; [artifact tests](../tests/tinfoil-direct.test.ts) reject worker/digest/tag substitution before inference. Stronger v3/GPU research checks below are not yet enforced by the registered JS route.
 
@@ -70,7 +70,8 @@ node scripts/research/tinfoil-direct.mjs
 
 # Billable synthetic actual-Pi suite; owner-only file with the relevant key:
 PI_TINFOIL_ROUTE=direct node --env-file=/path/to/private/tinfoil.env --import tsx scripts/live-pi.ts tinfoil gemma4-31b
-# Append --cancel-only to exercise just the cancellation check.
+# Append --cancel-only for cancellation at response headers, or --cancel-stream
+# to abort after a live text delta without the test consumption barrier.
 ```
 
 The initial research probes use the provider SDK; their logical request count does not account for SDK wire resends. The new registered direct route owns a single send. Worker availability and references may change; pin mismatches must remain terminal.
