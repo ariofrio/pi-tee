@@ -67,7 +67,7 @@ const allowedFields = new Set([
   "seed", "reasoning_effort", "thinking", "reasoning", "chat_template_kwargs", "enable_thinking",
   "store",
 ]);
-const messageFields = new Set(["role", "content", "name", "tool_calls", "tool_call_id", "reasoning_content", "reasoning_details"]);
+const messageFields = new Set(["role", "content", "name", "tool_calls", "tool_call_id", "reasoning", "reasoning_content", "reasoning_details"]);
 
 function object(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -94,6 +94,7 @@ function validateChat(body: unknown, model: string): asserts body is Record<stri
   for (const message of body.messages) {
     if (!object(message) || Object.keys(message).some((field) => !messageFields.has(field))) return fail();
     if (!["system", "developer", "user", "assistant", "tool"].includes(String(message.role))) return fail();
+    if (message.reasoning !== undefined && typeof message.reasoning !== "string") return fail();
     if (Array.isArray(message.content)) {
       for (const part of message.content) {
         if (!object(part)) return fail();

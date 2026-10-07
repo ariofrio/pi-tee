@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Accept Pi's text reasoning replay during tool-result follow-up; add failing-then-passing positive and structured-reasoning rejection tests. Record successful live Tinfoil completion, tools and reasoning with a corrected credential, while keeping cancellation and a complete live-suite pass unvalidated.
+
 - Preserve reusable guarded request bodies for Tinfoil SDK key-rotation recovery; add a failing-then-passing provider regression without adding Pi retries or independent approval claims.
 - Add opt-in, billable real Pi CLI/RPC validation with isolated native login, synthetic completion/tools/reasoning/cancellation checks and credential-safe diagnostics. Record current NEAR TCB-policy and Tinfoil credential failures without weakening verification policy.
 - Adopt unscoped `pi-nearai`, `pi-tinfoil` and `pi-tee-core` package names; publish the WIP source and assessment under `ariofrio/pi-tee`.

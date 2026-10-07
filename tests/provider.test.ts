@@ -150,6 +150,51 @@ test("a verified tool response preserves Pi's tool arguments and usage", async (
   assert.equal(result.usage.output, 7);
 });
 
+test("Pi can replay reasoning and a tool result on the next guarded request", async () => {
+  let followup: { messages: { role: string; reasoning?: string; content?: string }[] } | undefined;
+  const integration = await sdkProvider(async (input, init) => {
+    const request = new Request(input, init);
+    const payload = await request.json() as NonNullable<typeof followup>;
+    const isFollowup = payload.messages.some(message => message.role === "tool");
+    if (isFollowup) followup = payload;
+    const chunk = { id: isFollowup ? "done-1" : "tool-1", choices: [{ index: 0,
+      delta: isFollowup ? { content: "done" } : {
+        reasoning: "Use echo to obtain the result.",
+        tool_calls: [{ index: 0, id: "call-1", type: "function", function: { name: "echo", arguments: '{"text":"héllo 🌍"}' } }],
+      }, finish_reason: isFollowup ? "stop" : "tool_calls",
+    }] };
+    return new Response(`data: ${JSON.stringify(chunk)}\n\ndata: [DONE]\n\n`, { headers: { "content-type": "text/event-stream" } });
+  });
+  const tools = [{ name: "echo", description: "Echo text", parameters: Type.Object({ text: Type.String() }) }];
+  const firstContext = normalizeContext({ messages: [{ role: "user", content: "Call echo", timestamp: 1 }], tools });
+  const first = await integration.provider.streamSimple(model, firstContext, { apiKey: "test-key" }).result();
+  assert.equal(first.stopReason, "toolUse");
+  const secondContext = normalizeContext({ messages: [...firstContext.messages, first, {
+    role: "toolResult", toolCallId: "call-1", toolName: "echo", content: [{ type: "text", text: "héllo 🌍" }],
+    isError: false, timestamp: 2,
+  }], tools });
+  const second = await integration.provider.streamSimple(model, secondContext, { apiKey: "test-key" }).result();
+  assert.equal(second.stopReason, "stop");
+  assert.equal(followup?.messages.find(message => message.role === "assistant")?.reasoning, "Use echo to obtain the result.");
+  assert.equal(followup?.messages.find(message => message.role === "tool")?.content, "héllo 🌍");
+});
+
+test("structured message reasoning is rejected before the external transport", async () => {
+  let sends = 0;
+  const integration = await sdkProvider(async () => {
+    sends++;
+    return new Response('data: {"id":"c1","choices":[{"index":0,"delta":{"content":"ok"},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n', { headers: { "content-type": "text/event-stream" } });
+  });
+  const result = await integration.provider.streamSimple(model, context, {
+    apiKey: "test-key", onPayload: (body) => {
+      const payload = body as { messages: object[] };
+      return { ...payload, messages: payload.messages.map(message => ({ ...message, reasoning: { url: "https://attacker.example" } })) };
+    },
+  }).result();
+  assert.equal(sends, 0);
+  assert.equal(result.errorMessage, "TEE_REQUEST_REJECTED");
+});
+
 test("a forged tool response exposes no executable tool event to Pi", async () => {
   const body = 'data: {"id":"tool-1","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"c1","type":"function","function":{"name":"bash","arguments":"{}"}}]},"finish_reason":"tool_calls"}]}\n\ndata: [DONE]\n\n';
   const integration = await sdkProvider(async (input, init) => authenticateResponse(new Response(body, { headers: { "content-type": "text/event-stream" } }), {
