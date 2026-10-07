@@ -1,0 +1,55 @@
+{
+  "scope": "Artifact attribution, boot measurement recomputation and selected runtime source checks; not an Approved profile",
+  "dateUTC": "2026-10-07",
+  "cvmSource": "https://github.com/tinfoilsh/cvmimage/tree/a4dbce07f5b0efbee1df678026db538eba66a613",
+  "modelSource": "https://github.com/tinfoilsh/confidential-gemma4-31b/tree/43dc8f6d1c4d9c1504559ab181cf9dfe00ad239b",
+  "deploymentSha256": "65f2dfa59ced010aeba841fc909880ac3434282cf2b43e90d5c3a3e543b3ccf0",
+  "configSha256": "1aeed2c83d17555fcffbf1f6ec82f0cefd22ea09d61b4b1385b5d1451ed706a4",
+  "guestRootHash": "6bf30dfe78f9646111afbc718e3a819d618981f453f31ecca8d4e166b9fc9dd9",
+  "kernelSha256": "b1e042ac790ffbd1f8031d13e870f7b907d2bf685e755d43b2975c78752b42eb",
+  "initrdSha256": "fc1d0b7a6703e1b6c7dd34113aea3c3f5f5ef51decb3363736103c46efc9a24d",
+  "measurementToolSource": "https://github.com/tinfoilsh/tdx-measure/tree/9311cb9bdf3f83c9e3ec8dae4b6dff78a6d46123",
+  "measurementToolLocalSha256": "a6af55d5ce8bd405037e1e295cba4433f68dc1941af81491d7681b029a7255fa",
+  "measurementToolMemoryArgument": "65536G, as used by the release producer; not a platform-shape proof",
+  "rtmr1Recomputed": "a787299fe2e84295a406dde367abac5b40128c1e13aa81dfde4a5c2e39682e45cde7bb84cefc7f33f25ac645fc265030",
+  "rtmr2Recomputed": "233677c2518eadf59ff45e8c22ee776ff828d066675dc87d86043e2bc2c4352c4f915898044bf317993749045056f811",
+  "independentNodeRTMR2Matched": true,
+  "oneByteMutationRejections": {
+    "deployment": true,
+    "config": true,
+    "kernel": true,
+    "initrd": true
+  },
+  "buildInputGraphInspection": {
+    "derivationGraphSha256": "098a8dd42c7619f0ab7771f59973862765b1333cdde73b500b2031be8238b33f",
+    "evaluator": "Determinate Nix 3.20.0 / Nix 2.34.6; aarch64-darwin",
+    "derivations": 2410,
+    "fixedOutputs": 873
+  },
+  "provenance": {
+    "kernel": {
+      "issuer": "https://token.actions.githubusercontent.com",
+      "subjectAlternativeName": "https://github.com/tinfoilsh/cvmimage/.github/workflows/release.yml@refs/tags/v0.11.0",
+      "sourceRepositoryURI": "https://github.com/tinfoilsh/cvmimage",
+      "sourceRepositoryDigest": "a4dbce07f5b0efbee1df678026db538eba66a613",
+      "sourceRepositoryRef": "refs/tags/v0.11.0",
+      "buildSignerDigest": "a4dbce07f5b0efbee1df678026db538eba66a613",
+      "runnerEnvironment": "github-hosted",
+      "runInvocationURI": "https://github.com/tinfoilsh/cvmimage/actions/runs/31558890695/attempts/1"
+    },
+    "initrd": {
+      "issuer": "https://token.actions.githubusercontent.com",
+      "subjectAlternativeName": "https://github.com/tinfoilsh/cvmimage/.github/workflows/release.yml@refs/tags/v0.11.0",
+      "sourceRepositoryURI": "https://github.com/tinfoilsh/cvmimage",
+      "sourceRepositoryDigest": "a4dbce07f5b0efbee1df678026db538eba66a613",
+      "sourceRepositoryRef": "refs/tags/v0.11.0",
+      "buildSignerDigest": "a4dbce07f5b0efbee1df678026db538eba66a613",
+      "runnerEnvironment": "github-hosted",
+      "runInvocationURI": "https://github.com/tinfoilsh/cvmimage/actions/runs/31558890695/attempts/1"
+    }
+  },
+  "independentImageRebuild": false,
+  "runtimeQualificationComplete": false,
+  "independentImplementationReviewComplete": false,
+  "approvedProfileEnabled": false
+}

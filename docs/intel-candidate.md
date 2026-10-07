@@ -34,7 +34,7 @@ Set absolute paths `PI_TINFOIL_CPU_VERIFIER` to the executable and `PI_TINFOIL_N
 
 ## Remaining approval gates
 
-The fixed boot values were initially acquired from authenticated provider reference material. Freezing them removes ongoing provider selection, but does not independently approve their source or build. The guest/engine/weights/key-custody inventory, actual CC-mode/compute-channel/reset lifecycle, all plaintext-capable processes and runtime mutation/egress behavior still need complete qualification and an independent implementation review. NVIDIA file appraisal authenticates the CPU-bound device report; it does not alone establish the later execution path. [Full gates](../SECURITY.md).
+The fixed boot values were initially acquired from authenticated provider reference material. Freezing them removes ongoing provider selection, but does not independently approve their source or build. [Workload qualification](tinfoil-workload.md) records the recomputed boot-artifact trace, checked runtime source paths and remaining work. The guest/engine/weights/key-custody inventory, actual CC-mode/compute-channel/reset lifecycle, all plaintext-capable processes and runtime mutation/egress behavior still need complete qualification and an independent implementation review. NVIDIA file appraisal authenticates the CPU-bound device report; it does not alone establish the later execution path. [Full gates](../SECURITY.md).
 
 NEAR's shared-key/session contract and Pi's physical-dispatch guard are separate requirements. Neither this route nor its hardware passes enables Approved policy or claims a closed whole-session trust set.
 
