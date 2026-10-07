@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Clarify NEAR gateway coverage: 20 fresh evidence-only checks distinguished two measured instance IDs, both `OutOfDate`. Record the evidence and avoid extrapolating to the entire fleet; verification policy is unchanged.
+
 - Enable the reviewed Tinfoil Gemma public-build profile on the documented macOS ARM64/OrbStack setup. Default auto routing now selects the owned Intel worker under public policy; router users must explicitly choose SDK policy. Add production activation/no-fallback regressions and actual compiled-extension public-policy validation. NEAR public builds, independently Approved workloads and whole-session protection remain unavailable.
 
 - Select Tinfoil routes automatically by policy: owned worker admission for public builds (still gated for final wiring review), SDK router for explicit SDK policy. Report public-profile assumptions independently of SDK route assumptions; preserve explicit router rejection under public policy. State the tested OrbStack/containerd builder scope and make the setup negative robust to Node deprecation warnings.

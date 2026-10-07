@@ -1,0 +1,66 @@
+{
+  "observedAt": "2026-10-07T19:48:26.943Z",
+  "completedAt": "2026-10-07T19:49:35.396Z",
+  "endpoint": "https://cloud-api.near.ai/v1/attestation/report",
+  "sdkVersion": "0.1.0",
+  "nodeVersion": "24.21.0",
+  "inferenceRequests": 0,
+  "sampleCount": 20,
+  "rejectedCount": 20,
+  "tcbStatus": "OutOfDate",
+  "rejectionCode": "policy.tcb_status_not_allowed",
+  "advisoryIds": [
+    "INTEL-SA-01192",
+    "INTEL-SA-01245",
+    "INTEL-SA-01312",
+    "INTEL-SA-01313"
+  ],
+  "pckCertificateSha256": "386f6692dcf651f813c333f6e46e9e7a3e5b533bfb0b57b8facce411855fc53e",
+  "signerSha256": "b63b425d810ec067a5f79a03bb8a2aede0b72cbf722c25030b6936752c2b1ed3",
+  "tlsSpkiSha256": "73862c254372091cc6895b900111503860694f8916ebf0c63b18d245ba8ba5ad",
+  "composeSha256": "fbc3d362670662d02c5885c03f4770452cc29de4b1bcd3180613c1ccc90979b8",
+  "initialSampleTimes": [
+    "2026-10-07T19:48:26.950Z",
+    "2026-10-07T19:48:28.352Z",
+    "2026-10-07T19:48:28.925Z",
+    "2026-10-07T19:48:29.430Z",
+    "2026-10-07T19:48:29.954Z",
+    "2026-10-07T19:48:30.434Z",
+    "2026-10-07T19:48:31.068Z",
+    "2026-10-07T19:48:32.313Z",
+    "2026-10-07T19:48:32.840Z",
+    "2026-10-07T19:48:33.513Z"
+  ],
+  "instanceDistinguishingSamples": [
+    {
+      "instanceIdEventHexSha256": "028393a7f1e9d0ca75867c4371a54826578a1b2196678cd91ece5a3539d200ae",
+      "rtmr3": "30c6665c71a6b8b801ad555e37442133c945b6f17402805529d9347c0bf382dc082f7a7504b6d8f0869c71cfa5bb0c86",
+      "samples": [
+        "2026-10-07T19:49:29.471Z",
+        "2026-10-07T19:49:31.642Z",
+        "2026-10-07T19:49:32.164Z",
+        "2026-10-07T19:49:33.122Z",
+        "2026-10-07T19:49:34.183Z"
+      ]
+    },
+    {
+      "instanceIdEventHexSha256": "6193d09d1f7415283fb4bdc89dc8ac5ae40ef74d138dbe51d90742136aa97f55",
+      "rtmr3": "007751bfd8f84e4bdd6f3303a160a50b07deb807df1976b435751c45da87b1fa9a253fd99101d5b7de8e5e67e1276ea9",
+      "samples": [
+        "2026-10-07T19:49:30.594Z",
+        "2026-10-07T19:49:31.143Z",
+        "2026-10-07T19:49:32.620Z",
+        "2026-10-07T19:49:33.612Z",
+        "2026-10-07T19:49:34.779Z"
+      ]
+    }
+  ],
+  "method": "Each request opens a fresh TLS connection (SDK agent:false) and uses a fresh nonce. The SDK DCAP verifier authenticates the Intel quote and its current collateral. Strict UpToDate appraisal rejects. An evidence-only second pass permits the observed status to check quoted nonce/signer/TLS SPKI, MRCONFIGID and RTMR3 replay; no inference is admitted and production policy is unchanged. Instance-ID event payloads are rehashed as part of authenticated RTMR3 replay, then SHA-256-hashed as hexadecimal text for this record.",
+  "scope": "Two distinct measured instance IDs were observed, sharing the same Intel PCK certificate and application/TLS keys. These are evidence identities, not an exhaustive live fleet inventory or proof of exclusive serving-session binding. Twenty samples do not imply twenty gateways. This result concerns the default Cloud API gateway, not model workers.",
+  "sources": {
+    "gatewayDocs": "https://docs.near.ai/cloud/verification/cloud-api/gateway-attestations",
+    "nodeClient": "https://github.com/nearai/inference-sdk/blob/b9930893a9f560e66898e1616111c5ac2241686c/js/src/node/attestation-client.ts",
+    "eventReplay": "https://github.com/nearai/inference-sdk/blob/b9930893a9f560e66898e1616111c5ac2241686c/js/src/core/event-log.ts",
+    "gatewayQuoteCollector": "https://github.com/nearai/cloud-api/blob/e8a534ffba3edf7f51bfe8b207ccdbb2f284a491/crates/services/src/attestation/gateway_quote.rs"
+  }
+}

@@ -10,6 +10,12 @@ This assessment covers the [inspected SDK revision](https://github.com/nearai/in
 
 The route passed login, completion, tools, reasoning, usage and cancellation tests. The default gateway's observed `OutOfDate` rejection is separate: the direct GLM sample passed `UpToDate`, while the sampled Qwen endpoint did not.
 
+### How many gateways are affected?
+
+On 2026-10-07, 20 fresh TLS/nonce checks through `cloud-api.near.ai` all returned Intel-verified `OutOfDate`. The measured event logs distinguished two instance IDs; both failed the strict policy. They shared one Intel platform certificate, signing key and TLS key. See the [sample record and verification method](near-gateway-evidence.json).
+
+This confirms rejection for both observed gateway instances, not every gateway NEAR operates. We do not have an exhaustive production inventory or a way to select every gateway. The [gateway report](https://docs.near.ai/cloud/verification/cloud-api/gateway-attestations) describes the queried gateway; model-worker evidence is separate. No inference was sent and the extension's `UpToDate` requirement is unchanged.
+
 ## Why a valid quote and signature are insufficient
 
 NEAR [documents shared model signing keys](https://docs.near.ai/cloud/verification/cloud-api/model-attestations), including across instances with different measured configurations. A response signed by that shared key therefore does not identify which measured instance served it.

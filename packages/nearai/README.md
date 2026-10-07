@@ -14,7 +14,7 @@ Additional trust remains in Intel/NVIDIA verification and remote-verdict/JWKS po
 
 Another quote or matching shared signature cannot establish an exclusive serving session. The [NEAR assessment](../../docs/nearai-status.md#why-a-valid-quote-and-signature-are-insufficient) explains the ambiguity and the backend binding or key-recipient restrictions needed to resolve it.
 
-NEAR refuses Bun and Node 22 in this release. Browser OAuth and independently approved deployment profiles are not implemented. The default gateway route rejects its observed `OutOfDate` TDX status without weakening the required `UpToDate` policy.
+NEAR refuses Bun and Node 22 in this release. Browser OAuth and independently approved deployment profiles are not implemented. Both [observed gateway instances](../../docs/nearai-status.md#how-many-gateways-are-affected) returned `OutOfDate` TDX status; the gateway route rejects them under the required `UpToDate` policy. Fleet-wide status is unknown.
 
 Set `PI_NEARAI_POLICY=sdk PI_NEARAI_ROUTE=direct` before loading the extension to use the experimental GLM candidate, `z-ai/glm-5.3-flash`. The route restricts the picker and preflight to that model. [Direct transport](src/direct.ts) and [owned channel](src/direct-channel.ts) use one TLS 1.3 connection for fresh quote, encrypted OHTTP inference and signature lookup. Quote-bound SPKI approval precedes credentials; WebPKI validation also applies. Reconnection, a second inference POST and arbitrary paths are rejected. Abort or a terminal result closes the channel. CPU `UpToDate`, required GPU evidence, field encryption, OHTTP and the response-signature barrier remain required.
 

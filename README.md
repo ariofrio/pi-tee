@@ -63,7 +63,7 @@ Routes are selected at startup:
 | `PI_TINFOIL_ROUTE=router` | SDK policy only. Trusts the router's backend release policy and permits its SDK key-rotation resend. |
 | `PI_TINFOIL_ROUTE=direct` | SDK policy only. Frozen AMD Gemma worker; lacks fresh v3, revocation and independent GPU appraisal. |
 | `PI_TINFOIL_ROUTE=direct-intel` | SDK policy only. Frozen Intel/GPU research profile with separate helper configuration. |
-| `PI_NEARAI_ROUTE=gateway` | Default NEAR SDK route. The gateway sampled on 2026-10-07 failed the required `UpToDate` CPU check. |
+| `PI_NEARAI_ROUTE=gateway` | Default NEAR SDK route. Both observed gateway instances failed the required `UpToDate` CPU check on 2026-10-07; [fleet-wide status is unknown](docs/nearai-status.md#how-many-gateways-are-affected). |
 | `PI_NEARAI_ROUTE=direct` | SDK policy only. Restricts discovery to `z-ai/glm-5.3-flash` and binds inference to one attested TLS connection. |
 
 See the [Tinfoil route details](packages/tinfoil/README.md) and [NEAR direct assessment](docs/direct-access.md#near-direct-route-and-evidence) for requirements and limitations.
