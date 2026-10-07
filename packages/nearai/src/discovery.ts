@@ -1,4 +1,4 @@
-import { readBoundedBody, record, withAbort, type TeeCatalogModel } from "@ariofrio/pi-tee-core";
+import { readBoundedBody, record, withAbort, type TeeCatalogModel } from "pi-tee-core";
 import { NEAR_BASE_URL, parseNearCatalog } from "./catalog.js";
 
 export async function loadNearCatalog(value: unknown, context: {

@@ -1,4 +1,4 @@
-# @ariofrio/pi-tee-core
+# pi-tee-core
 
 Shared policy, native Pi catalog publication, guarded request transport, response authentication buffering, and terminal error handling for the NEAR AI and Tinfoil extensions. This library is not a Pi extension and imports neither provider SDK.
 

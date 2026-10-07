@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import {
   createTeeProvider, resolvePolicy, withAbort,
   type PolicyMode, type ProviderDefinition,
-} from "@ariofrio/pi-tee-core";
+} from "pi-tee-core";
 import { parseTinfoilCatalog, TINFOIL_BASE_URL } from "./catalog.js";
 export { parseTinfoilCatalog, TINFOIL_BASE_URL } from "./catalog.js";
 

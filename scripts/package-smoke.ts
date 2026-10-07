@@ -33,10 +33,10 @@ import { fileURLToPath } from 'node:url';
 import { createAgentSessionServices } from '@earendil-works/pi-coding-agent';
 assert.throws(() => import.meta.resolve('${otherSdk}'), { code: 'ERR_MODULE_NOT_FOUND' });
 assert.ok(fileURLToPath(import.meta.resolve('@earendil-works/pi-coding-agent')).startsWith(resolve('node_modules') + '/'));
-assert.ok(fileURLToPath(import.meta.resolve('@ariofrio/pi-tee-core')).startsWith(resolve('node_modules') + '/'));
+assert.ok(fileURLToPath(import.meta.resolve('pi-tee-core')).startsWith(resolve('node_modules') + '/'));
 const services = await createAgentSessionServices({
   cwd: resolve('project'), agentDir: resolve('agent'),
-  resourceLoaderOptions: { additionalExtensionPaths: [resolve('node_modules/@ariofrio/pi-${name}/dist/extension.js')] },
+  resourceLoaderOptions: { additionalExtensionPaths: [resolve('node_modules/pi-${name}/dist/extension.js')] },
 });
 assert.deepEqual(services.resourceLoader.getExtensions().errors, []);
 assert.equal(services.diagnostics.filter(entry => entry.type === 'error').length, 0);

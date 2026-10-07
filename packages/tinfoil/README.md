@@ -1,8 +1,8 @@
-# @ariofrio/pi-tinfoil
+# pi-tinfoil
 
 Tinfoil provider extension for Pi 1.0.4 and Node 22.19 or later. Supports native API-key `/login tinfoil`, `TINFOIL_API_KEY`, live chat/tool model discovery, provider-declared thinking controls, Pi tool handling and usage, SDK verification and EHBP encrypted transport.
 
-Build from the repository's locked workspace, then load `dist/extension.js` with `pi -e`. The shared `@ariofrio/pi-tee-core` library is a dependency; it is not another extension. This package does not load NEAR's SDK.
+Build from the repository's locked workspace, then load `dist/extension.js` with `pi -e`. The shared `pi-tee-core` library is a dependency; it is not another extension. This package does not load NEAR's SDK.
 
 Default `approved` policy hides models and blocks inference: no independently approved production profile is implemented. `PI_TINFOIL_POLICY=sdk` or `/tinfoil policy sdk` explicitly accepts SDK-policy authorities. `/tinfoil policy approved` restores blocking and aborts active requests. In-session choices are not persisted. `/tinfoil status`, `/tinfoil models`, and `/tinfoil models refresh` show the report and refresh discovery. `PI_TEE_OFFLINE=1` disables startup discovery.
 

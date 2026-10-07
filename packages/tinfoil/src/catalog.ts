@@ -1,4 +1,4 @@
-import { catalogModel, entries, price, record, strings } from "@ariofrio/pi-tee-core";
+import { catalogModel, entries, price, record, strings } from "pi-tee-core";
 import type { Model, OpenAICompletionsCompat } from "@earendil-works/pi-ai/compat";
 
 export const TINFOIL_BASE_URL = "https://inference.tinfoil.sh/v1";

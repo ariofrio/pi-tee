@@ -1,7 +1,7 @@
 import {
   authenticateResponse, createTeeProvider, limitResponseBody, MAX_ENCRYPTED_RESPONSE_BYTES, resolveModelVisibility, resolvePolicy, TeeError, withAbort,
   type ModelVisibility, type PolicyMode, type ProviderDefinition,
-} from "@ariofrio/pi-tee-core";
+} from "pi-tee-core";
 import { NEAR_BASE_URL } from "./catalog.js";
 import { loadNearCatalog } from "./discovery.js";
 export { NEAR_BASE_URL, parseNearCatalog } from "./catalog.js";

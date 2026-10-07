@@ -1,12 +1,14 @@
-# Pi confidential inference providers
+# pi-tee
+
+**Work in progress.** Approved-workload enforcement is not implemented; Approved mode blocks all inference. Live authenticated inference through Pi has not been tested. SDK mode is an explicit opt-in with the trust limits below.
 
 Two provider extensions and one shared library, built together in this repository:
 
 | Package | Purpose |
 | --- | --- |
-| [@ariofrio/pi-nearai](packages/nearai/README.md) | NEAR AI login, model discovery, attested gateway/model SDK transport, encryption, and response-signature verification. |
-| [@ariofrio/pi-tinfoil](packages/tinfoil/README.md) | Tinfoil login, model discovery, SDK verification, and EHBP encrypted transport. |
-| [@ariofrio/pi-tee-core](packages/core/README.md) | Shared policy, native catalog publications, request guards, response buffering, and terminal error handling. |
+| [pi-nearai](packages/nearai/README.md) | NEAR AI login, model discovery, attested gateway/model SDK transport, encryption, and response-signature verification. |
+| [pi-tinfoil](packages/tinfoil/README.md) | Tinfoil login, model discovery, SDK verification, and EHBP encrypted transport. |
+| [pi-tee-core](packages/core/README.md) | Shared policy, native catalog publications, request guards, response buffering, and terminal error handling. |
 
 Installing one provider does not load the other provider's SDK. The shared library is not a Pi extension. Both provider extensions can run together and have separate commands and credentials.
 
@@ -79,7 +81,7 @@ NEAR responses are buffered in memory until the SDK verifies their exact signed 
 
 These extensions guard requests sent through their own registered providers. They **do not protect an entire Pi conversation** from model switches, virtual-model fallback, compaction through another provider, other extensions, or external tools. All local plaintext-accessing code remains trusted. Avoid registering another extension under the same provider ID: registration can replace the provider implementation.
 
-The [security contract](SECURITY.md) lists the outstanding production requirements. The [assessment/design](../output/pi-tee-provider-design.md) describes the intended approved-worker transport and server contracts. In particular:
+The [security contract](SECURITY.md) lists the outstanding production requirements. The [assessment/design](docs/design.md) describes the intended approved-worker transport and server contracts. In particular:
 
 - Tinfoil Approved workloads must bypass `SecureClient.fetch` automatic recovery, pin code and hardware references, appraise revocation/security floors, and prove the direct worker or enforced forwarding chain and GPU path.
 - NEAR needs a serving-session binding and enforced runtime/key/forwarding closure. A shared certificate, shared model signer, public source, or another preflight quote is insufficient.
@@ -101,3 +103,5 @@ npm run smoke:attestation # live Tinfoil router SDK verification; no inference
 Tests exercise the real Pi OpenAI adapter with controlled external transport responses: payload/model/header/URL overrides, hosted-tool injection, both retry classifications, cancellation, policy changes, signature barriers, malformed/truncated streams, bounded buffering, Unicode tool arguments, usage, and catalog validation. These tests do not substitute for hardware evidence or a production security audit.
 
 Observed on 2026-10-06: live discovery mapped 44 NEAR chat/tool models, with **3** matching declared model-attestation capability and shown by the default filter, plus 7 Tinfoil models. Tinfoil router evidence passed the pinned SDK verifier. These are point-in-time observations, not a claim about today's full fleet. Authenticated live inference and NEAR live attestation were not run because provider credentials were unavailable.
+
+Written by Codex.

@@ -1,11 +1,13 @@
 {
-  "name": "pi-tee-providers-workspace",
+  "name": "pi-tee-workspace",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "workspaces": ["packages/*"],
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
-    "build": "npm run build -w @ariofrio/pi-tee-core && npm run build -w @ariofrio/pi-nearai && npm run build -w @ariofrio/pi-tinfoil",
+    "build": "npm run build -w pi-tee-core && npm run build -w pi-nearai && npm run build -w pi-tinfoil",
     "typecheck": "npm run typecheck --workspaces --if-present && tsc --noEmit -p tsconfig.tests.json",
     "test": "node --import tsx --test tests/*.test.ts",
     "check": "npm run build && npm run typecheck && npm test",
@@ -14,12 +16,18 @@
     "smoke:catalogs": "node --import tsx scripts/live-catalogs.ts",
     "smoke:attestation": "node --import tsx scripts/live-tinfoil-attestation.ts"
   },
-  "engines": {"node": ">=24"},
+  "engines": {
+    "node": ">=24"
+  },
   "devDependencies": {
     "@earendil-works/pi-ai": "1.0.4",
     "@earendil-works/pi-coding-agent": "1.0.4",
     "@types/node": "24.13.6",
     "tsx": "4.20.6",
     "typescript": "5.9.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ariofrio/pi-tee.git"
   }
 }

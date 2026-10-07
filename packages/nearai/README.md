@@ -1,8 +1,8 @@
-# @ariofrio/pi-nearai
+# pi-nearai
 
 NEAR AI provider extension for Pi 1.0.4, requiring Node 24. Supports native API-key `/login nearai`, `NEARAI_API_KEY`, live chat/tool model discovery, Pi tool handling and usage, SDK encryption, and response-signature verification before text or tool calls are exposed.
 
-Build from the repository's locked workspace, then load `dist/extension.js` with `pi -e`. The shared `@ariofrio/pi-tee-core` library is a dependency; it is not another extension. This package does not load Tinfoil.
+Build from the repository's locked workspace, then load `dist/extension.js` with `pi -e`. The shared `pi-tee-core` library is a dependency; it is not another extension. This package does not load Tinfoil.
 
 Default `approved` policy hides models and blocks inference: no independently approved production profile is implemented. `PI_NEARAI_POLICY=sdk` or `/nearai policy sdk` explicitly accepts SDK-policy authorities. `/nearai policy approved` restores blocking and aborts active requests. In-session policy choices are not persisted. `/nearai status`, `/nearai models`, and `/nearai models refresh` show the report and refresh discovery. `PI_TEE_OFFLINE=1` disables startup discovery.
 
