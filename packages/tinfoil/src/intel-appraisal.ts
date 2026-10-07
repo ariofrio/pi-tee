@@ -4,6 +4,9 @@ import { mkdtemp, readFile, writeFile, rm } from "node:fs/promises";
 import { resolve, dirname, isAbsolute } from "node:path";
 import { TeeError, readBoundedBody } from "pi-tee-core";
 import { parseHopperGpuMode } from "./gpu-mode.js";
+import { verifyPublicBuildArtifacts } from "./public-build.js";
+
+const PUBLIC_BUILD_VERIFIER_SHA256 = "dae400da525dc621f55aa6f6825726e8d67dfdf4cc770e5b1958f0b2a74cc37e";
 
 export const INTEL_CANDIDATE = Object.freeze({
   host: "gemma4-31b-inf8-0.tinfoil.containers.tinfoil.dev",
@@ -40,21 +43,26 @@ function command(file: string, args: string[], signal: AbortSignal, input?: stri
 
 export async function qualifyIntelCandidate(options: {
   cpuVerifier: string; nvatDir: string; signal: AbortSignal; evidenceFetch?: typeof globalThis.fetch;
+  mode?: "frozen" | "public-builds";
 }): Promise<{ tls: string; hpke: string }> {
   const { cpuVerifier, nvatDir } = options;
-  const signal = AbortSignal.any([options.signal, AbortSignal.timeout(90000)]);
+  const signal = AbortSignal.any([options.signal, AbortSignal.timeout(options.mode === "public-builds" ? 240000 : 90000)]);
   signal.throwIfAborted();
   requireCondition(isAbsolute(cpuVerifier) && isAbsolute(nvatDir), "TEE_VERIFIER_ARTIFACT_REJECTED");
-  await pinnedFile(cpuVerifier, INTEL_CANDIDATE.cpuVerifierSha256);
+  await pinnedFile(cpuVerifier, options.mode === "public-builds" ? PUBLIC_BUILD_VERIFIER_SHA256 : INTEL_CANDIDATE.cpuVerifierSha256);
   for (const [path, digest] of Object.entries(nvatHashes)) await pinnedFile(resolve(nvatDir, path), digest);
   const nonce = randomBytes(32).toString("hex");
   const response = await (options.evidenceFetch ?? globalThis.fetch)(`https://${INTEL_CANDIDATE.host}/.well-known/tinfoil-attestation?nonce=${nonce}`, { signal, redirect: "error" });
   requireCondition(response.ok, "TEE_ATTESTATION_REJECTED");
   const raw = await readBoundedBody(response.body, 2 * 1024 * 1024, signal);
   const envelope = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(raw));
-  const checked = await command(cpuVerifier, [], signal, `{"nonce":${JSON.stringify(nonce)},"envelope":${new TextDecoder("utf-8", { fatal: true }).decode(raw)}}`, true);
-  const cpu = JSON.parse(checked.stdout);
-  requireCondition(checked.code === 0 && cpu.cpuVerified === true && cpu.policySha256 === INTEL_CANDIDATE.cpuPolicySha256 && cpu.independentApproval === false && cpu.runtimeProviderReferenceAuthority === false, "TEE_CPU_POLICY_REJECTED");
+  if (options.mode === "public-builds") {
+    await verifyPublicBuildArtifacts({ helperPath: cpuVerifier, raw: new TextDecoder("utf-8", { fatal: true }).decode(raw), nonce, signal, evidenceFetch: options.evidenceFetch });
+  } else {
+    const checked = await command(cpuVerifier, [], signal, `{"nonce":${JSON.stringify(nonce)},"envelope":${new TextDecoder("utf-8", { fatal: true }).decode(raw)}}`, true);
+    const cpu = JSON.parse(checked.stdout);
+    requireCondition(checked.code === 0 && cpu.cpuVerified === true && cpu.policySha256 === INTEL_CANDIDATE.cpuPolicySha256 && cpu.independentApproval === false && cpu.runtimeProviderReferenceAuthority === false, "TEE_CPU_POLICY_REJECTED");
+  }
   // The strict Go parser authenticated both section byte strings before JS uses them.
   const devices = JSON.parse(Buffer.from(envelope.device_evidence, "base64").toString("utf8"));
   requireCondition(devices.items?.length === 1 && devices.items[0].id === "gpu0" && devices.items[0].kind === "gpu" && devices.items[0].vendor === "nvidia" && devices.items[0].format === "https://tinfoil.sh/format/nvidia-gpu-evidence/v1", "TEE_GPU_POLICY_REJECTED");

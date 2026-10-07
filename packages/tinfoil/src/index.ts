@@ -19,13 +19,20 @@ export const TINFOIL_ASSUMPTIONS = [
 
 export function createTinfoilProvider(options: {
   policy?: PolicyMode;
-  route?: "router" | "direct" | "direct-intel";
+  route?: "router" | "direct" | "direct-intel" | "direct-public";
   catalogFetch?: typeof globalThis.fetch;
   openSdkTransport?: ProviderDefinition["openSdkTransport"];
 } = {}) {
   const route = options.route ?? process.env.PI_TINFOIL_ROUTE ?? "router";
-  if (route !== "router" && route !== "direct" && route !== "direct-intel") throw new TeeError("TEE_ROUTE_INVALID");
-  const assumptions = route === "direct-intel" ? [
+  if (route !== "router" && route !== "direct" && route !== "direct-intel" && route !== "direct-public") throw new TeeError("TEE_ROUTE_INVALID");
+  const assumptions = route === "direct-public" ? [
+    "Experimental SDK-policy candidate: local Pi/runtime/extensions/tools, the hash-pinned public-build helper/dependencies, Docker image/runtime and NVIDIA verifier are trusted.",
+    "Intel roots, revocation, UpToDate appraisal and local floors authenticate fresh CPU-bound device and endpoint keys; named public Tinfoil workload/guest/platform/freshness workflows authorize dynamic releases.",
+    "GitHub Actions OIDC/hosted builds and the finite Sigstore roots are trusted; the named release publisher endorses OCI build/source claims, without an independent builder signature or rebuild.",
+    "Public source, authenticated guest/kernel/initrd/OCI artifacts, RTMR2 and the constrained Gemma runtime configuration are checked before GPU appraisal or inference; full running key/channel/reset qualification and implementation review remain incomplete.",
+    "Exactly one CPU-bound Hopper report must pass local NVIDIA signed references, revocation, nonce, secure-boot/debug and authenticated SPT checks; driver/VBIOS still use the experimental candidate's fixed policy.",
+    "TLS SPKI authenticates the inference socket before credentials/EHBP ciphertext; send once, reject rotation and encrypt a fresh cache salt. Tinfoil retains availability and credential/billing authority.",
+  ] : route === "direct-intel" ? [
     "Local Pi/runtime/extensions/tools, the hash-pinned Go CPU verifier and its dependencies, Docker runtime/image, and hash-pinned NVIDIA local verifier are trusted.",
     "Fresh Intel TDX quote authentication, revocation and UpToDate status enforce locally frozen guest registers and CPU security policy; no current provider release/reference authorizes a workload.",
     "The exact CPU-bound GPU evidence is appraised locally against NVIDIA roots, driver/VBIOS pins, signed references and OCSP, then required to declare authenticated SPT mode; compute-channel and reset lifecycle still require full runtime qualification.",
@@ -44,7 +51,7 @@ export function createTinfoilProvider(options: {
     policy: options.policy ?? resolvePolicy(process.env.PI_TINFOIL_POLICY),
     parseCatalog: parseTinfoilCatalog, catalogFetch: options.catalogFetch, assumptions,
     availableModelIds: route !== "router" ? [TINFOIL_DIRECT_PROFILE.model] : undefined,
-    openSdkTransport: options.openSdkTransport ?? (route === "direct-intel" ? ({ signal }) => openIntelTinfoilTransport(signal) : route === "direct" ? ({ signal }) => openDirectTinfoilTransport(signal) : async ({ signal }) => {
+    openSdkTransport: options.openSdkTransport ?? (route === "direct-public" ? ({ signal }) => openIntelTinfoilTransport(signal, "public-builds") : route === "direct-intel" ? ({ signal }) => openIntelTinfoilTransport(signal) : route === "direct" ? ({ signal }) => openDirectTinfoilTransport(signal) : async ({ signal }) => {
       const { SecureClient } = await import("tinfoil");
       signal.throwIfAborted();
       const client = new SecureClient({ baseURL: TINFOIL_BASE_URL, transport: "ehbp", userCacheSecret: randomBytes(32).toString("hex") });

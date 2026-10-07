@@ -29,6 +29,7 @@ A trusted publisher can authorize malicious code or incorrect measurements. Publ
 
 ```sh
 mkdir -p .scratch/work
+npm run build
 GOTOOLCHAIN=go1.26.6 go -C tools/tinfoil-public-build build \
   -mod=readonly -trimpath -buildvcs=false \
   -o ../../.scratch/work/tinfoil-public-build-verifier .
@@ -53,5 +54,7 @@ On 2026-10-07 the live probe authenticated Gemma `v0.0.25`, platform references 
 `--runtime-config` takes the same signed-release input as `--container-reference`. After authenticating the named publisher, it requires the `gemma-single-gpu-v1` configuration contract: one NVIDIA container/GPU, literal allowlisted environment and engine flags, a read-only container root with bounded tmpfs, two immutable model sources and verity-root mounts, authenticated chat/metrics routes, and a fixed health-check executable. Host mounts, capabilities, shared namespaces, external networks, vault/secrets, remote code and request logging are rejected. It checks configuration dimensions against the signed VM shape and the exact non-debug boot command against the configuration hash and guest root. Image/model/guest digests remain dynamic. These configuration constraints do not establish running engine behavior, GPU channels or a serving session: CPU/GPU/freshness/inference remain false in the standalone result. `--inspect-runtime` accepts only `{ "config": "base64 exact YAML bytes" }` and additionally leaves release authentication false. The combined live probe compares the authenticated runtime result to its fresh CPU/release and artifact chain. [Runtime verifier](runtime.go), [real-release and configuration rejection tests](runtime_test.go).
 
 [Design and remaining inference gates](../../docs/design.md).
+
+The evidence probe and SDK-policy `direct-public` candidate share the [artifact-chain implementation](../../packages/tinfoil/src/public-build.ts). The candidate verifies the local helper hash before fetching evidence, then appraises the same CPU-bound GPU bytes and releases endpoint keys to the send-once encrypted transport. Its full actual Pi suite and separate live-delta cancellation passed on 2026-10-07. This connects artifact verification to experimental inference; it does not enable the default production policy. [Candidate setup and limits](../../packages/tinfoil/README.md).
 
 Written by Codex.

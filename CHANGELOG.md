@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add the SDK-policy `direct-public` Intel candidate: authenticate fresh dynamic release/guest/OCI/source/runtime evidence before local NVIDIA appraisal and send-once encrypted inference. Share the artifact chain with the evidence probe, reject untrusted local helpers through native Pi, and retain the default production gate. All 44 provider tests, package loader checks, the full actual Pi suite and separate live-delta cancellation pass.
+
 - Enforce a Gemma runtime configuration contract after authenticating the named public release: bind VM shape, guest/config boot hashes, dynamic image/model roots, literal environment, engine flags, routes and health checks. Reject host access, unknown environment, remote code, logging and ambiguous YAML/arguments. Connect it to the evidence-only live chain; standalone and combined results still deny inference qualification.
 
 - Test signed GPU-mode coverage at the real NVIDIA verifier boundary: changing only SPT to MPT returns signature-error result `508`, alongside forged-signature and wrong-nonce negatives. Require SPT in the Intel research probe as well as the native candidate; the evidence-only run passes with zero inference.
