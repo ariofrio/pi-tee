@@ -1,9 +1,18 @@
 import { parentPort, workerData } from "node:worker_threads";
-import { pathToFileURL } from "node:url";
 
-const { module, glue, evidence, args, collateralOrigin } = workerData as {
-  module: WebAssembly.Module; glue: string; evidence: string; args: string[]; collateralOrigin?: string;
+const { module, glue, glueUrl, evidence, args, collateralOrigin } = workerData as {
+  module: WebAssembly.Module; glue: string; glueUrl: string; evidence: string; args: string[]; collateralOrigin?: string;
 };
+
+// Import the glue from the source the host authenticated: Node accepts data:
+// module URLs and Bun blob: URLs. Its import.meta.url refers to its own file.
+async function importGlue() {
+  const source = glue.replaceAll("import.meta.url", JSON.stringify(glueUrl));
+  if (source.includes("import.meta")) throw Error("unexpected glue");
+  if (!process.versions.bun) return import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`);
+  const url = URL.createObjectURL(new Blob([source], { type: "text/javascript" }));
+  try { return await import(url); } finally { URL.revokeObjectURL(url); }
+}
 
 // Source checkouts start this worker from TypeScript without the loader's
 // .js-to-.ts mapping, so the sibling module is named by this file's extension.
@@ -12,7 +21,7 @@ const { nvidiaCollateralBridge }: typeof import("./nvattest-bridge.js") =
 
 try {
   let stdout = "", overflow = false;
-  const { default: createNvattest } = await import(pathToFileURL(glue).href);
+  const { default: createNvattest } = await importGlue();
   const runtime = await createNvattest({
     noInitialRun: true,
     instantiateWasm(imports: WebAssembly.Imports, success: (instance: WebAssembly.Instance, module: WebAssembly.Module) => void) {

@@ -5,7 +5,7 @@
 - **`nvattest.wasm.gz` and `nvattest.mjs`:** NVIDIA's local file-evidence verifier, compiled with Emscripten.
 - **`tinfoil-public-build.wasm.gz`:** the [public-build CPU and release verifier](../tinfoil-public-build/README.md), compiled as a WASI command.
 
-Users need no compilers, containers or downloads: the extension checks each file against [`wasm-artifacts.ts`](../../packages/tinfoil/src/wasm-artifacts.ts) before compiling it. The same bytes run on every Pi platform, under both Node and Bun.
+Users need no compilers, containers or downloads: the extension checks each file against [`wasm-artifacts.ts`](../../packages/tinfoil/src/wasm-artifacts.ts) before compiling or importing it, and uses the checked bytes rather than reading the file again. The same bytes run on every Pi platform, under both Node and Bun.
 
 ## Sources and changes
 

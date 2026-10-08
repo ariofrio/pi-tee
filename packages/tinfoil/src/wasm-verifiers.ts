@@ -1,6 +1,5 @@
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import { fileURLToPath } from "node:url";
 import { Worker } from "node:worker_threads";
 import { gunzipSync } from "node:zlib";
 import { compileVerifiedWasm, runWasiCommand, TeeError } from "pi-tee-core";
@@ -17,8 +16,11 @@ const sha256 = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest(
 async function read(name: string): Promise<Buffer> {
   try { return await readFile(location(name)); } catch { throw new TeeError("TEE_VERIFIER_ARTIFACT_REJECTED"); }
 }
+// The worker imports the glue from these authenticated bytes, never from its path.
 async function glueArtifact() {
-  if (sha256(await read("nvattest.mjs")) !== WASM_ARTIFACTS["nvattest.mjs"]) throw new TeeError("TEE_VERIFIER_ARTIFACT_REJECTED");
+  const bytes = await read("nvattest.mjs");
+  if (sha256(bytes) !== WASM_ARTIFACTS["nvattest.mjs"]) throw new TeeError("TEE_VERIFIER_ARTIFACT_REJECTED");
+  return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
 }
 const modules = new Map<string, Promise<WebAssembly.Module>>();
 function compiled(name: "tinfoil-public-build.wasm" | "nvattest.wasm") {
@@ -54,7 +56,7 @@ export async function runNvidiaVerifier(options: { evidence: unknown[]; nonce: s
   // Tests may relay NVIDIA collateral through a loopback proxy; nothing else can redirect it.
   const origin = options.collateralOrigin;
   if (origin !== undefined && !/^http:\/\/127\.0\.0\.1:[1-9][0-9]{0,4}$/.test(origin)) throw new TeeError("TEE_REQUEST_REJECTED");
-  await glueArtifact();
+  const glue = await glueArtifact();
   const module = await compiled("nvattest.wasm");
   // The abort listener below cannot observe an abort during the awaits above.
   options.signal.throwIfAborted();
@@ -62,7 +64,7 @@ export async function runNvidiaVerifier(options: { evidence: unknown[]; nonce: s
     // Source checkouts run through a TypeScript loader that workers inherit.
     const worker = new Worker(new URL(`./nvattest-worker.${import.meta.url.endsWith(".ts") ? "ts" : "js"}`, import.meta.url), {
       workerData: {
-        module, glue: fileURLToPath(location("nvattest.mjs")), evidence: JSON.stringify(options.evidence), collateralOrigin: origin,
+        module, glue, glueUrl: location("nvattest.mjs").href, evidence: JSON.stringify(options.evidence), collateralOrigin: origin,
         args: ["--log-level", "off", "--format", "json", "attest", "--device", "gpu", "--gpu-evidence-source", "file",
           "--gpu-evidence-file", "/evidence.json", "--verifier", "local", "--nonce", options.nonce,
           ...(origin ? ["--rim-url", origin, "--ocsp-url", `${origin}/ocsp`] : [])],
