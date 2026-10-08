@@ -1,6 +1,6 @@
 # Tinfoil GPU runtime evidence
 
-These source and report observations support the GPU part of the [public-build serving contract](tinfoil-public-profile.md): one Hopper GPU in SPT mode, or up to eight Blackwell GPUs in MPT mode. Production admission awaits independent review. [Local NVIDIA appraisal](../packages/tinfoil/src/worker-appraisal.ts).
+These source and report observations support the GPU part of the [public-build serving contract](tinfoil-public-profile.md): one Hopper GPU in SPT mode, or up to eight Blackwell GPUs in MPT mode. [Local NVIDIA appraisal](../packages/tinfoil/src/worker-appraisal.ts).
 
 ## GPU mode and reference appraisal
 

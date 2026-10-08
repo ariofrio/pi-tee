@@ -52,7 +52,7 @@ const authorityPolicy = {
 export const PUBLIC_BUILD_PROFILE_ID = authorityPolicy.profile;
 export const PUBLIC_BUILD_AUTHORITY_POLICY_DIGEST = createHash("sha256").update(JSON.stringify(authorityPolicy)).digest("hex");
 
-// Production admission is paused until the WebAssembly verifiers pass
-// independent review; the experimental SDK-policy direct-public route uses them
-// meanwhile. Deliberately not configurable by environment.
-export const PUBLIC_BUILD_PROFILE_ENABLED = false;
+// Enabled after independent review of the WebAssembly verifiers, the NVIDIA
+// reference-manifest patch, the TLS client and the multi-model/SEV-SNP
+// profile. Deliberately not configurable by environment.
+export const PUBLIC_BUILD_PROFILE_ENABLED = true;

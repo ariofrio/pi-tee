@@ -1,3 +1,4 @@
+import { PUBLIC_BUILD_PROFILE } from "../packages/tinfoil/src/public-session.js";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
@@ -24,7 +25,7 @@ test("malformed public CPU evidence cannot reach artifact discovery, GPU apprais
   assert.equal(metadataRequests, 1);
 });
 
-test("default public admission remains gated and stale selections cannot fall back to SDK", async () => {
+test("default public admission lists only profile models and stale selections cannot fall back to SDK", async () => {
   const oldRoute = process.env.PI_TINFOIL_ROUTE;
   const oldPolicy = process.env.PI_TINFOIL_POLICY;
   try {
@@ -40,21 +41,26 @@ test("default public admission remains gated and stale selections cannot fall ba
       });
       await integration.initializeCatalog();
       assert.equal(integration.getReport().policy, "public-builds");
-      assert.deepEqual(integration.provider.getModels().map(m => m.id), []);
-      integration.setPolicy("sdk");
-      const model = integration.provider.getModels()[0];
-      integration.setPolicy("public-builds");
-      assert.ok(model);
-      const result = await integration.provider.streamSimple(model, normalizeContext({ messages: [{ role: "user", content: "synthetic prompt", timestamp: 1 }] }), { apiKey: "synthetic-key", maxRetries: 10 }).result();
-      assert.equal(result.errorMessage, "TEE_PUBLIC_BUILD_DEPLOYMENT_UNAVAILABLE");
-      assert.equal(sdkOpened, 0);
-      assert.equal(integration.getReport().publicBuildVerification, "not-established");
+      assert.deepEqual(integration.provider.getModels().map(m => m.id), ["gemma4-31b"], "Only catalog models in the public profile are selectable.");
+      assert.deepEqual(integration.getReport().assumptions, PUBLIC_BUILD_PROFILE.assumptions);
+      if (route === undefined) {
+        // A non-profile model selected under SDK policy cannot reach the SDK
+        // after switching back; it fails before any network request.
+        integration.setPolicy("sdk");
+        const stale = integration.provider.getModels().find(m => m.id === "gpt-oss-120b");
+        integration.setPolicy("public-builds");
+        assert.ok(stale);
+        const result = await integration.provider.streamSimple(stale, normalizeContext({ messages: [{ role: "user", content: "synthetic prompt", timestamp: 1 }] }), { apiKey: "synthetic-key", maxRetries: 10 }).result();
+        assert.equal(result.errorMessage, "TEE_MODEL_UNAVAILABLE");
+        assert.equal(sdkOpened, 0);
+        assert.equal(integration.getReport().publicBuildVerification, "not-established");
+      }
       integration.setPolicy("approved");
       assert.equal(integration.provider.getModels().length, 0);
       integration.setPolicy("sdk");
       assert.deepEqual(integration.provider.getModels().map(m => m.id), route ? ["gemma4-31b"] : ["gemma4-31b", "gpt-oss-120b"]);
       if (route === undefined) assert.deepEqual(integration.getReport().assumptions, TINFOIL_ASSUMPTIONS);
-      else assert.match(integration.getReport().assumptions[0]!, /^Experimental SDK-policy route/);
+      else assert.match(integration.getReport().assumptions[0]!, /^SDK-policy route running the public-build appraisal/);
     }
   } finally {
     for (const [name, value] of [["PI_TINFOIL_ROUTE", oldRoute], ["PI_TINFOIL_POLICY", oldPolicy]]) {

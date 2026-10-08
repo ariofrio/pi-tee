@@ -30,7 +30,7 @@ export function createTinfoilProvider(options: {
   // direct-public runs the production appraisal under SDK policy while
   // production admission is closed, so it shares the profile's assumptions.
   const assumptions = route === "direct-public" ? [
-    "Experimental SDK-policy route running the public-build appraisal below; production admission awaits independent review.",
+    "SDK-policy route running the public-build appraisal below for the profile's models only.",
     ...PUBLIC_BUILD_PROFILE.assumptions,
   ] : route === "direct" ? [
     "Local Pi, runtime, extensions, tools, the pinned JS verifier and EHBP are trusted.",

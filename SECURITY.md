@@ -4,7 +4,7 @@ This file defines what the extensions protect and what contributors must preserv
 
 ## Supported guarantees
 
-The default `public-builds` policy currently admits no models. Tinfoil Gemma 4 31B, DeepSeek V4.1 Flash and GLM-5.3 await independent review of the new verifiers. Once enabled, each dispatch requires fresh hardware verification, authenticated public build artifacts and the [declared serving contract](docs/tinfoil-public-profile.md). Named software publishers and build workflows may authorize compatible updates automatically. They include provider-operated authorities: this policy does not trust only hardware manufacturers or require independent review of every release.
+The default `public-builds` policy admits Tinfoil Gemma 4 31B, DeepSeek V4.1 Flash and GLM-5.3. Each dispatch requires fresh hardware verification, authenticated public build artifacts and the [declared serving contract](docs/tinfoil-public-profile.md). Named software publishers and build workflows may authorize compatible updates automatically. They include provider-operated authorities: this policy does not trust only hardware manufacturers or require independent review of every release.
 
 NEAR's experimental SDK route is implemented and tested. NEAR public builds cannot be established: its operator deploys serving software at runtime without a public release process. [NEAR assessment](docs/nearai-status.md). `sdk` policy explicitly accepts the selected route's weaker assumptions. `approved` is reserved for independent frozen-workload approval and currently admits no models. Verification failures never fall back to a weaker policy.
 

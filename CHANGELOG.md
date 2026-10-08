@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Enable the Tinfoil public-build profile for Gemma 4 31B, DeepSeek V4.1 Flash and GLM-5.3 after independent review of the WebAssembly verifiers, the NVIDIA reference-manifest patch, the TLS client and the multi-model/SEV-SNP profile. Default `auto` routing now admits these models under the default `public-builds` policy; other catalog models stay unavailable without an SDK fallback.
+
 - Persist the two GitHub API lookups in the artifact chain on disk after a verified chain, so separate Pi processes stay within GitHub's 60-requests-per-hour unauthenticated limit; a failing chain that read them discards them. Report delivery failures as `TEE_PUBLIC_ARTIFACT_UNAVAILABLE` instead of `TEE_PUBLIC_BUILD_REJECTED`, and a missing guest-build attestation as a rejection. Ask for medium reasoning effort in the live harness, since effort-only models may skip thinking at low effort.
 
 - Harden GPU reference-manifest appraisal: require NVIDIA's exact signature layout, read manifest content only from fixed signed locations with exactly one version `Meta`, ignore manifests and allowlist reference transforms. The collateral check adds six layout negatives with specific NVIDIA codes; the rebuilt module comes from CI.

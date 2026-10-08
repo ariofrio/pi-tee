@@ -235,4 +235,42 @@ The probe only filters and orders candidates. Each remaining candidate still get
 
 With F1 fixed, Gemma is served only by its TDX workers until Tinfoil patches the Genoa hosts. GLM-5.3 stays on endorsed Turin workers, and DeepSeek on TDX.
 
+## Enablement review at `94b43a7`
+
+This section reviews the proposed enablement commit `94b43a7` ("Enable the Tinfoil public-build profile"). It sits on the local, unpushed branch `ariofrio/enable-public-builds`, based on main [`6ea1329`](https://github.com/ariofrio/pi-tee/commit/6ea1329a502467d51e1cbee98c6620a874a9c16c). In my scope I also reviewed [`ecc5cd0`](https://github.com/ariofrio/pi-tee/commit/ecc5cd0) (Bun buffering cap, probe limits) and `6ea1329` (stalled-consumer test). The NVIDIA verifier, WASI and bridge commits `37eba73..13b116f`, including the new `nvattest.wasm` pin `c4bbe723…`, belong to review A and I did not review them. I used a read-only detached worktree, sent no inference requests and used no credentials.
+
+### Verdict: enable (approve the merge), with two conditions before pushing
+
+1. **Review A must have signed off on the post-`ad71a91` NVIDIA verifier commits** (`37eba73..13b116f`, `nvattest.wasm` `c4bbe723…`). Line 13 of the contract now states "Both reviewers re-checked the fixes before production admission was enabled". For this review it is true for the CPU/release, SNP, session and TLS code through `94b43a7`.
+2. **Run the production live suite on this exact commit** for all three models under Node and the Bun-compiled Pi before pushing. Expect Gemma on TDX workers only.
+
+### The enablement commit
+
+- **Code change.** The only code change is `PUBLIC_BUILD_PROFILE_ENABLED = true` (`packages/tinfoil/src/public-policy.ts:55-58` at `94b43a7`). It is a constant, not an environment switch.
+- **What it activates.** It wires `PUBLIC_BUILD_PROFILE` for the `auto` and `direct-public` routes only (`packages/tinfoil/src/index.ts:48`). Under `public-builds`:
+  - The picker lists only catalog models that the profile covers (`selectableCatalog`, provider.ts#L277-L281).
+  - The report shows the profile's assumptions.
+  - Dispatch goes only through `openSession`, which re-checks profile, model, authority digest, artifact digests, `checkedAt` and `expiresAt`. A model outside the profile fails with `TEE_MODEL_UNAVAILABLE` before any network or SDK call.
+  - `router` and `direct` still have no profile, so `public-builds` stays unavailable on them. `approved` stays empty.
+- **Activation test** (`tests/tinfoil-intel.test.ts`). It asserts the picker list and the profile assumptions. It also checks that a stale non-profile selection made under SDK policy ends in a terminal `TEE_MODEL_UNAVAILABLE`, with `sdkOpened = 0` and verification still "not-established", and that `approved` is empty. It passes.
+- **Documentation.** README, SECURITY.md, the package README, design.md, the contract and CHANGELOG consistently describe admission of the three models. The README now says "A single Hopper or Blackwell GPU must report SPT", which closes the remaining F7 README item. `docs/reviews/pi-tee-multimodel-snp-tls-opus-review.md` matched this report through the re-review section. This enablement section still needs to be copied there.
+
+### `ecc5cd0` and `6ea1329` (TLS and probing)
+
+| Change | Assessment |
+| --- | --- |
+| Received-bytes cap: `MAX_ENCRYPTED_RESPONSE_BYTES + 1 MiB`, counted on every runtime; Bun no longer pauses (`CAN_PAUSE = !process.versions.bun`) | **Closes the F4 residual.** With a Node peer flooding a stalled reader, Bun now stops the peer at 37–39 MiB and the stream fails with `TEE_RESPONSE_REJECTED` (4/4 runs, client RSS ≤ 43 MiB). Node still pauses at 3–4 MiB. The cap counts chunk framing too, so a response within about 3% of the existing 32 MiB encrypted limit can fail slightly earlier. That is roughly 100k streamed tokens, so negligible (Info). |
+| Stalled-consumer test now waits for the peer's writes to settle (`6ea1329`) | **Stable.** Bun 0/12 and Node 0/6 in isolation; the full file passes under `bun test` (4/4). |
+| Probe concurrency 16; stop after 8 reachable hosts | **Correct and bounded.** Abort and empty inputs resolve; nothing is authorized by reachability. Info: the 8 hosts are the first reachable ones in delivery order and are shuffled afterwards, so delivery chooses which 8 are eligible. It already controls availability. The array returned to the caller can still receive pushes from probes in flight. That is harmless, because the candidate slice is taken once, but returning a copy would be cleaner. |
+| Assumption names AMD-SB-3019/3020/3027 | Closes the earlier Info item. |
+
+### Regression checks at `94b43a7`
+
+- Build and typecheck are clean. `npm test` reports 87 pass, 0 fail, 3 skipped (private fixtures).
+- `go test` and `go vet` pass.
+- `public-build-chain.test.ts` passes with the private TDX evidence.
+- The helper WASM pin is unchanged (`7877fe36…`, reproduced in the re-review).
+- My hostile-peer probes still fail closed on Node and Bun: invalid name, bare LF, NUL, space before colon, close-delimited body and truncated chunk. A well-formed response passes.
+- Against a Node peer capped at TLS 1.2, Node fails the handshake and Bun is rejected by the protocol check (`TEE_TLS_KEY_REJECTED`). TLS 1.3 passes on both.
+
 Written by Claude

@@ -1,6 +1,6 @@
 # Pi NEAR AI and Tinfoil implementation
 
-Date: 2026-10-07. Author: Codex. Scope: SDK-policy extensions, live Pi validation and automatic public-release/CPU verification. Tinfoil public builds for Gemma 4 31B, DeepSeek V4.1 Flash and GLM-5.3 await review of the WebAssembly verifiers that replaced the macOS ARM64/OrbStack setup, and of the multi-model/SEV-SNP generalization; NEAR public builds and independently approved workloads remain gated.
+Date: 2026-10-07. Author: Codex. Scope: SDK-policy extensions, live Pi validation and automatic public-release/CPU verification. Tinfoil public builds for Gemma 4 31B, DeepSeek V4.1 Flash and GLM-5.3 are enabled after review of the WebAssembly verifiers and the multi-model/SEV-SNP generalization; NEAR public builds and independently approved workloads remain gated.
 
 Repository: [ariofrio/pi-tee](https://github.com/ariofrio/pi-tee). Initial integration: `7331cfd`; model visibility: `bc2cc98`.
 

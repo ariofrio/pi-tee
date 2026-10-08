@@ -96,7 +96,7 @@ export async function selectPublicWorker(model: PublicModel, signal: AbortSignal
   throw rejection ?? unavailable ?? new TeeError("TEE_PUBLIC_BUILD_DEPLOYMENT_UNAVAILABLE");
 }
 
-/** Experimental SDK-policy route over the same appraisal. */
+/** SDK-policy route over the same appraisal. */
 export async function openPublicWorkerTransport(signal: AbortSignal, model: string): Promise<SdkTransport> {
   if (!isPublicModel(model)) throw new TeeError("TEE_MODEL_UNAVAILABLE");
   const { host, keys } = await selectPublicWorker(model, signal);
