@@ -4,7 +4,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"reflect"
+	"strconv"
+	"strings"
 
 	"github.com/sigstore/sigstore-go/pkg/bundle"
 	"github.com/tinfoilsh/tinfoil-go/verifier/measurement"
@@ -99,9 +102,40 @@ func floorTDXArtifact(artifact *policy.Artifact, identity string) (*policy.Artif
 	return copy, nil
 }
 
-// SEV-SNP has no manufacturer "UpToDate" verdict; the publisher's TCB floors
-// and AMD's document-carried CRL govern firmware. Independently require a
-// non-debug, non-migratable guest at VMPL0 on released firmware.
+// Local SEV-SNP backstops: the floors Tinfoil's SDK hard-coded before v3
+// delegated them to the platform publisher (tinfoil-go 05e8179
+// verifier/attestation/sev.go). The verifier ties each policy's shape to the
+// report's product line: Turin policies carry fmc_spl, Genoa ones do not.
+var snpFloors = map[bool]struct {
+	build int
+	api   [2]int
+	tcb   policy.TCB
+}{
+	false: {21, [2]int{1, 55}, policy.TCB{BlSpl: u8(7), TeeSpl: u8(0), SnpSpl: u8(14), UcodeSpl: u8(72)}},
+	true:  {0, [2]int{1, 58}, policy.TCB{FmcSpl: u8(1), BlSpl: u8(1), TeeSpl: u8(1), SnpSpl: u8(4), UcodeSpl: u8(82)}},
+}
+
+func u8(value uint8) *uint8 { return &value }
+
+func raiseTCB(tcb *policy.TCB, floor policy.TCB) {
+	for _, pair := range [][2]*uint8{{tcb.FmcSpl, floor.FmcSpl}, {tcb.BlSpl, floor.BlSpl}, {tcb.TeeSpl, floor.TeeSpl}, {tcb.SnpSpl, floor.SnpSpl}, {tcb.UcodeSpl, floor.UcodeSpl}} {
+		if pair[0] != nil && pair[1] != nil {
+			*pair[0] = max(*pair[0], *pair[1])
+		}
+	}
+}
+
+func versionParts(version string) ([2]int, bool) {
+	major, minor, ok := strings.Cut(version, ".")
+	a, errA := strconv.Atoi(major)
+	b, errB := strconv.Atoi(minor)
+	return [2]int{a, b}, ok && errA == nil && errB == nil
+}
+
+// SEV-SNP has no manufacturer "UpToDate" verdict; the publisher's TCB floors,
+// raised to the local backstops, and AMD's document-carried CRL govern
+// firmware. Independently require a non-debug, non-migratable guest at VMPL0
+// on released firmware.
 func floorSNPArtifact(artifact *policy.Artifact, identity string) (*policy.Artifact, error) {
 	raw, err := json.Marshal(artifact)
 	if err != nil {
@@ -111,13 +145,26 @@ func floorSNPArtifact(artifact *policy.Artifact, identity string) (*policy.Artif
 	if err != nil {
 		return nil, err
 	}
-	_, selected, err := copy.PolicyFor(identity, policy.PlatformSEVSNP)
+	name, selected, err := copy.PolicyFor(identity, policy.PlatformSEVSNP)
 	if err != nil {
 		return nil, err
 	}
 	snp := selected.SEVSNP
-	if snp == nil || snp.GuestPolicy.Debug || snp.GuestPolicy.MigrateMA || snp.PermitProvisionalFirmware || snp.VMPL == nil || *snp.VMPL != 0 {
+	if snp == nil || snp.GuestPolicy.Debug || snp.GuestPolicy.MigrateMA || snp.PermitProvisionalFirmware || snp.VMPL == nil || *snp.VMPL != 0 ||
+		snp.MinimumBuild == nil || (snp.MinimumTCB.FmcSpl == nil) != (snp.MinimumLaunchTCB.FmcSpl == nil) {
 		return nil, errors.New("TEE_CPU_POLICY_REJECTED")
 	}
+	floor := snpFloors[snp.MinimumTCB.FmcSpl != nil]
+	version, ok := versionParts(snp.MinimumAPIVersion)
+	if !ok {
+		return nil, errors.New("TEE_CPU_POLICY_REJECTED")
+	}
+	if version[0] < floor.api[0] || (version[0] == floor.api[0] && version[1] < floor.api[1]) {
+		snp.MinimumAPIVersion = fmt.Sprintf("%d.%d", floor.api[0], floor.api[1])
+	}
+	*snp.MinimumBuild = max(*snp.MinimumBuild, uint8(floor.build))
+	raiseTCB(&snp.MinimumTCB, floor.tcb)
+	raiseTCB(&snp.MinimumLaunchTCB, floor.tcb)
+	copy.Policies[name] = *selected
 	return copy, nil
 }

@@ -4,6 +4,8 @@
 
 - Extend the Tinfoil public-build profile to DeepSeek V4.1 Flash and GLM-5.3, alongside Gemma 4 31B. Accept AMD SEV-SNP evidence (Genoa/Turin roots, AMD CRL, publisher TCB floors, non-debug non-migratable VMPL0 guests) as well as Intel TDX. Appraise every CPU-bound GPU: one claim per device, one supported hardware model, distinct devices, per-model firmware floors, and SPT for one GPU or Blackwell MPT for several. Replace the Gemma-only runtime profile with `tinfoil-vllm-v1`, and discover and freshly appraise workers on each dispatch instead of pinning one host. Tinfoil's remaining models are reachable only through a router that does not enforce the policy and stay excluded. Production admission stays closed pending review.
 
+- Raise weaker SEV-SNP firmware floors from the platform publisher to local backstops, matching the existing TDX floors. Current publisher floors already equal them.
+
 - Recompute the SEV-SNP launch digest from the authenticated kernel, initrd and command line with a pinned, attested OVMF, matching the existing TDX register recomputation.
 
 - Retry transient 502/503/504 responses while fetching public artifacts; every byte is still authenticated by digest or signature.
