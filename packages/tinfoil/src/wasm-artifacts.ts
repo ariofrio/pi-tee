@@ -2,5 +2,5 @@
 export const WASM_ARTIFACTS = Object.freeze({
   "nvattest.wasm": "0b6f1107f87c6c88447ee233bab9773c42dc0bc9cd2e829d0d388ffbc0b10705",
   "nvattest.mjs": "2e17aded359c413300d6c8de0da1caa2ea2f59f96bfd4d9bd593d78cec666722",
-  "tinfoil-public-build.wasm": "839f4036ff882aa3b278841442b7d907d60b069b8646c814a410d7568fbf7c51"
+  "tinfoil-public-build.wasm": "e039fdb17f107326cdde9bcf81aafb445472ea8a62b96bbc175e2b2bbe7eb75d"
 });

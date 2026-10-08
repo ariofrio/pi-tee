@@ -59,6 +59,7 @@ type result struct {
 	CodeFreshness       time.Time `json:"codeFreshness"`
 	PlatformFreshness   time.Time `json:"platformFreshness"`
 	CodeStatementDigest string    `json:"codeStatementDigest"`
+	SNPMeasurement      string    `json:"snpMeasurement"`
 	RTMR1               string    `json:"rtmr1"`
 	RTMR2               string    `json:"rtmr2"`
 	Shape               any       `json:"vmShape"`
@@ -180,7 +181,7 @@ func verify(raw, nonce []byte, now time.Time) (*result, error) {
 	return &result{CPUVerified: true, PublicBuildVerified: true, Repo: codeRepo, Platform: authenticated.Platform, Workflow: codeWorkflow,
 		Tag: code.Tag, Commit: code.Commit, Digest: code.Digest,
 		PlatformTag: platform.Tag, PlatformCommit: platform.Commit, PlatformDigest: platform.Digest,
-		CodeStatementDigest: statementDigest, RTMR1: predicate.TDX.RTMR1, RTMR2: predicate.TDX.RTMR2, Shape: predicate.Shape,
+		CodeStatementDigest: statementDigest, SNPMeasurement: predicate.SNP, RTMR1: predicate.TDX.RTMR1, RTMR2: predicate.TDX.RTMR2, Shape: predicate.Shape,
 		CodeFreshness: codeTime, PlatformFreshness: platformTime}, nil
 }
 

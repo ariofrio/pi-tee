@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { GPU_POLICIES } from "./gpu-policy.js";
+import { SNP_FIRMWARE } from "./snp-measurement.js";
 import { WASM_ARTIFACTS } from "./wasm-artifacts.js";
 import { PUBLIC_MODELS, WORKER_HOST } from "./worker-appraisal.js";
 
@@ -15,7 +16,7 @@ const authorityPolicy = {
     tdx: { root: "267a851c8d10982685b5f219d9ac2600ba71463569a6541827c2dc9fe9d6d699",
       status: "UpToDate", attributes: "0000001000000000", svnFloor: "03010200000000000000000000000000", collateralFloor: 20 },
     sevSnp: { arks: { genoa: "4c6598d19c18719c5dfd4a7d335f674e5bfe1d8f800cea2cf270c10d103db2f1", turin: "1f084161a44bb6d93778a904877d4819cafa5d05ef4193b2ded9dd9c73dd3f6a" },
-      revocation: "AMD CRL", tcbFloors: "platform publisher", guest: { debug: false, migrateMA: false, vmpl: 0, provisionalFirmware: false } },
+      revocation: "AMD CRL", tcbFloors: "platform publisher", firmware: SNP_FIRMWARE, guest: { debug: false, migrateMA: false, vmpl: 0, provisionalFirmware: false } },
   },
   sigstoreRoot: "6494e21ea73fa7ee769f85f57d5a3e6a08725eae1e38c755fc3517c9e6bc0b66",
   issuer: "https://token.actions.githubusercontent.com",

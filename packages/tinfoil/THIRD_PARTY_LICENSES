@@ -2,6 +2,13 @@ boot-measurements.ts is adapted from tinfoilsh/tdx-measure
 https://github.com/tinfoilsh/tdx-measure/tree/9311cb9bdf3f83c9e3ec8dae4b6dff78a6d46123
 Apache-2.0; modified as a TypeScript port with stricter bounds/layout checks.
 
+snp-measurement.ts is adapted from virtee/sev-snp-measure 0.0.12
+https://pypi.org/project/sev-snp-measure/0.0.12/ (sdist SHA256 58ac5fcdb2029b7474246eab5f7603b4b22f8217efa24228eea9e328f801eaab)
+Copyright 2022- IBM Inc. Apache-2.0; modified as a TypeScript port of the
+QEMU SNP path with precomputed firmware pages and input bounds.
+
+Both are distributed under the following license.
+
                                  Apache License
                            Version 2.0, January 2004
                         http://www.apache.org/licenses/

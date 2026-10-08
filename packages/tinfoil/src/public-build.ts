@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { readBoundedBody, TeeError } from "pi-tee-core";
 import assert from "node:assert/strict";
 import { computeBootMeasurements } from "./boot-measurements.js";
+import { computeSnpLaunchDigest } from "./snp-measurement.js";
 import { PUBLIC_BUILD_HELPER_DIGEST, runPublicBuildHelper } from "./wasm-verifiers.js";
 
 const parseJson = (bytes: string | Uint8Array): any => JSON.parse(typeof bytes === "string" ? bytes : new TextDecoder("utf-8", { fatal: true }).decode(bytes));
@@ -123,14 +124,17 @@ export async function verifyPublicBuildArtifacts(options: {
     ]);
     assert.equal(sha256(kernel), cvm.hashes.kernel, "TEE_PUBLIC_KERNEL_DIGEST_REJECTED");
     assert.equal(sha256(initrd), cvm.hashes.initrd, "TEE_PUBLIC_INITRD_DIGEST_REJECTED");
-    // TDX: independently recompute the boot registers from the authenticated
-    // kernel, initrd and command line. SEV-SNP: the helper already required the
-    // quote's launch digest to equal the release's signed SNP measurement.
+    // Independently recompute the quote-bound boot measurement from the
+    // authenticated kernel, initrd and command line: TDX RTMR1/RTMR2, or the
+    // whole SEV-SNP launch digest with the pinned OVMF.
     assert(verified.platform === "tdx" || verified.platform === "sev-snp", "TEE_CPU_PLATFORM_REJECTED");
     const boot = verified.platform === "tdx" ? computeBootMeasurements(kernel, initrd, verified.vmShape.memory_mb, expectedCommand) : undefined;
+    const snpMeasurement = verified.platform === "sev-snp" ? computeSnpLaunchDigest(kernel, initrd, verified.vmShape.cpus, expectedCommand) : undefined;
     if (boot) {
       assert.equal(boot.rtmr1, verified.rtmr1, "TEE_PUBLIC_BOOT_MEASUREMENT_REJECTED");
       assert.equal(boot.rtmr2, verified.rtmr2, "TEE_PUBLIC_BOOT_MEASUREMENT_REJECTED");
+    } else {
+      assert.equal(snpMeasurement, verified.snpMeasurement, "TEE_PUBLIC_BOOT_MEASUREMENT_REJECTED");
     }
 
     // Select the registry root through the authenticated release, not delivery
@@ -205,7 +209,7 @@ export async function verifyPublicBuildArtifacts(options: {
       cvmBuildVerified: true, cvmTag, cvmCommit: cvm.commit, cvmManifestDigest: cvm.manifestDigest,
       cvmSourceUrl: `https://github.com/tinfoilsh/cvmimage/tree/${cvm.commit}`,
       kernelDigestMatched: true, initrdDigestMatched: true, guestVerityRootAuthenticated: true,
-      rtmr1Recomputed: boot?.rtmr1, rtmr2Recomputed: boot?.rtmr2,
+      rtmr1Recomputed: boot?.rtmr1, rtmr2Recomputed: boot?.rtmr2, snpMeasurementRecomputed: snpMeasurement,
       containerBuild: { ...container, publicSourceParentMatched: true, publicDockerfileBytesMatched: true },
       runtimeConfig: runtime,
       independentRebuild: false, inferenceQualified: false,
