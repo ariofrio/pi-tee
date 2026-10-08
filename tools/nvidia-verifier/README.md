@@ -9,13 +9,13 @@ Users need no compilers, containers or downloads: the extension checks each file
 
 ## Sources and changes
 
-[`source-lock.json`](source-lock.json) pins the NVIDIA SDK, Regorus, vcpkg and Emscripten SDK commits, Rust 1.90.0 and Go 1.26.6. vcpkg resolves the C/C++ dependencies from its pinned baseline and [`vcpkg.json`](vcpkg.json); Cargo uses the checked-in [`regorus.Cargo.lock`](regorus.Cargo.lock); Go uses the helper's `go.sum`.
+[`source-lock.json`](source-lock.json) pins the NVIDIA SDK, Regorus, vcpkg and Emscripten SDK commits, Rust 1.90.0 and Go 1.26.6. vcpkg resolves the C/C++ dependencies from its pinned baseline and [`vcpkg.json`](vcpkg.json), except OpenSSL, which comes from the pinned vcpkg port through the patched overlay below; Cargo uses the checked-in [`regorus.Cargo.lock`](regorus.Cargo.lock); Go uses the helper's `go.sum`.
 
 NVIDIA's verification sources are unchanged except for hash-locked patches, each requiring independent review:
 
 - [`rim-leaf-signature.patch`](patches/rim-leaf-signature.patch) verifies reference-manifest signatures with the leaf certificate that the chain check appraises, and requires whole-document references.
 - [`collectors-disabled.cpp`](collectors-disabled.cpp) replaces NVIDIA's three local-GPU collectors with functions that reject collection.
-- [`nv-http-host.cpp`](nv-http-host.cpp) replaces the libcurl transport with a request bridge to the host. libcurl remains linked only for its URL parser.
+- [`nv-http-host.cpp`](nv-http-host.cpp) replaces the libcurl transport with a request bridge to the host. It sends each request once; NVIDIA's client retried 5xx and 429 responses. NVIDIA's sources still include libcurl headers, but none of its code is linked.
 
 The Go helper's own source is in [`tools/tinfoil-public-build`](../tinfoil-public-build/README.md). Its vendored copy of in-toto replaces one Unix-only file-writability check that verification never calls ([replacement](../tinfoil-public-build/wasi/in_toto_util_unix.go.in)).
 

@@ -1,6 +1,6 @@
 // Replaces NVIDIA's libcurl transport in the WebAssembly verifier. Requests go
 // to the embedding host, which enforces its own destination allowlist, size
-// limits and timeouts. The host owns retries; this client sends each request once.
+// limits and timeouts. Neither side retries: a failed request fails the appraisal.
 #include <cstdlib>
 #include <string>
 

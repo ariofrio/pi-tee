@@ -22,7 +22,8 @@ configure_file("${sdk}/include/nvat.h.in" "include/nvat.h")
 # Preserve every verification source except hash-locked patches in source-lock.json.
 # The three collector implementations are replaced; they always reject instead
 # of loading hardware libraries. The libcurl transport is replaced by a host
-# request bridge; libcurl remains linked only for its URL parser.
+# request bridge; NVIDIA's sources still include libcurl headers, but none of
+# its code is linked.
 add_library(nvat STATIC
   ${sdk}/src/nvat.cpp ${sdk}/src/attestation.cpp ${sdk}/src/claims.cpp ${sdk}/src/claims_evaluator.cpp
   ${sdk}/src/gpu/evidence.cpp ${sdk}/src/gpu/claims.cpp ${sdk}/src/gpu/verify.cpp
@@ -36,8 +37,9 @@ add_library(nvat STATIC
 target_include_directories(nvat PUBLIC "${CMAKE_CURRENT_BINARY_DIR}/include"
   PRIVATE "${sdk}/src" "${sdk}/include" "${REGORUS_SOURCE}/bindings/ffi")
 target_compile_definitions(nvat PRIVATE JWT_DISABLE_PICOJSON)
+target_include_directories(nvat PRIVATE $<TARGET_PROPERTY:CURL::libcurl,INTERFACE_INCLUDE_DIRECTORIES>)
 target_link_libraries(nvat PUBLIC unofficial::xmlsec::xmlsec1 unofficial::xmlsec::xmlsec1-openssl
-  OpenSSL::SSL OpenSSL::Crypto CURL::libcurl LibXml2::LibXml2 spdlog::spdlog fmt::fmt
+  OpenSSL::SSL OpenSSL::Crypto LibXml2::LibXml2 spdlog::spdlog fmt::fmt
   jwt-cpp::jwt-cpp nlohmann_json::nlohmann_json "${REGORUS_LIBRARY}" Threads::Threads ${CMAKE_DL_LIBS})
 
 set(NVATTEST_FULL_VERSION "1.2.2+pi-tee-wasm")
