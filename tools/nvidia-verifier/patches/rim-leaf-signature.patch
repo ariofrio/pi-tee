@@ -1,6 +1,170 @@
 --- a/nv-attestation-sdk-cpp/src/rim.cpp
 +++ b/nv-attestation-sdk-cpp/src/rim.cpp
-@@ -199,6 +199,33 @@
+@@ -47,10 +47,112 @@
+ 
+ namespace nvattestation {
+ 
++// pi-tee: the certificates of the root's signature, in document order.
++static const char* const RIM_CERTIFICATES_XPATH = "/ns0:SoftwareIdentity/ds:Signature/ds:KeyInfo/ds:X509Data/ds:X509Certificate";
++
+     
+ // ref: https://github.com/nlohmann/json?tab=readme-ov-file#simplify-your-life-with-macros
+ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(RimResponse, id, rim, request_id, sha256);
+ 
++// pi-tee: require NVIDIA's RIM signature layout: no DTD; one ds:Signature,
++// the root's last element, holding SignedInfo, SignatureValue and X509Data
++// certificates; one whole-document reference with the enveloped-signature and
++// C14N 1.1 transforms.
++static bool is_dsig_element(xmlNodePtr node, const char* name) {
++    return node != nullptr && node->type == XML_ELEMENT_NODE && node->ns != nullptr &&
++        xmlStrEqual(node->name, BAD_CAST name) && xmlStrEqual(node->ns->href, BAD_CAST RimDocument::XML_DSIG_NAMESPACE_URI);
++}
++
++static xmlNodePtr next_element(xmlNodePtr node) {
++    while (node != nullptr && node->type != XML_ELEMENT_NODE) {
++        node = node->next;
++    }
++    return node;
++}
++
++static xmlNodePtr first_child_element(xmlNodePtr node) {
++    return node == nullptr ? nullptr : next_element(node->children);
++}
++
++static xmlNodePtr next_sibling_element(xmlNodePtr node) {
++    return node == nullptr ? nullptr : next_element(node->next);
++}
++
++static bool has_algorithm(xmlNodePtr node, const xmlChar* algorithm) {
++    auto value = nv_unique_ptr<xmlChar>(xmlGetNoNsProp(node, BAD_CAST "Algorithm"));
++    return value && xmlStrEqual(value.get(), algorithm) && first_child_element(node) == nullptr;
++}
++
++static Error get_signature_node(xmlDocPtr doc, xmlNodePtr& out_signature) {
++    xmlNodePtr root = xmlDocGetRootElement(doc);
++    if (root == nullptr || doc->intSubset != nullptr || doc->extSubset != nullptr || root->ns == nullptr ||
++            !xmlStrEqual(root->name, BAD_CAST "SoftwareIdentity") ||
++            !xmlStrEqual(root->ns->href, BAD_CAST RimDocument::ISO_19770_SCHEMA_NAMESPACE_URI)) {
++        LOG_ERROR("RIM is not a SoftwareIdentity document without a DTD");
++        return Error::RimInvalidSignature;
++    }
++
++    // Exactly one ds:Signature, the root's last element.
++    auto x_path_ctx = nv_unique_ptr<xmlXPathContext>(xmlXPathNewContext(doc));
++    if (!x_path_ctx || xmlXPathRegisterNs(x_path_ctx.get(), BAD_CAST "ds", BAD_CAST RimDocument::XML_DSIG_NAMESPACE_URI) != 0) {
++        LOG_ERROR("Failed to create XPath context");
++        return Error::InternalError;
++    }
++    auto signatures = nv_unique_ptr<xmlXPathObject>(xmlXPathEvalExpression(BAD_CAST "//ds:Signature", x_path_ctx.get()));
++    xmlNodePtr signature = nullptr;
++    for (xmlNodePtr child = first_child_element(root); child != nullptr; child = next_sibling_element(child)) {
++        signature = child;
++    }
++    if (!signatures || signatures->nodesetval == nullptr || signatures->nodesetval->nodeNr != 1 ||
++            signatures->nodesetval->nodeTab[0] != signature || !is_dsig_element(signature, "Signature")) {
++        LOG_ERROR("RIM must contain one signature, as the root's last element");
++        return Error::RimInvalidSignature;
++    }
++
++    // Signature: SignedInfo, SignatureValue and KeyInfo with only X509Data certificates.
++    xmlNodePtr signed_info = first_child_element(signature);
++    xmlNodePtr signature_value = next_sibling_element(signed_info);
++    xmlNodePtr key_info = next_sibling_element(signature_value);
++    xmlNodePtr x509_data = first_child_element(key_info);
++    if (!is_dsig_element(signed_info, "SignedInfo") || !is_dsig_element(signature_value, "SignatureValue") ||
++            first_child_element(signature_value) != nullptr || !is_dsig_element(key_info, "KeyInfo") ||
++            next_sibling_element(key_info) != nullptr || !is_dsig_element(x509_data, "X509Data") ||
++            next_sibling_element(x509_data) != nullptr || first_child_element(x509_data) == nullptr) {
++        LOG_ERROR("RIM signature has unexpected elements");
++        return Error::RimInvalidSignature;
++    }
++    for (xmlNodePtr cert = first_child_element(x509_data); cert != nullptr; cert = next_sibling_element(cert)) {
++        if (!is_dsig_element(cert, "X509Certificate") || first_child_element(cert) != nullptr) {
++            LOG_ERROR("RIM KeyInfo must contain only X509 certificates");
++            return Error::RimInvalidSignature;
++        }
++    }
++
++    // SignedInfo: one whole-document reference with the enveloped-signature
++    // and C14N 1.1 transforms.
++    xmlNodePtr c14n_method = first_child_element(signed_info);
++    xmlNodePtr signature_method = next_sibling_element(c14n_method);
++    xmlNodePtr reference = next_sibling_element(signature_method);
++    xmlNodePtr transforms = first_child_element(reference);
++    xmlNodePtr digest_method = next_sibling_element(transforms);
++    xmlNodePtr digest_value = next_sibling_element(digest_method);
++    xmlNodePtr enveloped = first_child_element(transforms);
++    xmlNodePtr c14n = next_sibling_element(enveloped);
++    auto uri = nv_unique_ptr<xmlChar>(reference == nullptr ? nullptr : xmlGetNoNsProp(reference, BAD_CAST "URI"));
++    if (!is_dsig_element(c14n_method, "CanonicalizationMethod") || !is_dsig_element(signature_method, "SignatureMethod") ||
++            !is_dsig_element(reference, "Reference") || next_sibling_element(reference) != nullptr || !uri || uri.get()[0] != '\0' ||
++            !is_dsig_element(transforms, "Transforms") || !is_dsig_element(digest_method, "DigestMethod") ||
++            !is_dsig_element(digest_value, "DigestValue") || next_sibling_element(digest_value) != nullptr ||
++            !is_dsig_element(enveloped, "Transform") || !has_algorithm(enveloped, xmlSecHrefEnveloped) ||
++            !is_dsig_element(c14n, "Transform") || !has_algorithm(c14n, xmlSecHrefC14N11) || next_sibling_element(c14n) != nullptr) {
++        LOG_ERROR("RIM signature must have one whole-document reference");
++        return Error::RimInvalidSignature;
++    }
++
++    out_signature = signature;
++    return Error::Ok;
++}
++
+ // RimDocumentImpl functions
+ 
+ Error RimDocument::create_from_rim_data(const std::string &rim_data, RimDocument& out_rim_document) {
+@@ -71,6 +173,12 @@
+         LOG_ERROR(error_msg);
+         return Error::InternalError;
+     }
++    // pi-tee: check the signature layout before any RIM content is read.
++    xmlNodePtr signature = nullptr;
++    Error layout_error = get_signature_node(doc.get(), signature);
++    if (layout_error != Error::Ok) {
++        return layout_error;
++    }
+     out_rim_document.m_rim_data = rim_data;
+     out_rim_document.m_doc = std::move(doc);
+ 
+@@ -104,12 +212,14 @@
+         return Error::InternalError;
+     }
+ 
+-    if(xmlXPathRegisterNs(x_path_ctx.get(), BAD_CAST "ds", BAD_CAST RimDocument::XML_DSIG_NAMESPACE_URI) != 0) {
++    if(xmlXPathRegisterNs(x_path_ctx.get(), BAD_CAST "ds", BAD_CAST RimDocument::XML_DSIG_NAMESPACE_URI) != 0 ||
++            xmlXPathRegisterNs(x_path_ctx.get(), BAD_CAST "ns0", BAD_CAST RimDocument::ISO_19770_SCHEMA_NAMESPACE_URI) != 0) {
+         LOG_ERROR("Failed to register namespace");
+         return Error::InternalError;
+     }
+ 
+-    auto x_path_obj = nv_unique_ptr<xmlXPathObject>(xmlXPathEvalExpression(BAD_CAST "//ds:X509Certificate", x_path_ctx.get()));
++    // pi-tee: read certificates from the signature's X509Data only.
++    auto x_path_obj = nv_unique_ptr<xmlXPathObject>(xmlXPathEvalExpression(BAD_CAST RIM_CERTIFICATES_XPATH, x_path_ctx.get()));
+     if (!x_path_obj) {
+         LOG_ERROR("Failed to get X509Certificate XPath object");
+         return Error::InternalError;
+@@ -173,7 +283,8 @@
+     }
+ 
+     // Find the Meta element with colloquialVersion attribute
+-    auto x_path_obj = nv_unique_ptr<xmlXPathObject>(xmlXPathEvalExpression(BAD_CAST "//ns0:Meta[@colloquialVersion]", x_path_ctx.get()));
++    // pi-tee: read the root's Meta only.
++    auto x_path_obj = nv_unique_ptr<xmlXPathObject>(xmlXPathEvalExpression(BAD_CAST "/ns0:SoftwareIdentity/ns0:Meta[@colloquialVersion]", x_path_ctx.get()));
+     if (!x_path_obj) {
+         LOG_ERROR("Failed to get Meta XPath object");
+         return Error::RimInvalidSchema;
+@@ -185,8 +296,8 @@
+         return Error::RimInvalidSchema;
+     }
+ 
+-    if (nodes->nodeNr == 0) {
+-        LOG_ERROR("No Meta element with colloquialVersion attribute found in RIM data");
++    if (nodes->nodeNr != 1) {
++        LOG_ERROR("Expected exactly 1 Meta element with colloquialVersion attribute, found " << nodes->nodeNr);
+         return Error::RimInvalidSchema;
+     }
+ 
+@@ -199,6 +310,34 @@
      }
  
      out_version = std::string(reinterpret_cast<const char*>(version_attr.get()));
@@ -14,11 +178,12 @@
 +        LOG_ERROR("Failed to create XPath context");
 +        return Error::InternalError;
 +    }
-+    if (xmlXPathRegisterNs(x_path_ctx.get(), BAD_CAST "ds", BAD_CAST dsig_namespace) != 0) {
++    if (xmlXPathRegisterNs(x_path_ctx.get(), BAD_CAST "ds", BAD_CAST dsig_namespace) != 0 ||
++            xmlXPathRegisterNs(x_path_ctx.get(), BAD_CAST "ns0", BAD_CAST RimDocument::ISO_19770_SCHEMA_NAMESPACE_URI) != 0) {
 +        LOG_ERROR("Failed to register namespace");
 +        return Error::InternalError;
 +    }
-+    auto x_path_obj = nv_unique_ptr<xmlXPathObject>(xmlXPathEvalExpression(BAD_CAST "//ds:X509Certificate", x_path_ctx.get()));
++    auto x_path_obj = nv_unique_ptr<xmlXPathObject>(xmlXPathEvalExpression(BAD_CAST RIM_CERTIFICATES_XPATH, x_path_ctx.get()));
 +    if (!x_path_obj || x_path_obj->nodesetval == nullptr || x_path_obj->nodesetval->nodeNr == 0) {
 +        LOG_ERROR("No X509Certificate found in RIM data");
 +        return Error::RimInvalidSignature;
@@ -34,10 +199,28 @@
      return Error::Ok;
  }
  
-@@ -236,9 +263,26 @@
+@@ -220,10 +359,11 @@
+         return Error::InternalError;
+     }
+ 
+-    xmlNodePtr node = xmlSecFindNode(root, xmlSecNodeSignature, xmlSecDSigNs);
+-    if (node == nullptr) {
+-        LOG_ERROR("Failed to find signature node in RIM file");
+-        return Error::RimInvalidSchema;
++    // pi-tee: verify the signature whose layout get_signature_node() checked.
++    xmlNodePtr node = nullptr;
++    Error layout_error = get_signature_node(m_doc.get(), node);
++    if (layout_error != Error::Ok) {
++        return layout_error;
+     }
+ 
+     nv_unique_ptr<xmlSecDSigCtx> d_sig_ctx(xmlSecDSigCtxCreate(keys_mngr.get()));
+@@ -236,11 +376,37 @@
      // we verify cert chain in a different method, so set the appropriate flag here to disable that.
      d_sig_ctx->keyInfoReadCtx.flags |= XMLSEC_KEYINFO_FLAGS_X509DATA_DONT_VERIFY_CERTS;
  
+-    if (xmlSecDSigCtxVerify(d_sig_ctx.get(), node) < 0) {
+-        LOG_ERROR("Failed to verify signature");
 +    // pi-tee: verify with the public key of the same leaf certificate that
 +    // get_cert_chain() appraises.
 +    std::string leaf_cert;
@@ -53,13 +236,52 @@
 +    }
 +    // pi-tee: NVIDIA RIM signatures cover the whole enveloping document.
 +    d_sig_ctx->enabledReferenceUris = xmlSecTransformUriTypeEmpty;
-+
-     if (xmlSecDSigCtxVerify(d_sig_ctx.get(), node) < 0) {
--        LOG_ERROR("Failed to verify signature");
--        return Error::InternalError;
++    // pi-tee: ignore manifests and allow only the reference transforms and
++    // digest NVIDIA RIMs use.
++    d_sig_ctx->flags |= XMLSEC_DSIG_FLAGS_IGNORE_MANIFESTS;
++    if (xmlSecDSigCtxEnableReferenceTransform(d_sig_ctx.get(), xmlSecTransformEnvelopedId) < 0 ||
++            xmlSecDSigCtxEnableReferenceTransform(d_sig_ctx.get(), xmlSecTransformInclC14N11Id) < 0 ||
++            xmlSecDSigCtxEnableReferenceTransform(d_sig_ctx.get(), xmlSecTransformSha384Id) < 0) {
++        LOG_ERROR("Failed to restrict RIM reference transforms");
+         return Error::InternalError;
+     }
+ 
++    if (xmlSecDSigCtxVerify(d_sig_ctx.get(), node) < 0) {
 +        // pi-tee: report verification failures as signature rejections.
 +        LOG_ERROR("Failed to verify signature with the RIM leaf certificate");
 +        return Error::RimInvalidSignature;
++    }
++
+     if (d_sig_ctx->status != xmlSecDSigStatusSucceeded) {
+         // RIM signature is not valid
+         LOG_ERROR("RIM signature is not valid");
+@@ -309,7 +475,8 @@
      }
  
-     if (d_sig_ctx->status != xmlSecDSigStatusSucceeded) {
+     // Query for measurement elements
+-    auto x_path_obj = nv_unique_ptr<xmlXPathObject>(xmlXPathEvalExpression(BAD_CAST "//ns0:Resource[@type='Measurement']", x_path_ctx.get()));
++    // pi-tee: read the root's Payload only.
++    auto x_path_obj = nv_unique_ptr<xmlXPathObject>(xmlXPathEvalExpression(BAD_CAST "/ns0:SoftwareIdentity/ns0:Payload/ns0:Resource[@type='Measurement']", x_path_ctx.get()));
+     if (!x_path_obj) {
+         LOG_ERROR("Failed to evaluate XPath expression for measurements");
+         return Error::LibXml2Error;
+@@ -414,7 +581,8 @@
+     }
+ 
+     // Find the Meta element with ns1:FirmwareManufacturerId attribute
+-    auto x_path_obj = nv_unique_ptr<xmlXPathObject>(xmlXPathEvalExpression(BAD_CAST "//ns0:Meta[@ns1:FirmwareManufacturerId]", x_path_ctx.get()));
++    // pi-tee: read the root's Meta only.
++    auto x_path_obj = nv_unique_ptr<xmlXPathObject>(xmlXPathEvalExpression(BAD_CAST "/ns0:SoftwareIdentity/ns0:Meta[@ns1:FirmwareManufacturerId]", x_path_ctx.get()));
+     if (!x_path_obj) {
+         LOG_ERROR("Failed to get Meta XPath object");
+         return Error::RimInvalidSchema;
+@@ -532,7 +700,8 @@
+     error = RimDocument::create_from_rim_data(decoded_rim_data, rim_document);
+     if (error != Error::Ok) {
+         LOG_ERROR("Failed to create RimDocument from RIM data");
+-        return Error::InternalError;
++        // pi-tee: keep the signature-layout rejection code.
++        return error == Error::RimInvalidSignature ? error : Error::InternalError;
+     }
+     out_rim_document = std::move(rim_document);
+     return Error::Ok;

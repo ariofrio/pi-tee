@@ -13,7 +13,11 @@ Users need no compilers, containers or downloads: the extension checks each file
 
 NVIDIA's verification sources are unchanged except for hash-locked patches, each requiring independent review:
 
-- [`rim-leaf-signature.patch`](patches/rim-leaf-signature.patch) verifies reference-manifest signatures with the leaf certificate that the chain check appraises, and requires whole-document references.
+- [`rim-leaf-signature.patch`](patches/rim-leaf-signature.patch) hardens reference-manifest (RIM) appraisal:
+  - It verifies signatures with the leaf certificate that the chain check appraises.
+  - It requires NVIDIA's signature layout: no DTD; one signature, the root's last element, holding `SignedInfo`, `SignatureValue` and `X509Data` certificates; and one whole-document reference with only the enveloped-signature and C14N 1.1 transforms. Layout violations are signature rejections (NVIDIA code 105).
+  - It reads the version, manufacturer, measurements and certificates only from their fixed signed locations, and requires exactly one version `Meta`.
+  - It ignores manifests and allows only the enveloped-signature, C14N 1.1 and SHA-384 reference transforms.
 - [`collectors-disabled.cpp`](collectors-disabled.cpp) replaces NVIDIA's three local-GPU collectors with functions that reject collection.
 - [`nv-http-host.cpp`](nv-http-host.cpp) replaces the libcurl transport with a request bridge to the host. It sends each request once; NVIDIA's client retried 5xx and 429 responses. NVIDIA's sources still include libcurl headers, but none of its code is linked.
 
@@ -36,6 +40,6 @@ Maintainers need Git, CMake, a C/C++ host toolchain, Rust 1.90.0 with the `wasm3
 
 ## Checks
 
-[`check-nvidia-verifier.ts`](../../scripts/check-nvidia-verifier.ts) appraises fresh public Gemma (one Hopper) GPU evidence through the WebAssembly verifier; live appraisal of the eight-GPU Blackwell workers exercises the multi-GPU path. It checks authentic evidence and rejects a wrong nonce and corrupted report, signed-mode, certificate, reference-manifest and OCSP signatures. A loopback proxy relays authentic NVIDIA collateral as the positive control for the collateral cases. Each negative requires a specific NVIDIA result code; delivery errors cannot pass. Under Node, a verifier process started with proxy settings must still reach the relay directly. No credentials or inference are sent. [`wasm-verifiers.test.ts`](../../tests/wasm-verifiers.test.ts) covers artifact authentication, the absent file system, the shim's import and memory bounds, cancellation (including before a worker starts), an offline release authentication, and the request bridge: a stub `fetch` checks its destinations, forwarded headers, redirect setting, size limits and request cap.
+[`check-nvidia-verifier.ts`](../../scripts/check-nvidia-verifier.ts) appraises fresh public Gemma (one Hopper) GPU evidence through the WebAssembly verifier; live appraisal of the eight-GPU Blackwell workers exercises the multi-GPU path. It checks authentic evidence and rejects a wrong nonce and corrupted report, signed-mode, certificate, reference-manifest and OCSP signatures. It also rejects driver manifests whose layout differs from NVIDIA's, built from the genuine manifest: an extra `KeyInfo` element, a signature that is not the root's last element, a `ds:Object`, a manifest reference and a DTD (105), and a duplicate version `Meta` (106). A loopback proxy relays authentic NVIDIA collateral as the positive control for the collateral cases. Each negative requires a specific NVIDIA result code; delivery errors cannot pass. Under Node, a verifier process started with proxy settings must still reach the relay directly. No credentials or inference are sent. [`wasm-verifiers.test.ts`](../../tests/wasm-verifiers.test.ts) covers artifact authentication, the absent file system, the shim's import and memory bounds, cancellation (including before a worker starts), an offline release authentication, and the request bridge: a stub `fetch` checks its destinations, forwarded headers, redirect setting, size limits and request cap.
 
 Written by Claude.

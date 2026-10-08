@@ -16,10 +16,10 @@
   "patches": [
     {
       "file": "patches/rim-leaf-signature.patch",
-      "sha256": "9517fc51399f385ac2108ddcbddb77756a77329c53851f567f1fda7f30dbbe96",
+      "sha256": "d6c8ed51ee6fab810351c196ac209610811808ac160681606cf87ec6f5aad49e",
       "source": "nv-attestation-sdk-cpp/src/rim.cpp",
       "sourceSha256": "42ee94f69f87569892f1753f44b82c32e58aa330b2a91c44ae59e92708aacd5b",
-      "resultSha256": "717813c698286c225527299d781614d919aef1bd466a17b54e5a1364a18ad719"
+      "resultSha256": "e752c2da219ef270b27f0501ac86c7e95bb91b252103d0161a39fb71e20fc143"
     }
   ],
   "emsdk": {

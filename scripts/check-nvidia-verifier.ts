@@ -8,7 +8,7 @@ import { discoverTinfoilWorkers } from "../packages/tinfoil/src/worker-discovery
 import { gpuVersionsAllowed } from "../packages/tinfoil/src/gpu-policy.js";
 import { parseHopperGpuMode } from "../packages/tinfoil/src/gpu-mode.js";
 import { runNvidiaVerifier } from "../packages/tinfoil/src/wasm-verifiers.js";
-import { collateralOracle } from "./research/nvidia-collateral.js";
+import { collateralOracle, RIM_LAYOUT_CODES } from "./research/nvidia-collateral.js";
 
 // GPU verifier seam only: no CPU/workload appraisal, credentials or inference.
 const required = [
@@ -125,7 +125,8 @@ try {
     console.log(JSON.stringify({ case: label, accepted: expectedCode === 0, resultCode: result.result_code, inferenceRequests: 0, cpuVerified: false, workloadQualified: false }));
   }
   if (process.argv.includes("--collateral")) {
-    for (const mode of ["authentic", "rim-signature", "ocsp-signature"] as const) {
+    const expectedCodes = { "rim-signature": 105, "ocsp-signature": 12, ...RIM_LAYOUT_CODES };
+    for (const mode of ["authentic", ...Object.keys(expectedCodes) as (keyof typeof expectedCodes)[]] as const) {
       phase = `collateral-${mode}`;
       const oracle = await collateralOracle(mode);
       try {
@@ -136,7 +137,7 @@ try {
           assert.equal(code, 0); assert.equal(accepted(result, nonce, evidence), true); assert.equal(observations.mutations, 0);
         } else {
           assert.notEqual(code, 0); assert.equal(accepted(result, nonce, evidence), false); assert.ok(observations.mutations > 0);
-          assert.equal(result.result_code, mode === "rim-signature" ? 105 : 12);
+          assert.equal(result.result_code, expectedCodes[mode]);
           if (mode === "ocsp-signature") {
             assert.ok(result.claims?.some((claim: any) => ["x-nvidia-gpu-attestation-report-cert-chain", "x-nvidia-gpu-driver-rim-cert-chain", "x-nvidia-gpu-vbios-rim-cert-chain"].some(name => claim[name]?.["x-nvidia-cert-ocsp-response-valid"] === false)));
           }

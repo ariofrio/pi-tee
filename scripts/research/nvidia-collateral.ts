@@ -2,9 +2,20 @@ import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { readBoundedBody } from "../../packages/core/src/transport.js";
 
+// Layout changes to the genuine driver RIM, with the NVIDIA result code each
+// must produce. The verifier accepts only NVIDIA's signature layout and one
+// version Meta.
+export const RIM_LAYOUT_CODES = {
+  "rim-signature-extra-keyinfo": 105, "rim-signature-not-last": 105, "rim-signature-object": 105,
+  "rim-manifest-reference": 105, "rim-doctype": 105, "rim-duplicate-meta": 106,
+} as const;
+type RimLayoutMode = keyof typeof RIM_LAYOUT_CODES;
+export type CollateralMode = "authentic" | "rim-signature" | "ocsp-signature" | RimLayoutMode;
+const layoutMode = (mode: CollateralMode): mode is RimLayoutMode => Object.hasOwn(RIM_LAYOUT_CODES, mode);
+
 // Test delivery seams only. NVIDIA's verifier must authenticate the
 // exact reference/revocation bytes. No GPU report or credentials go upstream.
-export async function collateralOracle(mode: "authentic" | "rim-signature" | "ocsp-signature") {
+export async function collateralOracle(mode: CollateralMode) {
   let mutations = 0, deliveries = 0, failures = 0;
   const server = createServer((request, response) => {
     void (async () => {
@@ -30,6 +41,11 @@ export async function collateralOracle(mode: "authentic" | "rim-signature" | "oc
         const upstream = await fetch(`https://rim.attestation.nvidia.com${request.url}`, { signal, redirect: "error" });
         if (!upstream.ok) throw Error();
         bytes = await readBoundedBody(upstream.body, 16 * 1024 * 1024, signal);
+        if (request.url!.startsWith("/v1/rim/NV_GPU_DRIVER_") && layoutMode(mode)) {
+          const rim = JSON.parse(Buffer.from(bytes).toString("utf8"));
+          rim.rim = Buffer.from(changedLayout(mode, Buffer.from(rim.rim, "base64").toString("utf8"))).toString("base64");
+          bytes = Buffer.from(JSON.stringify(rim)); mutations++;
+        }
         if (mode === "rim-signature") {
           const rim = JSON.parse(Buffer.from(bytes).toString("utf8"));
           let changed = false;
@@ -62,6 +78,29 @@ export async function collateralOracle(mode: "authentic" | "rim-signature" | "oc
       await new Promise<void>(resolve => server.close(() => resolve()));
     },
   };
+}
+
+function insert(xml: string, before: string, text: string) {
+  assert.equal(xml.split(before).length, 2, `expected one ${before}`);
+  return xml.replace(before, () => text + before);
+}
+function changedLayout(mode: RimLayoutMode, xml: string) {
+  const start = xml.indexOf("<ds:Signature "), end = xml.indexOf("</ds:Signature>") + "</ds:Signature>".length;
+  assert.ok(start > 0 && end > start && xml.indexOf("<ds:Signature ", start + 1) < 0);
+  switch (mode) {
+    case "rim-signature-extra-keyinfo": return insert(xml, "<ds:X509Data>", "<ds:KeyName>pi-tee</ds:KeyName>");
+    case "rim-signature-not-last": {
+      const rest = xml.slice(0, start) + xml.slice(end), root = rest.indexOf(">", rest.indexOf("<SoftwareIdentity ")) + 1;
+      return rest.slice(0, root) + xml.slice(start, end) + rest.slice(root);
+    }
+    case "rim-signature-object": return insert(xml, "</ds:Signature>", "<ds:Object></ds:Object>");
+    case "rim-manifest-reference": return insert(xml, "</ds:Signature>", `<ds:Object><ds:Manifest><ds:Reference URI=""><ds:DigestMethod Algorithm="http://www.w3.org/2001/04/xmldsig-more#sha384"/><ds:DigestValue>${"A".repeat(64)}</ds:DigestValue></ds:Reference></ds:Manifest></ds:Object>`);
+    case "rim-doctype": return `<!DOCTYPE SoftwareIdentity>\n${xml}`;
+    case "rim-duplicate-meta": {
+      const meta = /<ns0:Meta [^>]*\/>/.exec(xml)![0];
+      return insert(xml, meta, meta);
+    }
+  }
 }
 
 function corruptOcspSignature(bytes: Buffer): Buffer {

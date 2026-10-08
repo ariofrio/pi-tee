@@ -9,7 +9,7 @@ Pi's [binary builds](https://github.com/earendil-works/pi/blob/eb326d265ae0b8848
 | Component | Implementation |
 | --- | --- |
 | CPU and release verifier | The Go public-build helper as a WASI command, under a minimal shim with no file system or network. |
-| GPU verifier | NVIDIA's verifier with the [reference-signer patch](../tools/nvidia-verifier/patches/rim-leaf-signature.patch), compiled with Emscripten. It fetches signed NVIDIA references and OCSP responses through a bridge restricted to NVIDIA's two services. |
+| GPU verifier | NVIDIA's verifier with the [reference-manifest patch](../tools/nvidia-verifier/patches/rim-leaf-signature.patch), compiled with Emscripten. The patch binds the signer to the appraised certificate, requires NVIDIA's signature layout and reads manifest content only from signed locations. It fetches signed NVIDIA references and OCSP responses through a bridge restricted to NVIDIA's two services. |
 | Inference transport | `node:tls` checks the attested SPKI on the socket, then writes one HTTP/1.1 request on that socket and reads the response. Bun's `https.Agent` cannot adopt an externally verified socket, so `node:https` is not used. |
 
 The extension authenticates each module's SHA-256 before compiling it. Verifiers run in worker threads that are terminated on cancellation or timeout. The pinned hashes authenticate the client installation; they do not freeze Tinfoil's workload releases.
