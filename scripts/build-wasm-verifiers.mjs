@@ -1,8 +1,11 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
+import { createReadStream, createWriteStream } from "node:fs";
 import { copyFile, cp, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
+import { Readable } from "node:stream";
+import { pipeline } from "node:stream/promises";
 import { gunzipSync, gzipSync } from "node:zlib";
 
 // Maintainer build of the platform-independent verifier modules shipped in
@@ -25,6 +28,11 @@ function run(executable, args, cwd = root, env = baseEnv, capture = false) {
   if (capture && result.status !== 0) process.stderr.write(result.stderr ?? "");
   assert.equal(result.status, 0, `${executable} ${args[0] ?? ""} failed (${result.error?.code ?? result.status})`);
   return result.stdout?.trim() ?? "";
+}
+async function fileSha256(path) {
+  const hash = createHash("sha256");
+  for await (const chunk of createReadStream(path)) hash.update(chunk);
+  return hash.digest("hex");
 }
 async function source(name) {
   const path = resolve(root, name);
@@ -80,8 +88,30 @@ if (goOnly) {
 const sdk = await source("sdk"), regorus = await source("regorus"), vcpkg = await source("vcpkg");
 await source("emsdk");
 for (const path of [sdk, vcpkg]) assert.equal(run("git", ["status", "--porcelain", "--untracked-files=no"], path, baseEnv, true), "", "pinned source must be clean");
-run(resolve(emsdk, "emsdk"), ["install", lock.emsdk.version], emsdk);
-run(resolve(emsdk, "emsdk"), ["activate", lock.emsdk.version], emsdk);
+
+// emsdk downloads its toolchain archives (LLVM, Binaryen, Emscripten, Node and
+// on macOS Python) without checking their contents. Place hash-pinned archives
+// where emsdk reuses kept downloads, and reinstall whenever the verified set
+// changes, so that it extracts exactly these bytes.
+const archives = lock.emsdk.archives[`${process.platform}-${process.arch}`];
+assert.ok(archives, `no pinned Emscripten toolchain for ${process.platform}-${process.arch}`);
+const toolchainMarker = resolve(emsdk, "pi-tee-toolchain.json");
+if ((await readFile(toolchainMarker, "utf8").catch(() => "")) !== JSON.stringify(archives)) {
+  for (const name of ["upstream", "node", "python", toolchainMarker]) await rm(resolve(emsdk, name), { recursive: true, force: true });
+}
+for (const archive of archives) {
+  const path = resolve(emsdk, "downloads", archive.file);
+  if (await fileSha256(path).catch(() => null) === archive.sha256) continue;
+  await mkdir(dirname(path), { recursive: true });
+  const response = await fetch(archive.url, { redirect: "error" });
+  assert.ok(response.ok, `${archive.url} returned ${response.status}`);
+  await pipeline(Readable.fromWeb(response.body), createWriteStream(path));
+  assert.equal(await fileSha256(path), archive.sha256, `${archive.file} does not match source-lock.json`);
+}
+const emsdkEnv = { ...baseEnv, EMSDK_KEEP_DOWNLOADS: "1" };
+run(resolve(emsdk, "emsdk"), ["install", lock.emsdk.version], emsdk, emsdkEnv);
+run(resolve(emsdk, "emsdk"), ["activate", lock.emsdk.version], emsdk, emsdkEnv);
+await writeFile(toolchainMarker, JSON.stringify(archives));
 const emscripten = resolve(emsdk, "upstream/emscripten");
 const env = { ...baseEnv, EMSDK: emsdk, EM_CACHE: resolve(root, "emscripten-cache"), PATH: `${emscripten}:${baseEnv.PATH}` };
 assert.match(run(resolve(emscripten, "emcc"), ["--version"], root, env, true), new RegExp(`^emcc .* ${lock.emsdk.version.replaceAll(".", "\\.")} `));

@@ -25,7 +25,67 @@
   "emsdk": {
     "repository": "https://github.com/emscripten-core/emsdk.git",
     "commit": "b44154299bdefe75ba287874bb63fc9806243771",
-    "version": "6.0.11"
+    "version": "6.0.11",
+    "archives": {
+      "linux-x64": [
+        {
+          "file": "node-v24.19.0-linux-x64.tar.xz",
+          "url": "https://storage.googleapis.com/webassembly/emscripten-releases-builds/deps/node-v24.19.0-linux-x64.tar.xz",
+          "sha256": "14b342e71204f811bde6153be8e04b62aef63c236fef92b55f9c83154b409647"
+        },
+        {
+          "file": "f6264d4a4dd9ba24a9f0a5702835a44d1463de13-wasm-binaries.tar.xz",
+          "url": "https://storage.googleapis.com/webassembly/emscripten-releases-builds/linux/f6264d4a4dd9ba24a9f0a5702835a44d1463de13/wasm-binaries.tar.xz",
+          "sha256": "cab251b54999e8fb4260080f0e719796336570396e118865013a20b8d93dbb83"
+        }
+      ],
+      "linux-arm64": [
+        {
+          "file": "node-v24.19.0-linux-arm64.tar.xz",
+          "url": "https://storage.googleapis.com/webassembly/emscripten-releases-builds/deps/node-v24.19.0-linux-arm64.tar.xz",
+          "sha256": "01443c1e1a29e531ccad5a46fefa6df490d2189c49f7955904aecdbb0fe86fdc"
+        },
+        {
+          "file": "f6264d4a4dd9ba24a9f0a5702835a44d1463de13-wasm-binaries-arm64.tar.xz",
+          "url": "https://storage.googleapis.com/webassembly/emscripten-releases-builds/linux/f6264d4a4dd9ba24a9f0a5702835a44d1463de13/wasm-binaries-arm64.tar.xz",
+          "sha256": "9146dd517c705d30505942d0eb6786ed11ea59cc8acd19fea50d21c3d732532b"
+        }
+      ],
+      "darwin-x64": [
+        {
+          "file": "node-v24.19.0-darwin-x64.tar.gz",
+          "url": "https://storage.googleapis.com/webassembly/emscripten-releases-builds/deps/node-v24.19.0-darwin-x64.tar.gz",
+          "sha256": "d1b5e999db158c62fe8f7267a4476b035d8bd93b1a605bac24a3f0dd166e3316"
+        },
+        {
+          "file": "python-3.13.3-0-macos-x86_64.tar.gz",
+          "url": "https://storage.googleapis.com/webassembly/emscripten-releases-builds/deps/python-3.13.3-0-macos-x86_64.tar.gz",
+          "sha256": "d3f30e1b78354d6f74fae951175dc2bd22b386aafeab13edd6ac7c9613b0d33c"
+        },
+        {
+          "file": "f6264d4a4dd9ba24a9f0a5702835a44d1463de13-wasm-binaries.tar.xz",
+          "url": "https://storage.googleapis.com/webassembly/emscripten-releases-builds/mac/f6264d4a4dd9ba24a9f0a5702835a44d1463de13/wasm-binaries.tar.xz",
+          "sha256": "5959c07b2206d82414878ad118f9988ccdf489fe8a9e54b7a4dcdec57d8298a6"
+        }
+      ],
+      "darwin-arm64": [
+        {
+          "file": "node-v24.19.0-darwin-arm64.tar.gz",
+          "url": "https://storage.googleapis.com/webassembly/emscripten-releases-builds/deps/node-v24.19.0-darwin-arm64.tar.gz",
+          "sha256": "8294b7aa9b03997481c06babf1e8b270c859358f27da57a11509afe537ac381d"
+        },
+        {
+          "file": "python-3.13.3-0-macos-arm64.tar.gz",
+          "url": "https://storage.googleapis.com/webassembly/emscripten-releases-builds/deps/python-3.13.3-0-macos-arm64.tar.gz",
+          "sha256": "2b0899d7ade9463b0c909ef23aeea27546a4f412637998d817a49718bc2bac19"
+        },
+        {
+          "file": "f6264d4a4dd9ba24a9f0a5702835a44d1463de13-wasm-binaries-arm64.tar.xz",
+          "url": "https://storage.googleapis.com/webassembly/emscripten-releases-builds/mac/f6264d4a4dd9ba24a9f0a5702835a44d1463de13/wasm-binaries-arm64.tar.xz",
+          "sha256": "8151a0cd16b9fee579e73b8b31905e7073cdf20e76a91858ff807858a635fa5d"
+        }
+      ]
+    }
   },
   "go": "go1.26.6",
   "vcpkgPatches": [

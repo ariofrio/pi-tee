@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Hash-pin the Emscripten toolchain archives (LLVM, Binaryen, Emscripten, Node, Python) for Linux and macOS build hosts; emsdk itself installs them unchecked.
+
 - Harden the WebAssembly verifier hosts: the WASI shim resolves only its own imports and returns `EFAULT` for buffers past the end of guest memory instead of truncating them, a cancellation that arrives while the NVIDIA verifier is loading now stops it before its worker starts, and the worker imports NVIDIA's JavaScript glue from the authenticated bytes instead of re-reading the file. Under Node, the NVIDIA worker no longer follows `NODE_USE_ENV_PROXY` proxy settings; Bun still applies `HTTP(S)_PROXY`, now documented.
 
 - Key SEV-SNP firmware floors on the report's CPU model and raise them to AMD-SB-3019/3020/3027 (Genoa SNP SPL 0x1B and microcode 0x56, Genoa-X 0x1B/0x51, Turin 0x04/0x51). Reject other CPU models and non-production machine policies on both platforms. Gemma's current Genoa workers fall below these floors and are rejected; its TDX workers still serve.

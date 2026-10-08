@@ -9,7 +9,7 @@ Users need no compilers, containers or downloads: the extension checks each file
 
 ## Sources and changes
 
-[`source-lock.json`](source-lock.json) pins the NVIDIA SDK, Regorus, vcpkg and Emscripten SDK commits, Rust 1.90.0 and Go 1.26.6. vcpkg resolves the C/C++ dependencies from its pinned baseline and [`vcpkg.json`](vcpkg.json), except OpenSSL, which comes from the pinned vcpkg port through the patched overlay below; Cargo uses the checked-in [`regorus.Cargo.lock`](regorus.Cargo.lock); Go uses the helper's `go.sum`.
+[`source-lock.json`](source-lock.json) pins the NVIDIA SDK, Regorus, vcpkg and Emscripten SDK commits, Rust 1.90.0 and Go 1.26.6. It also pins the SHA-256 of each archive the Emscripten SDK installs on Linux and macOS hosts (LLVM, Binaryen and Emscripten, Node, and on macOS Python); the build places the checked archives where emsdk installs from. vcpkg resolves the C/C++ dependencies from its pinned baseline and [`vcpkg.json`](vcpkg.json), except OpenSSL, which comes from the pinned vcpkg port through the patched overlay below; Cargo uses the checked-in [`regorus.Cargo.lock`](regorus.Cargo.lock); Go uses the helper's `go.sum`.
 
 NVIDIA's verification sources are unchanged except for hash-locked patches, each requiring independent review:
 
