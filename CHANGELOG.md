@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Replace the Docker-hosted NVIDIA verifier and native Go helpers with WebAssembly modules shipped in `pi-tinfoil`: NVIDIA's verifier with the reference-signer patch (Emscripten) and the public-build CPU/release verifier (WASI). Both are hash-checked before compilation and run in terminable worker threads; the CPU verifier has no file system or network, and the NVIDIA verifier reaches only NVIDIA's reference and OCSP services. No setup step remains. Remove the frozen `direct-intel` route, `pi-tinfoil-setup`, the native NVIDIA candidate and the Go TLS helper. The experimental `sdk`-policy `direct-public` route runs the full appraisal; production `public-builds` admission stays closed pending review.
+
+- Send pinned-TLS requests as one HTTP/1.1 exchange on the verified `node:tls` socket instead of through `https.Agent`, which Bun cannot bind to an existing socket. The actual Pi suite, including live-delta cancellation, passes under Node and the Bun-compiled Pi 1.0.4 binary.
+
 - Map NEAR models' Pi `maxTokens` to their context length. NEAR advertises `max_output_length` 8192 for several models but does not enforce it, and Pi already clamps requests to the remaining context.
 
 - Pause Tinfoil public-build admission until the native GPU verifier replaces the pinned Linux verifier and passes review. Admission and the Intel research route fail before collecting evidence; the default policy exposes no models.

@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
-import { GPU_VERIFIER_QUALIFIED, INTEL_CANDIDATE, NVAT_HASHES, PUBLIC_BUILD_VERIFIER_SHA256 } from "./intel-appraisal.js";
+import { INTEL_CANDIDATE } from "./intel-appraisal.js";
+import { WASM_ARTIFACTS } from "./wasm-artifacts.js";
 import { GPU_VERSION_FLOORS } from "./gpu-policy.js";
 
 // Authority/rule identity, not a catalog of deployment digests. The local
@@ -24,7 +25,7 @@ const authorityPolicy = {
     deviceRoot: "102bf659d5419614c9d8e6aecebc80454eb26b1df6a769ac720b9a690b167b48",
     referenceRoot: "12977b5115acb0381179279fffeb5a8c4d264971ebb32298023a465fa41df5d1",
     versionFloors: GPU_VERSION_FLOORS, signedReferences: true, nonceMatchingOcsp: true },
-  localArtifacts: { helper: PUBLIC_BUILD_VERIFIER_SHA256, nvat: NVAT_HASHES, image: INTEL_CANDIDATE.gpuImage },
+  localArtifacts: WASM_ARTIFACTS,
   runtime: "gemma-single-gpu-v1",
   softwareContract: "public publishers preserve private per-boot keys, immutable runtime/model roots, closed engine egress and the NVIDIA protected channel/reset contract",
   transport: { tls: "TLS1.3-SPKI", body: "EHBP", sends: 1, rotation: "reject", cache: "fresh-encrypted-cache_salt" },
@@ -33,6 +34,7 @@ const authorityPolicy = {
 export const PUBLIC_BUILD_PROFILE_ID = authorityPolicy.profile;
 export const PUBLIC_BUILD_AUTHORITY_POLICY_DIGEST = createHash("sha256").update(JSON.stringify(authorityPolicy)).digest("hex");
 
-// Paused until the replacement GPU verifier is integrated, reviewed and
-// qualified. Deliberately not configurable by environment.
-export const PUBLIC_BUILD_PROFILE_ENABLED = GPU_VERIFIER_QUALIFIED;
+// Production admission is paused until the WebAssembly verifiers pass
+// independent review; the experimental SDK-policy direct-public route uses them
+// meanwhile. Deliberately not configurable by environment.
+export const PUBLIC_BUILD_PROFILE_ENABLED = false;

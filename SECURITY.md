@@ -4,15 +4,15 @@ This file defines what the extensions protect and what contributors must preserv
 
 ## Supported guarantees
 
-The default `public-builds` policy currently admits no models. Tinfoil Gemma is paused while its GPU verifier is replaced and requalified. Once requalified, each dispatch requires fresh hardware verification, authenticated public build artifacts and the [declared serving contract](docs/tinfoil-public-profile.md). Named software publishers and build workflows may authorize compatible updates automatically. They include provider-operated authorities: this policy does not trust only hardware manufacturers or require independent review of every release.
+The default `public-builds` policy currently admits no models. Tinfoil Gemma awaits independent review of its WebAssembly verifiers. Once enabled, each dispatch requires fresh hardware verification, authenticated public build artifacts and the [declared serving contract](docs/tinfoil-public-profile.md). Named software publishers and build workflows may authorize compatible updates automatically. They include provider-operated authorities: this policy does not trust only hardware manufacturers or require independent review of every release.
 
-NEAR's experimental SDK route is implemented and tested. Its public-build profile is not implemented; the [NEAR assessment](docs/nearai-status.md) separates unfinished client checks, missing deployment evidence and backend protocol requirements. `sdk` policy explicitly accepts the selected route's weaker assumptions. `approved` is reserved for independent frozen-workload approval and currently admits no models. Verification failures never fall back to a weaker policy.
+NEAR's experimental SDK route is implemented and tested. NEAR public builds cannot be established: its operator deploys serving software at runtime without a public release process. [NEAR assessment](docs/nearai-status.md). `sdk` policy explicitly accepts the selected route's weaker assumptions. `approved` is reserved for independent frozen-workload approval and currently admits no models. Verification failures never fall back to a weaker policy.
 
 Successful public dispatches report `publicBuildVerification: profile-established` and `closedTrustSet: profile-declared`. These mean the named profile's checks passed under its declared trust contract. They do not certify an independently proven complete software inventory. `independentApproval` and `protectedSession` remain `not-established`.
 
 ## Protection boundary
 
-The extensions protect their own dispatches. They do not prevent another Pi provider, fallback, compaction, extension or tool from receiving conversation plaintext. The user's OS, runtime, enabled local code and verifier installation remain trusted. Whole-session protection needs a [Pi dispatch guard](docs/design.md#pi-integration-and-request-lifecycle).
+The extensions protect their own dispatches. They do not prevent another Pi provider, fallback, compaction, extension or tool from receiving conversation plaintext. The user's OS, runtime, enabled local code and the shipped verifier modules remain trusted. Whole-session protection needs a [Pi dispatch guard](docs/design.md#pi-integration-and-request-lifecycle).
 
 Direct routes check the attested key on the actual TLS socket before sending credentials or ciphertext, then reject reconnect/resend. The SDK router retains its disclosed rotation retry. NEAR exposes completion and tool output only after response-signature verification; Tinfoil streams authenticated encrypted responses. Credentials are managed by Pi. Ordinary logs exclude credentials, prompts, completions and quote bodies; no background inference is added.
 

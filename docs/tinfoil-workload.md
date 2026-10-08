@@ -1,6 +1,6 @@
 # Tinfoil workload qualification
 
-The Intel direct candidate has working local CPU/GPU appraisal and an attested encrypted transport. This page records the checked boot/runtime properties supporting the [reviewed public serving contract](tinfoil-public-profile.md), with manufacturer and publisher assumptions stated explicitly. Its fixed artifacts are research fixtures; the [normal public-build policy](design.md) accepts updates from named public release/build authorities rather than requiring independent approval of each release. [Hardware policy and local artifacts](intel-candidate.md), [security contract](../SECURITY.md).
+The Intel direct candidate has working local CPU/GPU appraisal and an attested encrypted transport. This page records the checked boot/runtime properties supporting the [reviewed public serving contract](tinfoil-public-profile.md), with manufacturer and publisher assumptions stated explicitly. Its fixed artifacts are research fixtures; the [normal public-build policy](design.md) accepts updates from named public release/build authorities rather than requiring independent approval of each release. Hardware policy and local artifacts, [security contract](../SECURITY.md).
 
 ## Boot-artifact trace
 
@@ -12,11 +12,8 @@ A local locked build of [tdx-measure v0.0.6](https://github.com/tinfoilsh/tdx-me
 
 The shipping-image derivation graph contains 2,410 derivations and 873 fixed outputs. The [input inventory](tinfoil-build-inputs.json) records their declared hashes and delivery URLs, plus the separately pinned evaluation-time Nixpkgs archive. Six fixed outputs are generated/vendor aggregates rather than direct URL fetches. This enumerates build inputs, not the final runtime process set or a successful independent image rebuild. Evaluation used the installed local Nix; it did not run or qualify the release's isolated Linux builder.
 
-The dependency-free [boot check](../scripts/research/tinfoil-boot.mjs) separately recomputes RTMR2 from the UTF-16LE, NUL-terminated command line plus initrd. It passed with real artifacts and rejected separate one-byte mutations of deployment, configuration, kernel and initrd. It neither authenticates a CPU quote nor approves software. [Event calculation](https://github.com/tinfoilsh/tdx-measure/blob/9311cb9bdf3f83c9e3ec8dae4b6dff78a6d46123/src/kernel.rs#L121).
+A since-removed dependency-free boot check separately recomputed RTMR2 from the UTF-16LE, NUL-terminated command line plus initrd. It passed with real artifacts and rejected separate one-byte mutations of deployment, configuration, kernel and initrd. It neither authenticates a CPU quote nor approves software. [Event calculation](https://github.com/tinfoilsh/tdx-measure/blob/9311cb9bdf3f83c9e3ec8dae4b6dff78a6d46123/src/kernel.rs#L121).
 
-```sh
-node scripts/research/tinfoil-boot.mjs ARTIFACT_DIRECTORY SOURCE_CONFIG
-```
 
 Use the exact [deployment JSON](https://github.com/tinfoilsh/confidential-gemma4-31b/releases/download/v0.0.25/tinfoil-deployment.json), `tinfoil-inference-v0.11.0.vmlinuz` and `tinfoil-inference-v0.11.0.initrd` in that directory. Their URLs are under `https://images.tinfoil.sh/cvm/`; the script enforces fixed digests, independently of delivery. The source config is the file at the linked commit.
 

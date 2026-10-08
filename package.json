@@ -11,13 +11,14 @@
     "typecheck": "npm run typecheck --workspaces --if-present && tsc --noEmit -p tsconfig.tests.json",
     "test": "node --import tsx --test tests/*.test.ts",
     "check": "npm run build && npm run typecheck && npm test",
-    "check:pinned-tls": "node --import tsx scripts/check-pinned-tls.ts",
     "smoke": "node --import tsx scripts/smoke.ts",
     "smoke:packages": "node --import tsx scripts/package-smoke.ts",
     "smoke:catalogs": "node --import tsx scripts/live-catalogs.ts",
     "smoke:workers": "node --import tsx scripts/live-tinfoil-workers.ts",
     "smoke:attestation": "node --import tsx scripts/live-tinfoil-attestation.ts",
-    "smoke:pi": "node --import tsx scripts/live-pi.ts"
+    "smoke:pi": "node --import tsx scripts/live-pi.ts",
+    "check:nvidia": "node --import tsx scripts/check-nvidia-verifier.ts",
+    "build:wasm": "node scripts/build-wasm-verifiers.mjs"
   },
   "engines": {
     "node": ">=24"

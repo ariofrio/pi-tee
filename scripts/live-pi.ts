@@ -7,8 +7,7 @@ import { createAgentSessionServices } from "@earendil-works/pi-coding-agent";
 
 // Opt-in, billable tests. Credentials come from the caller's environment only.
 const provider = process.argv[2];
-const portableTlsCandidate = process.argv.includes("--portable-tls-candidate");
-const publicCandidate = process.argv.includes("--public-builds-candidate") || portableTlsCandidate;
+const publicCandidate = process.argv.includes("--public-builds-candidate");
 assert.ok(!publicCandidate || provider === "tinfoil", "The public-build candidate is Tinfoil only.");
 const publicProduction = process.argv.includes("--public-builds");
 assert.ok(!publicProduction || (provider === "tinfoil" && !publicCandidate), "Select the production Tinfoil public policy separately from candidate registration.");
@@ -28,29 +27,11 @@ const scratch = await mkdtemp(resolve(".scratch/work/pi-live-"));
 const cwd = join(scratch, "project");
 const agentDir = join(scratch, "agent");
 const entry = publicCandidate ? join(scratch, "public-candidate.ts") : resolve("packages", provider, "dist/extension.js");
-const tlsArtifact = portableTlsCandidate ? {
-  helperPath: resolve(process.env.PI_TEE_PINNED_TLS_TEST_HELPER ?? ""),
-  sha256: createHash("sha256").update(await readFile(process.env.PI_TEE_PINNED_TLS_TEST_HELPER ?? "")).digest("hex"),
-} : undefined;
 if (publicCandidate) await writeFile(entry, `
 import { createTeeProvider } from ${JSON.stringify(resolve("packages/core/dist/index.js"))};
 import { parseTinfoilCatalog, TINFOIL_BASE_URL } from ${JSON.stringify(resolve("packages/tinfoil/dist/index.js"))};
 import { INTEL_PUBLIC_BUILD_PROFILE } from ${JSON.stringify(resolve("packages/tinfoil/dist/intel.js"))};
-import { INTEL_CANDIDATE, qualifyIntelCandidate } from ${JSON.stringify(resolve("packages/tinfoil/dist/intel-appraisal.js"))};
-import { openEncryptedWorkerTransport } from ${JSON.stringify(resolve("packages/tinfoil/dist/direct.js"))};
-const artifact = ${JSON.stringify(tlsArtifact) ?? "undefined"};
-const profile = artifact ? {
-  ...INTEL_PUBLIC_BUILD_PROFILE,
-  id: INTEL_PUBLIC_BUILD_PROFILE.id + "-portable-tls-candidate",
-  authorityPolicyDigest: ${JSON.stringify(tlsArtifact ? createHash("sha256").update("pi-tee-portable-tls-candidate-v1\0" + tlsArtifact.sha256).digest("hex") : "")},
-  assumptions: [...INTEL_PUBLIC_BUILD_PROFILE.assumptions, "Experimental local TLS helper artifact: " + artifact.sha256],
-  async openSession({signal,model}) {
-    const keys = await qualifyIntelCandidate({cpuVerifier:process.env.PI_TINFOIL_PUBLIC_BUILD_VERIFIER,nvatDir:process.env.PI_TINFOIL_NVAT_DIR,signal,mode:"public-builds"});
-    if(!keys.publicBuild) throw Error("TEE_PUBLIC_SESSION_REJECTED");
-    return {admission:{profile:profile.id,model:model.id,authorityPolicyDigest:profile.authorityPolicyDigest,...keys.publicBuild},
-      transport:await openEncryptedWorkerTransport(signal,INTEL_CANDIDATE.host,keys,"cache_salt",artifact,keys.publicBuild.expiresAt)};
-  },
-} : INTEL_PUBLIC_BUILD_PROFILE;
+const profile = INTEL_PUBLIC_BUILD_PROFILE;
 export default async function(pi) {
   // Synthetic candidate registration; it does not change production routing.
   const integration = createTeeProvider({

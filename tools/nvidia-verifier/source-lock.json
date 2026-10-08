@@ -1,13 +1,41 @@
 {
-  "sdk": { "repository": "https://github.com/NVIDIA/attestation-sdk.git", "commit": "9d12801cea8a198ea0f29640dfaf8a4017c841c5" },
-  "regorus": { "repository": "https://github.com/microsoft/regorus.git", "commit": "c7bf460bc160c96e38048296e5708943d2e43909" },
-  "vcpkg": { "repository": "https://github.com/microsoft/vcpkg.git", "commit": "02a476b3a4adaf6c4bdbb79b702458eae5f34b12" },
+  "sdk": {
+    "repository": "https://github.com/NVIDIA/attestation-sdk.git",
+    "commit": "9d12801cea8a198ea0f29640dfaf8a4017c841c5"
+  },
+  "regorus": {
+    "repository": "https://github.com/microsoft/regorus.git",
+    "commit": "c7bf460bc160c96e38048296e5708943d2e43909"
+  },
+  "vcpkg": {
+    "repository": "https://github.com/microsoft/vcpkg.git",
+    "commit": "02a476b3a4adaf6c4bdbb79b702458eae5f34b12"
+  },
   "rust": "1.90.0",
   "regorusCargoLockSha256": "2a9be5f9abde87eecfb276d6cb5fac13f694f930380d41130bc27982e510abba",
-  "opensslConfigSha256": "375de15a54c07b902dc1b0ceff383b914c4877f4d27542cd10b0ee53747297c5",
   "patches": [
-    { "file": "patches/rim-leaf-signature.patch", "sha256": "9517fc51399f385ac2108ddcbddb77756a77329c53851f567f1fda7f30dbbe96",
-      "source": "nv-attestation-sdk-cpp/src/rim.cpp", "sourceSha256": "42ee94f69f87569892f1753f44b82c32e58aa330b2a91c44ae59e92708aacd5b",
-      "resultSha256": "717813c698286c225527299d781614d919aef1bd466a17b54e5a1364a18ad719" }
+    {
+      "file": "patches/rim-leaf-signature.patch",
+      "sha256": "9517fc51399f385ac2108ddcbddb77756a77329c53851f567f1fda7f30dbbe96",
+      "source": "nv-attestation-sdk-cpp/src/rim.cpp",
+      "sourceSha256": "42ee94f69f87569892f1753f44b82c32e58aa330b2a91c44ae59e92708aacd5b",
+      "resultSha256": "717813c698286c225527299d781614d919aef1bd466a17b54e5a1364a18ad719"
+    }
+  ],
+  "emsdk": {
+    "repository": "https://github.com/emscripten-core/emsdk.git",
+    "commit": "b44154299bdefe75ba287874bb63fc9806243771",
+    "version": "6.0.11"
+  },
+  "go": "go1.26.6",
+  "vcpkgPatches": [
+    {
+      "file": "patches/vcpkg-openssl-fixed-paths.patch",
+      "sha256": "88359d086bd4c18d9ce816221f31b020bcd5f910acc9bce0dac95b3e8af00cbc",
+      "port": "openssl",
+      "source": "ports/openssl/unix/portfile.cmake",
+      "sourceSha256": "dfeb87712f385eb156913b3b43e01efb95134f9e1c2c2e34cf5c6d4aa41b6ec1",
+      "resultSha256": "0a4963df6093bf197750f39560f0666ee5db686c71cf46a8425090003a5c7a58"
+    }
   ]
 }

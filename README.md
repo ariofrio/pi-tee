@@ -2,7 +2,7 @@
 
 NEAR AI and Tinfoil providers for Pi, with native API-key login, live model discovery, tools, reasoning, usage accounting and encrypted inference.
 
-**Work in progress; packages are unpublished.** The default `public-builds` policy currently admits no models. Tinfoil Gemma is paused while its GPU verifier is replaced and requalified. NEAR's experimental direct `sdk` route works; its public-build profile needs more client implementation, deployment evidence and backend bindings. [What is missing for NEAR](docs/nearai-status.md).
+**Work in progress; packages are unpublished.** The default `public-builds` policy currently admits no models: Tinfoil Gemma awaits independent review of its new WebAssembly verifiers. The same appraisal already serves the experimental `sdk`-policy `direct-public` route. NEAR's `sdk` routes work, but NEAR public builds are not possible today: NEAR's operator deploys serving software at runtime without a public release process, so no client can confine its keys. [Why](docs/nearai-status.md).
 
 | Package | Purpose |
 | --- | --- |
@@ -21,13 +21,9 @@ npm ci --ignore-scripts
 npm run check
 ```
 
-The existing local verifier setup remains for maintainer research; it cannot authorize public-build inference while admission is paused. The tested setup requires **macOS ARM64, Go, OrbStack, Docker 29.4.0, buildx 0.33.0 and the containerd image store**. Setup selects Go 1.26.6 and checks the built helper and image hashes. Docker Desktop sockets are recognized, but its setup is unvalidated; incompatible builders fail closed. [Setup and artifact inventory](docs/intel-candidate.md#local-setup).
+No further setup is needed on any Pi platform. The CPU/release and NVIDIA verifiers ship in `pi-tinfoil` as hash-checked WebAssembly and run under Node and Bun. [Portable verification](docs/portable-verification.md).
 
 ```sh
-node packages/tinfoil/dist/setup.js --directory "$PWD/local-verifiers"
-export PI_TINFOIL_PUBLIC_BUILD_VERIFIER="$PWD/local-verifiers/tinfoil-public-build-verifier"
-export PI_TINFOIL_NVAT_DIR="$PWD/local-verifiers/libnvat-linux-sbsa-1.2.2.1780962352-archive"
-
 node_modules/.bin/pi \
   -e packages/nearai/dist/extension.js \
   -e packages/tinfoil/dist/extension.js
@@ -48,7 +44,7 @@ Pi stores credentials and handles `/logout`. Stored keys take precedence over `N
 
 | Policy | Behavior |
 | --- | --- |
-| `public-builds` | Default. Currently admits no models; Tinfoil Gemma is paused pending GPU verifier requalification. NEAR is blocked. |
+| `public-builds` | Default. Currently admits no models; Tinfoil Gemma awaits review of its WebAssembly verifiers. NEAR cannot qualify. |
 | `sdk` | Enables experimental routes under their disclosed trust assumptions. |
 | `approved` | Reserved for independently approved frozen workloads; no profile is implemented. |
 
@@ -59,11 +55,10 @@ Routes are selected at startup:
 | Setting | Route |
 | --- | --- |
 | `PI_TINFOIL_ROUTE=auto` | Default. Public policy is paused; SDK policy uses the router catalog. |
-| `PI_TINFOIL_ROUTE=direct-public` | Same public profile, explicitly selected. |
+| `PI_TINFOIL_ROUTE=direct-public` | Same public profile, explicitly selected. Under `sdk` policy it runs the full public-build appraisal while production admission awaits review. |
 | `PI_TINFOIL_ROUTE=router` | SDK policy only. Trusts the router's backend release policy and permits its SDK key-rotation resend. |
 | `PI_TINFOIL_ROUTE=direct` | SDK policy only. Frozen AMD Gemma worker; lacks fresh v3, revocation and independent GPU appraisal. |
-| `PI_TINFOIL_ROUTE=direct-intel` | SDK policy only. Frozen Intel/GPU research profile with separate helper configuration. |
-| `PI_NEARAI_ROUTE=gateway` | Default NEAR SDK route. Both observed gateway instances failed the required `UpToDate` CPU check on 2026-10-07; [fleet-wide status is unknown](docs/nearai-status.md#how-many-gateways-are-affected). |
+| `PI_NEARAI_ROUTE=gateway` | Default NEAR SDK route. Both observed gateway instances failed the required `UpToDate` CPU check on 2026-10-07; [evidence](docs/near-gateway-evidence.json). |
 | `PI_NEARAI_ROUTE=direct` | SDK policy only. Restricts discovery to `z-ai/glm-5.3-flash` and binds inference to one attested TLS connection. |
 
 See the [Tinfoil route details](packages/tinfoil/README.md) and [NEAR direct assessment](docs/direct-access.md#near-direct-route-and-evidence) for requirements and limitations.
@@ -76,17 +71,17 @@ Both providers fetch chat/tool models from public catalogs, mapping prices, cont
 
 NEAR defaults to **TEE-only discovery**: metadata must match the model and declare `providerType: "vllm"` and `attestationSupported: true`. Non-TEE, unknown and failed lookups are hidden. `/nearai models all` or `PI_NEARAI_MODEL_VISIBILITY=all` shows labeled entries whose inference remains blocked; `/nearai models tee` restores the filter. Session choices are not persisted.
 
-NEAR public-build and Approved policies show no selectable models. Tinfoil public builds show no models while the GPU verifier is requalified. Missing prices are labeled, and NEAR pricing tiers beyond base costs are not modeled.
+NEAR public-build and Approved policies show no selectable models. Tinfoil public builds show no models until the WebAssembly verifiers are reviewed. Missing prices are labeled, and NEAR pricing tiers beyond base costs are not modeled.
 
 ## Security scope
 
-Public-build policy trusts the named public maintainers, workflows and build processes, plus Intel/NVIDIA and the local installation. Compatible vendor releases are verified automatically without maintained deployment pins. A malicious authorized release can be accepted before detection; public evidence permits later auditing, not guaranteed detection. Changes to authorities, supported schemas/GPU families or local verifier artifacts can require a client update. [Exact trust set and serving contract](docs/tinfoil-public-profile.md).
+Public-build policy trusts the named public maintainers, workflows and build processes, plus Intel/AMD/NVIDIA and the local installation, including the hash-checked WebAssembly verifiers. Compatible vendor releases are verified automatically without maintained deployment pins. A malicious authorized release can be accepted before detection; public evidence permits later auditing, not guaranteed detection. Changes to authorities, supported schemas/GPU families or local verifier artifacts can require a client update. [Exact trust set and serving contract](docs/tinfoil-public-profile.md).
 
 The final request guard fixes model, endpoint and authentication after Pi's payload hooks, rejecting transport overrides, hosted tools, remote media and unsupported fields. Direct routes bind the actual TLS socket before credentials or ciphertext, send once and reject reconnect/resend. Pi provider retries are disabled; terminal security errors also suppress Pi 1.0.4's turn/summarization retries. The SDK router retains its disclosed rotation resend.
 
 NEAR buffers bounded response bytes in memory until signature verification; Tinfoil streams authenticated encrypted responses. Ordinary logs exclude credentials, prompts, completions and quote bodies. [Security guarantees and limits](SECURITY.md).
 
-**These extensions protect their own requests, not the entire Pi conversation.** Other providers, fallback, compaction, extensions and tools can access or transmit plaintext. Local code remains trusted. The [NEAR assessment](docs/nearai-status.md) explains which remaining guarantees need client work, deployment investigation or server support.
+**These extensions protect their own requests, not the entire Pi conversation.** Other providers, fallback, compaction, extensions and tools can access or transmit plaintext. Local code remains trusted. The [NEAR assessment](docs/nearai-status.md) explains why NEAR public builds need NEAR server changes.
 
 ## Validation
 
@@ -96,22 +91,23 @@ npm run smoke             # compiled loading and native login
 npm run smoke:packages    # isolated tarball loading and login
 npm run smoke:catalogs    # public metadata; no inference
 npm run smoke:attestation # router SDK attestation; no inference
+npm run check:nvidia      # WebAssembly NVIDIA verifier negatives; no inference
+npm run build:wasm        # maintainers: rebuild the WebAssembly verifiers
 ```
 
-On 2026-10-07, the qualification run passed **62/62 tests using private evidence fixtures**, plus compiled-loader and isolated-package checks. Without those fixtures, three tests skip. The production Tinfoil public-policy Pi suite passed login, stored-key precedence, completion/usage, Unicode tools and follow-up, reasoning and cancellation, including a separate abort after a live text delta. [Recorded results](docs/public-profile-validation.json).
+On 2026-10-07, `npm run check` passed 70 tests; two more need private evidence fixtures and also passed. The experimental `direct-public` route, which runs the full public-build appraisal through the WebAssembly verifiers, passed the actual Pi suite under Node and the Bun-compiled Pi 1.0.4 binary: login, stored-key precedence, completion/usage, Unicode tools and follow-up, reasoning, and cancellation, including after a live text delta. [Portable verification evidence](docs/portable-verification.md#evidence).
 
 The [live Pi harness](scripts/live-pi.ts) sends capped synthetic prompts using an isolated credential store:
 
 ```sh
-# With the local verifiers configured above:
-node --env-file=/path/to/private/tinfoil.env \
-  --import tsx scripts/live-pi.ts tinfoil gemma4-31b --public-builds
+PI_TINFOIL_POLICY=sdk PI_TINFOIL_ROUTE=direct-public node --env-file=/path/to/private/tinfoil.env \
+  --import tsx scripts/live-pi.ts tinfoil gemma4-31b
 
 PI_NEARAI_ROUTE=direct node --env-file=/path/to/private/nearai.env \
   --import tsx scripts/live-pi.ts nearai z-ai/glm-5.3-flash
 ```
 
-Live tests are opt-in and billable. Add `--cancel-stream` to test abort after a text delta. Cancellation establishes local abort and acknowledgement, not remote generation-stop timing. The harness removes its temporary credential store and never prints keys or provider payloads.
+Live tests are opt-in and billable. Add `--cancel-stream` to test abort after a text delta; set `PI_TEE_LIVE_PI_BINARY` to an absolute Pi binary path to test a compiled Pi. Cancellation establishes local abort and acknowledgement, not remote generation-stop timing. The harness removes its temporary credential store and never prints keys or provider payloads.
 
 The [validation record](docs/implementation.md#validation) covers the other routes, unresolved router key-mismatch errors and the recorded NEAR dependency advisory. Independent Opus 5.5 reviews of the public profile, local setup and enablement are linked in the [serving contract](docs/tinfoil-public-profile.md).
 

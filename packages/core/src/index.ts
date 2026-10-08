@@ -5,4 +5,4 @@ export * from "./response.js";
 export * from "./catalog.js";
 
 export * from "./pinned-tls.js";
-export * from "./pinned-tls-helper.js";
+export * from "./wasi.js";

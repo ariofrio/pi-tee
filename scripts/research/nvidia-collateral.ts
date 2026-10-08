@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { readBoundedBody } from "../../packages/core/src/transport.js";
 
-// Test delivery seams only. NVIDIA's unchanged verifier must authenticate the
+// Test delivery seams only. NVIDIA's verifier must authenticate the
 // exact reference/revocation bytes. No GPU report or credentials go upstream.
 export async function collateralOracle(mode: "authentic" | "rim-signature" | "ocsp-signature") {
   let mutations = 0, deliveries = 0, failures = 0;
@@ -55,7 +55,7 @@ export async function collateralOracle(mode: "authentic" | "rim-signature" | "oc
   assert.ok(address && typeof address === "object");
   const base = `http://127.0.0.1:${address.port}`;
   return {
-    args: ["--rim-url", base, "--ocsp-url", `${base}/ocsp`],
+    origin: base,
     observations: () => ({ mutations, deliveries, failures }),
     async close() {
       server.closeAllConnections();

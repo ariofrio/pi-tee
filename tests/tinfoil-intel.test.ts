@@ -6,11 +6,12 @@ import { qualifyIntelCandidate } from "../packages/tinfoil/src/intel-appraisal.j
 import { createTinfoilProvider, TINFOIL_ASSUMPTIONS } from "../packages/tinfoil/src/index.js";
 import { normalizeContext } from "@earendil-works/pi-ai/compat";
 
-test("an unqualified GPU verifier cannot collect evidence or release endpoint keys", { skip: !process.env.PI_TEE_PUBLIC_BUILD_TEST_HELPER || !process.env.PI_TEE_PUBLIC_BUILD_TEST_NVAT }, async () => {
+test("malformed public CPU evidence cannot reach artifact discovery, GPU appraisal or endpoint keys", async () => {
   let metadataRequests = 0;
   await assert.rejects(qualifyIntelCandidate({
-    cpuVerifier: process.env.PI_TEE_PUBLIC_BUILD_TEST_HELPER!, nvatDir: process.env.PI_TEE_PUBLIC_BUILD_TEST_NVAT!,
-    mode: "public-builds", signal: AbortSignal.timeout(10000),
+    signal: AbortSignal.timeout(30000),
+    // The loopback origin would be the only permitted NVIDIA collateral source; nothing may reach it.
+    nvidiaCollateralOrigin: "http://127.0.0.1:9",
     evidenceFetch: async (input, options) => {
       metadataRequests++;
       assert.equal(metadataRequests, 1, "Invalid CPU evidence cannot authorize further discovery.");
@@ -19,22 +20,14 @@ test("an unqualified GPU verifier cannot collect evidence or release endpoint ke
       assert.equal(options?.body, undefined);
       return Response.json({});
     },
-  }), /TEE_GPU_VERIFIER_UNQUALIFIED/);
-  assert.equal(metadataRequests, 0);
+  }), /TEE_PUBLIC_BUILD_REJECTED/);
+  assert.equal(metadataRequests, 1);
 });
 
 test("default public admission remains gated and stale selections cannot fall back to SDK", async () => {
-  await mkdir(".scratch/work", { recursive: true });
-  const dir = await mkdtemp(resolve(".scratch/work/untrusted-public-verifier-"));
-  const oldVerifier = process.env.PI_TINFOIL_PUBLIC_BUILD_VERIFIER;
-  const oldNvat = process.env.PI_TINFOIL_NVAT_DIR;
   const oldRoute = process.env.PI_TINFOIL_ROUTE;
   const oldPolicy = process.env.PI_TINFOIL_POLICY;
   try {
-    const path = resolve(dir, "verifier");
-    await writeFile(path, "untrusted public-build verifier", { mode: 0o700 });
-    process.env.PI_TINFOIL_PUBLIC_BUILD_VERIFIER = path;
-    process.env.PI_TINFOIL_NVAT_DIR = dir;
     delete process.env.PI_TINFOIL_ROUTE;
     delete process.env.PI_TINFOIL_POLICY;
     for (const route of [undefined, "direct-public"] as const) {
@@ -64,26 +57,10 @@ test("default public admission remains gated and stale selections cannot fall ba
       else assert.match(integration.getReport().assumptions[0]!, /^Experimental SDK-policy candidate:/);
     }
   } finally {
-    for (const [name, value] of [["PI_TINFOIL_PUBLIC_BUILD_VERIFIER", oldVerifier], ["PI_TINFOIL_NVAT_DIR", oldNvat], ["PI_TINFOIL_ROUTE", oldRoute], ["PI_TINFOIL_POLICY", oldPolicy]]) {
+    for (const [name, value] of [["PI_TINFOIL_ROUTE", oldRoute], ["PI_TINFOIL_POLICY", oldPolicy]]) {
       if (value === undefined) delete process.env[name!]; else process.env[name!] = value;
     }
-    await rm(dir, { recursive: true, force: true });
   }
-});
-
-test("an unpinned local verifier cannot authorize an Intel worker or initiate attestation", async () => {
-  await mkdir(".scratch/work", { recursive: true });
-  const dir = await mkdtemp(resolve(".scratch/work/untrusted-verifier-"));
-  let requests = 0;
-  try {
-    const cpuVerifier = resolve(dir, "verifier");
-    await writeFile(cpuVerifier, "untrusted synthetic verifier", { mode: 0o700 });
-    await assert.rejects(qualifyIntelCandidate({
-      cpuVerifier, nvatDir: dir, signal: AbortSignal.timeout(5000),
-      evidenceFetch: async () => { requests++; throw Error("must not fetch"); },
-    }), /TEE_VERIFIER_ARTIFACT_REJECTED/);
-    assert.equal(requests, 0);
-  } finally { await rm(dir, { recursive: true, force: true }); }
 });
 
 test("a direct encrypted worker error cannot resend credentials or ciphertext", async () => {

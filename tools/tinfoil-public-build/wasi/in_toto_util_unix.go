@@ -1,0 +1,8 @@
+//go:build linux || darwin || !windows
+
+package in_toto
+
+import "errors"
+
+// WASI has no access(2); the verifier never writes in-toto link files.
+func isWritable(path string) error { return errors.New("in_toto: writability checks are unavailable under WASI") }

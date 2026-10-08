@@ -1,8 +1,7 @@
 cmake_minimum_required(VERSION 3.25)
-project(pi-tee-nvidia-native VERSION 1.2.2 LANGUAGES C CXX)
+project(pi-tee-nvidia-wasm VERSION 1.2.2 LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 if(NOT DEFINED NVIDIA_SOURCE OR NOT DEFINED PATCHED_SOURCE OR NOT DEFINED REGORUS_SOURCE OR NOT DEFINED REGORUS_LIBRARY)
   message(FATAL_ERROR "Use the locked maintainer build script")
 endif()
@@ -22,7 +21,8 @@ configure_file("${sdk}/include/nvat.h.in" "include/nvat.h")
 
 # Preserve every verification source except hash-locked patches in source-lock.json.
 # The three collector implementations are replaced; they always reject instead
-# of loading hardware libraries.
+# of loading hardware libraries. The libcurl transport is replaced by a host
+# request bridge; libcurl remains linked only for its URL parser.
 add_library(nvat STATIC
   ${sdk}/src/nvat.cpp ${sdk}/src/attestation.cpp ${sdk}/src/claims.cpp ${sdk}/src/claims_evaluator.cpp
   ${sdk}/src/gpu/evidence.cpp ${sdk}/src/gpu/claims.cpp ${sdk}/src/gpu/verify.cpp
@@ -30,7 +30,7 @@ add_library(nvat STATIC
   ${sdk}/src/gpu/spdm/gpu_opaque_data_parser.cpp ${sdk}/src/spdm/spdm_req.cpp ${sdk}/src/spdm/spdm_resp.cpp
   ${sdk}/src/init.cpp ${sdk}/src/log.cpp ${sdk}/src/nv_x509.cpp ${sdk}/src/rego_engine/regorus_rego_engine.cpp
   ${PATCHED_SOURCE}/nv-attestation-sdk-cpp/src/rim.cpp ${sdk}/src/switch/evidence.cpp ${sdk}/src/switch/claims.cpp ${sdk}/src/switch/verify.cpp
-  ${sdk}/src/verify.cpp ${sdk}/src/switch/spdm/switch_opaque_data_parser.cpp ${sdk}/src/nv_http.cpp
+  ${sdk}/src/verify.cpp ${sdk}/src/switch/spdm/switch_opaque_data_parser.cpp nv-http-host.cpp
   ${sdk}/src/nv_jwt.cpp ${sdk}/src/nv_ocsp.cpp ${sdk}/src/utils.cpp ${sdk}/src/nv_cache.cpp
   collectors-disabled.cpp)
 target_include_directories(nvat PUBLIC "${CMAKE_CURRENT_BINARY_DIR}/include"
@@ -39,30 +39,24 @@ target_compile_definitions(nvat PRIVATE JWT_DISABLE_PICOJSON)
 target_link_libraries(nvat PUBLIC unofficial::xmlsec::xmlsec1 unofficial::xmlsec::xmlsec1-openssl
   OpenSSL::SSL OpenSSL::Crypto CURL::libcurl LibXml2::LibXml2 spdlog::spdlog fmt::fmt
   jwt-cpp::jwt-cpp nlohmann_json::nlohmann_json "${REGORUS_LIBRARY}" Threads::Threads ${CMAKE_DL_LIBS})
-if(APPLE)
-  target_link_libraries(nvat PUBLIC "-framework CoreFoundation" "-framework Security" iconv resolv)
-elseif(WIN32)
-  target_link_libraries(nvat PUBLIC ws2_32 userenv bcrypt ntdll advapi32)
-endif()
 
-set(NVATTEST_FULL_VERSION "1.2.2+pi-tee-candidate")
+set(NVATTEST_FULL_VERSION "1.2.2+pi-tee-wasm")
 configure_file("${cli}/src/version_config.h.in" "version_config.h")
 add_executable(nvattest ${cli}/src/main.cpp ${cli}/src/version.cpp ${cli}/src/attest.cpp
   ${cli}/src/collect_evidence.cpp ${cli}/src/utils.cpp ${cli}/src/logging.cpp)
 target_include_directories(nvattest PRIVATE "${cli}/src" "${CMAKE_CURRENT_BINARY_DIR}")
 target_link_libraries(nvattest PRIVATE nvat CLI11::CLI11)
-if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-  foreach(target nvat nvattest)
+foreach(target nvat nvattest)
     target_compile_options(${target} PRIVATE "-ffile-prefix-map=${NVIDIA_SOURCE}=/nvidia-sdk" "-ffile-prefix-map=${PATCHED_SOURCE}=/nvidia-sdk"
-      "-ffile-prefix-map=${CMAKE_CURRENT_SOURCE_DIR}=/pi-tee-nvidia-recipe")
-  endforeach()
-endif()
-if(MSVC)
-  foreach(target nvat nvattest)
-    target_compile_definitions(${target} PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
-    target_include_directories(${target} PRIVATE windows)
-    target_compile_options(${target} PRIVATE "/FI${CMAKE_CURRENT_SOURCE_DIR}/windows/compat.h"
-      "/pathmap:${NVIDIA_SOURCE}=/nvidia-sdk" "/pathmap:${PATCHED_SOURCE}=/nvidia-sdk" "/pathmap:${CMAKE_CURRENT_SOURCE_DIR}=/pi-tee-nvidia-recipe")
-  endforeach()
-endif()
+      "-ffile-prefix-map=${CMAKE_CURRENT_SOURCE_DIR}=/pi-tee-nvidia-recipe" "-ffile-prefix-map=$ENV{EMSDK}=/emsdk")
+endforeach()
+target_compile_options(nvat PRIVATE -fexceptions)
+target_compile_options(nvattest PRIVATE -fexceptions)
+set_target_properties(nvattest PROPERTIES SUFFIX ".mjs")
+target_link_options(nvattest PRIVATE -fexceptions -sASYNCIFY=1 -sASYNCIFY_STACK_SIZE=131072 -sSTACK_SIZE=1048576
+  -sALLOW_MEMORY_GROWTH=1 -sMAXIMUM_MEMORY=536870912 -sMODULARIZE=1 -sEXPORT_ES6=1 -sEXPORT_NAME=createNvattest
+  -sENVIRONMENT=node -sINVOKE_RUN=0 -sEXIT_RUNTIME=1 -sFILESYSTEM=1 -sNODERAWFS=0 -sSINGLE_FILE=0
+  "-sEXPORTED_RUNTIME_METHODS=['FS','ccall','stringToNewUTF8','UTF8ToString','HEAPU8','HEAP32','HEAPU32']" "-sEXPORTED_FUNCTIONS=['_main','_malloc','_free']"
+  -sNODEJS_CATCH_EXIT=0 -sNODEJS_CATCH_REJECTION=0 -sDYNAMIC_EXECUTION=0)
 install(TARGETS nvattest RUNTIME DESTINATION bin)
+install(FILES "$<TARGET_FILE_DIR:nvattest>/nvattest.wasm" DESTINATION bin)

@@ -1,14 +1,14 @@
 import assert from "node:assert/strict";
-import { readFile, mkdir, mkdtemp, writeFile, readdir, rm } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { resolve } from "node:path";
 import { test } from "node:test";
 import { verifyPublicBuildArtifacts } from "../packages/tinfoil/src/public-build.js";
 
-const enabled = Boolean(process.env.PI_TEE_PUBLIC_BUILD_TEST_EVIDENCE && process.env.PI_TEE_PUBLIC_BUILD_TEST_HELPER && process.env.PI_TEE_BOOT_TEST_DIR);
+const enabled = Boolean(process.env.PI_TEE_PUBLIC_BUILD_TEST_EVIDENCE && process.env.PI_TEE_BOOT_TEST_DIR);
 const hash = (bytes: Buffer) => createHash("sha256").update(bytes).digest("hex");
 
-test("the Node artifact chain rejects substituted delivery bytes using the real CPU and release verifiers", { skip: !enabled }, async () => {
+test("the artifact chain rejects substituted delivery bytes using the WebAssembly CPU and release verifiers", { skip: !enabled }, async () => {
   const evidence = JSON.parse(await readFile(process.env.PI_TEE_PUBLIC_BUILD_TEST_EVIDENCE!, "utf8"));
   const fixture = (name: string) => readFile(`tools/tinfoil-public-build/testdata/${name}`);
   const deployment = await fixture("gemma-v0.0.25-deployment.json");
@@ -37,14 +37,12 @@ test("the Node artifact chain rejects substituted delivery bytes using the real 
   for (const [kind, bytes] of [["manifests", index], ["manifests", image], ["manifests", attestation], ["blobs", imageConfig], ["blobs", provenance]] as const) {
     artifacts.set(`https://ghcr.io/v2/${repo}/${kind}/sha256:${hash(bytes)}`, bytes);
   }
-  const run = async (change?: { url: string; bytes: Buffer }, repeat = false, replaceOriginal?: string) => {
+  const run = async (change?: { url: string; bytes: Buffer }, repeat = false) => {
     const requests: string[] = [];
-    const options = { helperPath: replaceOriginal ?? process.env.PI_TEE_PUBLIC_BUILD_TEST_HELPER!,
-      expectedHelperDigest: hash(await readFile(process.env.PI_TEE_PUBLIC_BUILD_TEST_HELPER!)),
+    const options = {
       raw: JSON.stringify(evidence.envelope), nonce: evidence.nonce, signal: AbortSignal.timeout(60000),
       evidenceFetch: (async (input, init) => {
         const url = String(input); requests.push(url);
-        if (replaceOriginal && requests.length === 1) await writeFile(replaceOriginal, "untrusted replacement", { mode: 0o700 });
         assert.equal(init?.body, undefined, "No artifact check sends a prompt or credentials.");
         assert(!url.includes("chat/completions") && !url.includes("nvidia"));
         const bytes = change?.url === url ? change.bytes : artifacts.get(url);
@@ -72,15 +70,6 @@ test("the Node artifact chain rejects substituted delivery bytes using the real 
   assert.equal(verified.inferenceQualified, false);
   assert.equal(verified.runtimeConfig.subjectPredicateMatched, true);
   assert.equal(verified.runtimeConfig.codeStatementDigest, verified.codeStatementDigest);
-  await mkdir(".scratch/work", { recursive: true });
-  const scratch = await mkdtemp(resolve(".scratch/work/helper-copy-"));
-  try {
-    const original = resolve(scratch, "verifier");
-    await writeFile(original, await readFile(process.env.PI_TEE_PUBLIC_BUILD_TEST_HELPER!), { mode: 0o700 });
-    const replaced = await run(undefined, false, original);
-    assert.equal((await replaced.result).runtimeConfig.subjectPredicateMatched, true, "Replacing the original helper cannot alter the verified executable already owned by this appraisal.");
-    assert.deepEqual(await readdir(scratch), ["verifier"], "Private helper snapshots must be removed after appraisal.");
-  } finally { await rm(scratch, { recursive: true, force: true }); }
   for (const [url, bytes] of artifacts) {
     if (url.includes("ghcr.io/token")) continue;
     const altered = Buffer.from(bytes);

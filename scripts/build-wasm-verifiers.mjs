@@ -1,0 +1,162 @@
+import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
+import { copyFile, cp, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { dirname, resolve } from "node:path";
+import { gzipSync } from "node:zlib";
+
+// Maintainer build of the platform-independent verifier modules shipped in
+// packages/tinfoil/wasm. Every source is pinned; the output hashes are written
+// to wasm-artifacts.ts and must match an independent rebuild.
+const recipe = resolve("tools/nvidia-verifier");
+const lock = JSON.parse(await readFile(resolve(recipe, "source-lock.json"), "utf8"));
+const root = resolve(process.env.PI_TEE_WASM_BUILD_DIR ?? ".scratch/work/wasm-build");
+const output = resolve("packages/tinfoil/wasm");
+await mkdir(root, { recursive: true });
+const sha256 = bytes => createHash("sha256").update(bytes).digest("hex");
+const inherited = ["PATH", "HOME", "TMPDIR", "RUSTUP_HOME"];
+const emsdk = resolve(root, "emsdk");
+const baseEnv = {
+  ...Object.fromEntries(inherited.filter(name => process.env[name] !== undefined).map(name => [name, process.env[name]])),
+  TZ: "UTC", LANG: "C", LC_ALL: "C", SOURCE_DATE_EPOCH: "0", ZERO_AR_DATE: "1",
+};
+function run(executable, args, cwd = root, env = baseEnv, capture = false) {
+  const result = spawnSync(executable, args, { cwd, env, encoding: "utf8", stdio: capture ? "pipe" : "inherit", timeout: 3600000, maxBuffer: 64 * 1024 * 1024 });
+  if (capture && result.status !== 0) process.stderr.write(result.stderr ?? "");
+  assert.equal(result.status, 0, `${executable} ${args[0] ?? ""} failed (${result.error?.code ?? result.status})`);
+  return result.stdout?.trim() ?? "";
+}
+async function source(name) {
+  const path = resolve(root, name);
+  if (!(await stat(path).catch(() => null))) run("git", ["clone", "--no-checkout", "-c", "core.autocrlf=false", lock[name].repository, path]);
+  run("git", ["checkout", "-q", "--detach", lock[name].commit], path);
+  assert.equal(run("git", ["rev-parse", "HEAD"], path, baseEnv, true), lock[name].commit);
+  return path;
+}
+
+// Sources: NVIDIA SDK, Regorus, vcpkg and the Emscripten SDK at pinned commits.
+const sdk = await source("sdk"), regorus = await source("regorus"), vcpkg = await source("vcpkg");
+await source("emsdk");
+for (const path of [sdk, vcpkg]) assert.equal(run("git", ["status", "--porcelain", "--untracked-files=no"], path, baseEnv, true), "", "pinned source must be clean");
+run(resolve(emsdk, "emsdk"), ["install", lock.emsdk.version], emsdk);
+run(resolve(emsdk, "emsdk"), ["activate", lock.emsdk.version], emsdk);
+const emscripten = resolve(emsdk, "upstream/emscripten");
+const env = { ...baseEnv, EMSDK: emsdk, EM_CACHE: resolve(root, "emscripten-cache"), PATH: `${emscripten}:${baseEnv.PATH}` };
+assert.match(run(resolve(emscripten, "emcc"), ["--version"], root, env, true), new RegExp(`^emcc .* ${lock.emsdk.version.replaceAll(".", "\\.")} `));
+
+// Hash-locked verification patches are applied to copies outside the pinned checkout.
+const patched = resolve(root, "patched-source");
+await rm(patched, { recursive: true, force: true });
+for (const patch of lock.patches) {
+  const patchPath = resolve(recipe, patch.file);
+  assert.equal(sha256(await readFile(patchPath)), patch.sha256);
+  const original = await readFile(resolve(sdk, patch.source));
+  assert.equal(sha256(original), patch.sourceSha256);
+  await mkdir(dirname(resolve(patched, patch.source)), { recursive: true });
+  await writeFile(resolve(patched, patch.source), original);
+  run("git", ["apply", "--unidiff-zero", patchPath], patched, { ...env, GIT_CEILING_DIRECTORIES: root });
+  assert.equal(sha256(await readFile(resolve(patched, patch.source))), patch.resultSha256);
+}
+
+// Regorus evaluates NVIDIA's appraisal policy; only its static library is linked.
+const cargoLock = await readFile(resolve(recipe, "regorus.Cargo.lock"));
+assert.equal(sha256(cargoLock), lock.regorusCargoLockSha256);
+await copyFile(resolve(recipe, "regorus.Cargo.lock"), resolve(regorus, "bindings/ffi/Cargo.lock"));
+const cargo = process.env.PI_TEE_BUILD_CARGO ?? "cargo";
+const cargoHome = resolve(root, "cargo-home");
+const rustEnv = { ...env, RUSTUP_TOOLCHAIN: lock.rust, CARGO_HOME: cargoHome, CARGO_TARGET_DIR: resolve(root, "rust-build"),
+  RUSTFLAGS: `--remap-path-prefix=${cargoHome}=/cargo --remap-path-prefix=${regorus}=/regorus` };
+assert.match(run(cargo, ["--version"], root, rustEnv, true), new RegExp(`^cargo ${lock.rust.replaceAll(".", "\\.")} `));
+run(cargo, ["rustc", "--release", "--locked", "--manifest-path", "bindings/ffi/Cargo.toml", "--features", "regorus/semver",
+  "--target", "wasm32-unknown-emscripten", "--crate-type", "staticlib"], regorus, rustEnv);
+const regorusLibrary = resolve(root, "rust-build/wasm32-unknown-emscripten/release/libregorus_ffi.a");
+assert.ok((await stat(regorusLibrary)).isFile());
+
+// Overlay ports: pinned vcpkg ports plus hash-locked patches that remove
+// build-root paths from their outputs.
+const overlay = resolve(root, "overlay");
+await rm(overlay, { recursive: true, force: true });
+for (const patch of lock.vcpkgPatches) {
+  await cp(resolve(vcpkg, "ports", patch.port), resolve(overlay, "ports", patch.port), { recursive: true });
+  assert.equal(sha256(await readFile(resolve(recipe, patch.file))), patch.sha256);
+  assert.equal(sha256(await readFile(resolve(overlay, patch.source))), patch.sourceSha256);
+  run("git", ["apply", "--unidiff-zero", resolve(recipe, patch.file)], overlay, { ...env, GIT_CEILING_DIRECTORIES: root });
+  assert.equal(sha256(await readFile(resolve(overlay, patch.source))), patch.resultSha256);
+}
+
+// C/C++ dependencies and the verifier itself.
+const vcpkgBinary = resolve(vcpkg, "vcpkg");
+if (!(await stat(vcpkgBinary).catch(() => null))) run("sh", ["bootstrap-vcpkg.sh", "-disableMetrics"], vcpkg, env);
+const vcpkgEnv = { ...env, VCPKG_BINARY_SOURCES: "clear", VCPKG_DISABLE_METRICS: "1", VCPKG_ROOT: vcpkg };
+const build = resolve(root, "build");
+await rm(build, { recursive: true, force: true });
+run("cmake", ["-S", recipe, "-B", build, "-G", "Unix Makefiles", "-DCMAKE_BUILD_TYPE=Release",
+  `-DCMAKE_TOOLCHAIN_FILE=${resolve(vcpkg, "scripts/buildsystems/vcpkg.cmake")}`, "-DVCPKG_TARGET_TRIPLET=wasm32-emscripten-pi-tee",
+  `-DVCPKG_OVERLAY_TRIPLETS=${resolve(recipe, "triplets")}`, `-DVCPKG_OVERLAY_PORTS=${resolve(overlay, "ports")}`, `-DVCPKG_CHAINLOAD_TOOLCHAIN_FILE=${resolve(vcpkg, "scripts/toolchains/emscripten.cmake")}`,
+  `-DNVIDIA_SOURCE=${sdk}`, `-DPATCHED_SOURCE=${patched}`, `-DREGORUS_SOURCE=${regorus}`, `-DREGORUS_LIBRARY=${regorusLibrary}`], root, vcpkgEnv);
+run("cmake", ["--build", build, "--parallel", "4"], root, vcpkgEnv);
+
+// The public-build CPU verifier as a WASI command. in-toto's Unix-only
+// writability check is replaced in the vendored copy; verification never writes.
+const goSource = resolve(root, "go-source");
+await rm(goSource, { recursive: true, force: true });
+await mkdir(goSource, { recursive: true });
+const helper = resolve("tools/tinfoil-public-build");
+for (const name of await readdir(helper)) {
+  if ((name.endsWith(".go") && !name.endsWith("_test.go")) || ["go.mod", "go.sum", "trusted_root.json"].includes(name)) await copyFile(resolve(helper, name), resolve(goSource, name));
+}
+const goEnv = { ...baseEnv, GOTOOLCHAIN: lock.go, GOFLAGS: "", CGO_ENABLED: "0", GOPATH: resolve(root, "gopath"), GOCACHE: resolve(root, "gocache") };
+run("go", ["mod", "vendor"], goSource, goEnv);
+const vendored = resolve(goSource, "vendor/github.com/in-toto/in-toto-golang/in_toto/util_unix.go");
+assert.ok((await stat(vendored)).isFile());
+await copyFile(resolve(helper, "wasi/in_toto_util_unix.go"), vendored);
+run("go", ["build", "-mod=vendor", "-trimpath", "-buildvcs=false", "-ldflags=-s -w -buildid=", "-o", resolve(root, "tinfoil-public-build.wasm"), "."],
+  goSource, { ...goEnv, GOOS: "wasip1", GOARCH: "wasm" });
+
+// License inventory for everything linked into the two modules.
+const notices = [];
+async function notice(title, path) {
+  notices.push(`==== ${title} ====\n\n${(await readFile(path, "utf8")).trim()}\n`);
+}
+async function licenseFiles(directory) {
+  return (await readdir(directory).catch(() => [])).filter(name => /^(LICEN[CS]E|COPYING|COPYRIGHT|NOTICE)([-._].*)?$/i.test(name)).sort();
+}
+await notice("NVIDIA Attestation SDK", resolve(sdk, "LICENSE"));
+for (const name of ["LICENSE", "system/lib/libcxx/LICENSE.TXT", "system/lib/libcxxabi/LICENSE.TXT", "system/lib/compiler-rt/LICENSE.TXT", "system/lib/libc/musl/COPYRIGHT"]) {
+  await notice(`Emscripten runtime (${name})`, resolve(emscripten, name));
+}
+const installed = resolve(build, "vcpkg_installed/wasm32-emscripten-pi-tee/share");
+for (const port of (await readdir(installed)).sort()) {
+  if (await stat(resolve(installed, port, "copyright")).catch(() => null)) await notice(`${port} (vcpkg)`, resolve(installed, port, "copyright"));
+}
+const metadata = JSON.parse(run(cargo, ["metadata", "--format-version", "1", "--locked", "--filter-platform", "wasm32-unknown-emscripten", "--manifest-path", "bindings/ffi/Cargo.toml"], regorus, rustEnv, true));
+const resolvedCrates = new Set(metadata.resolve.nodes.map(node => node.id));
+for (const crate of metadata.packages.filter(item => resolvedCrates.has(item.id)).sort((a, b) => a.name.localeCompare(b.name))) {
+  const files = await licenseFiles(dirname(crate.manifest_path));
+  if (!files.length) notices.push(`==== ${crate.name} ${crate.version} (Rust) ====\n\nLicense: ${crate.license}\n`);
+  for (const file of files) await notice(`${crate.name} ${crate.version} (Rust, ${file})`, resolve(dirname(crate.manifest_path), file));
+}
+await notice("Go standard library", resolve(run("go", ["env", "GOROOT"], goSource, goEnv, true), "LICENSE"));
+for (const line of (await readFile(resolve(goSource, "vendor/modules.txt"), "utf8")).split("\n")) {
+  const match = /^# (\S+) (\S+)/.exec(line);
+  if (!match) continue;
+  for (const file of await licenseFiles(resolve(goSource, "vendor", match[1]))) await notice(`${match[1]} ${match[2]} (Go, ${file})`, resolve(goSource, "vendor", match[1], file));
+}
+
+// Deterministic compressed artifacts: fixed gzip header, no file metadata.
+await mkdir(output, { recursive: true });
+const artifacts = {
+  "nvattest.wasm.gz": gzipSync(await readFile(resolve(build, "nvattest.wasm")), { level: 9 }),
+  "nvattest.mjs": await readFile(resolve(build, "nvattest.mjs")),
+  "tinfoil-public-build.wasm.gz": gzipSync(await readFile(resolve(root, "tinfoil-public-build.wasm")), { level: 9 }),
+};
+const digests = {};
+for (const [name, bytes] of Object.entries(artifacts)) {
+  await writeFile(resolve(output, name), bytes);
+  digests[name] = sha256(bytes);
+}
+await writeFile(resolve(output, "THIRD_PARTY_LICENSES.txt"), notices.join("\n"));
+await writeFile(resolve("packages/tinfoil/src/wasm-artifacts.ts"), `// Generated by scripts/build-wasm-verifiers.mjs from tools/nvidia-verifier/source-lock.json.
+export const WASM_ARTIFACTS = Object.freeze(${JSON.stringify(digests, null, 2)});
+`);
+console.log(JSON.stringify(digests, null, 2));

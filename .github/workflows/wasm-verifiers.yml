@@ -1,0 +1,100 @@
+name: WebAssembly verifiers
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/wasm-verifiers.yml
+      - tools/nvidia-verifier/**
+      - tools/tinfoil-public-build/**
+      - scripts/build-wasm-verifiers.mjs
+      - packages/tinfoil/wasm/**
+      - packages/tinfoil/src/wasm-artifacts.ts
+  pull_request:
+    paths:
+      - .github/workflows/wasm-verifiers.yml
+      - tools/nvidia-verifier/**
+      - tools/tinfoil-public-build/**
+      - scripts/build-wasm-verifiers.mjs
+      - packages/tinfoil/wasm/**
+      - packages/tinfoil/src/wasm-artifacts.ts
+
+permissions:
+  contents: read
+
+jobs:
+  rebuild:
+    # The committed modules must equal an independent rebuild from the locked
+    # sources. Rust path dependencies hash their absolute location, so the
+    # build always uses this directory.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    env:
+      PI_TEE_WASM_BUILD_DIR: /home/runner/pi-tee-wasm-build
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24.21.0
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: 1.26.6
+          cache: false
+      - run: rustup toolchain install 1.90.0 --profile minimal --target wasm32-unknown-emscripten --no-self-update
+      - run: node scripts/build-wasm-verifiers.mjs
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: wasm-verifiers
+          path: |
+            packages/tinfoil/wasm/
+            packages/tinfoil/src/wasm-artifacts.ts
+      - run: git diff --stat --exit-code -- packages/tinfoil/wasm packages/tinfoil/src/wasm-artifacts.ts
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        if: github.event_name == 'push'
+        with:
+          subject-path: |
+            packages/tinfoil/wasm/nvattest.wasm.gz
+            packages/tinfoil/wasm/nvattest.mjs
+            packages/tinfoil/wasm/tinfoil-public-build.wasm.gz
+
+  runtimes:
+    # The modules are platform-independent; their hosts are not.
+    name: ${{ matrix.os }} / ${{ matrix.arch }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            arch: x64
+          - os: ubuntu-24.04-arm
+            arch: arm64
+          - os: macos-15-intel
+            arch: x64
+          - os: macos-15
+            arch: arm64
+          - os: windows-2025
+            arch: x64
+          - os: windows-11-arm
+            arch: arm64
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24.21.0
+          architecture: ${{ matrix.arch }}
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.3.13
+      - run: npm ci --ignore-scripts
+      - run: npm run build
+      - run: node --import tsx --test tests/wasm-verifiers.test.ts tests/pinned-tls.test.ts
+      - run: bun test tests/wasm-verifiers.test.ts tests/pinned-tls.test.ts
+      - run: node --import tsx scripts/check-nvidia-verifier.ts --collateral

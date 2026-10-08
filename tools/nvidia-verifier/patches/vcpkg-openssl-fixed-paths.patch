@@ -1,0 +1,12 @@
+--- a/ports/openssl/unix/portfile.cmake
++++ b/ports/openssl/unix/portfile.cmake
+@@ -41,7 +41,8 @@
+     vcpkg_host_path_list(PREPEND ENV{PATH} "${compiler_path}")
+ endif()
+ 
+-vcpkg_list(SET MAKEFILE_OPTIONS)
++# pi-tee: fixed, absent module and engine paths keep builds reproducible.
++vcpkg_list(SET MAKEFILE_OPTIONS OPTIONS "MODULESDIR=/ossl-modules" "ENGINESDIR=/engines-3")
+ # Universal builds don't support ASM
+ list(LENGTH VCPKG_OSX_ARCHITECTURES openssl_osx_arch_count)
+ if(openssl_osx_arch_count GREATER 1)

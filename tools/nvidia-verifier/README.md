@@ -1,17 +1,41 @@
-# Native NVIDIA verifier candidate
+# WebAssembly verifiers
 
-This maintainer recipe builds NVIDIA's file-evidence verifier without Docker. It is unfinished and is not selected by a production provider. End-user downloads, artifact authentication, platform execution and cryptographic qualification still need to land.
+`node scripts/build-wasm-verifiers.mjs` builds the two verifiers that ship in [`packages/tinfoil/wasm`](../../packages/tinfoil/wasm):
 
-`node scripts/build-native-nvidia.mjs` uses pinned NVIDIA, Regorus and vcpkg source commits, a checked-in Cargo lock and vcpkg's pinned dependency baseline. Maintainers need Git, CMake, a native C++ toolchain and Rust 1.90.0. Windows uses the static MSVC triplets. `PI_TEE_BUILD_CARGO` selects a toolchain executable; `PI_TEE_NATIVE_BUILD_DIR` selects the build directory.
+- **`nvattest.wasm.gz` and `nvattest.mjs`:** NVIDIA's local file-evidence verifier, compiled with Emscripten.
+- **`tinfoil-public-build.wasm.gz`:** the [public-build CPU and release verifier](../tinfoil-public-build/README.md), compiled as a WASI command.
 
-The recipe preserves NVIDIA's verification sources except for hash-locked patches, each requiring independent review. [`rim-leaf-signature.patch`](patches/rim-leaf-signature.patch) verifies reference-manifest signatures with the leaf certificate the chain check appraises. It replaces three unused local-device collectors with functions that reject collection. A Windows compatibility layer supplies alternative operator tokens, UTC time conversion, disables dynamic loading and removes a conflicting logging macro. The vcpkg dependency versions differ from the currently qualified Linux package, including xmlsec; they require differential tests and target execution.
+Users need no compilers, containers or downloads: the extension checks each file against [`wasm-artifacts.ts`](../../packages/tinfoil/src/wasm-artifacts.ts) before compiling it. The same bytes run on every Pi platform, under both Node and Bun.
 
-Build subprocesses receive an allowlisted toolchain environment and an isolated Cargo home. The output includes a hash-checked OpenSSL configuration using the built-in default provider. The check script authenticates that configuration before fetching evidence and excludes inherited NVIDIA service URLs, proxies and OpenSSL overrides. These controls must also hold in the eventual production adapter.
+## Sources and changes
 
-The output includes the binary hash, source identities, dependency manifest and resolved package inventory. It is marked `qualified: false`. A complete artifact inventory must also authenticate retained OS libraries, certificate delivery, licenses and compiler/build provenance before shipping. Android/Termux is outside this desktop build recipe and remains work to complete.
+[`source-lock.json`](source-lock.json) pins the NVIDIA SDK, Regorus, vcpkg and Emscripten SDK commits, Rust 1.90.0 and Go 1.26.6. vcpkg resolves the C/C++ dependencies from its pinned baseline and [`vcpkg.json`](vcpkg.json); Cargo uses the checked-in [`regorus.Cargo.lock`](regorus.Cargo.lock); Go uses the helper's `go.sum`.
 
-`node --import tsx scripts/check-native-nvidia.ts --collateral` obtains fresh public Gemma GPU evidence. It tests authentic evidence and corrupted nonces, report signatures, signed mode, certificate signatures, reference signatures and OCSP signatures. A loopback delivery proxy provides an untouched positive control for the collateral cases. Each negative requires a specific NVIDIA rejection code or failed signature claim; delivery errors cannot pass. Checks cover the three certificate/OCSP chains, signed references, version floors and authenticated SPT interpretation. No credentials or inference are sent, and no CPU/workload admission is established.
+NVIDIA's verification sources are unchanged except for hash-locked patches, each requiring independent review:
 
-`PI_TEE_NATIVE_NVIDIA_BINARY` selects a binary; `PI_TEE_NATIVE_NVIDIA_CONFIG` selects its pinned configuration. Maintainers may supply a private `{nonce,evidence}` fixture through `PI_TEE_NATIVE_NVIDIA_TEST_EVIDENCE`. The [desktop workflow](../../.github/workflows/native-nvidia.yml) builds and executes the cases on all six desktop targets. Full differential tests, Android execution, repeatable artifact packaging and final Pi integration remain required.
+- [`rim-leaf-signature.patch`](patches/rim-leaf-signature.patch) verifies reference-manifest signatures with the leaf certificate that the chain check appraises, and requires whole-document references.
+- [`collectors-disabled.cpp`](collectors-disabled.cpp) replaces NVIDIA's three local-GPU collectors with functions that reject collection.
+- [`nv-http-host.cpp`](nv-http-host.cpp) replaces the libcurl transport with a request bridge to the host. libcurl remains linked only for its URL parser.
 
-Written by Codex.
+The Go helper is unchanged. Its vendored copy of in-toto replaces one Unix-only file-writability check that verification never calls ([replacement](../tinfoil-public-build/wasi/in_toto_util_unix.go)).
+
+## Runtime boundary
+
+Each verifier runs in a worker thread that is terminated on cancellation or after a timeout.
+
+- The CPU helper runs under the minimal [WASI shim](../../packages/core/src/wasi.ts): arguments, `TZ=UTC`, clocks, randomness and bounded stdin/stdout. It has no preopened directories or sockets.
+- The NVIDIA verifier's only network path is the [request bridge](../../packages/tinfoil/src/nvattest-worker.ts). It admits `GET https://rim.attestation.nvidia.com/v1/rim/<id>` and `POST https://ocsp.ndis.nvidia.com`, with bounded bodies, no redirects, proxies or credentials, and at most 64 requests. Evidence is written to an in-memory file system. Emscripten's environment is isolated from the host's, so `OPENSSL_*` and NVIDIA service overrides cannot reach it.
+
+## Reproducibility
+
+A rebuild in the same directory produced identical artifacts, and the Go helper, JavaScript glue and license inventory were identical across directories. The Regorus library is not: Cargo hashes the absolute path of out-of-workspace path dependencies into symbol names. The committed artifacts therefore come from the [CI workflow](../../.github/workflows/wasm-verifiers.yml), which builds in `/home/runner/pi-tee-wasm-build`, uploads the result and fails if it differs from the committed bytes. Pushes to `main` also record GitHub build-provenance attestations.
+
+The triplet removes vcpkg and Emscripten source paths from objects. A hash-locked [port patch](patches/vcpkg-openssl-fixed-paths.patch) and a triplet option fix the OpenSSL module/engine and libxml2 catalog paths that would otherwise embed the build root.
+
+Maintainers need Git, CMake, a C/C++ host toolchain, Rust 1.90.0 with the `wasm32-unknown-emscripten` target, and Go. `PI_TEE_BUILD_CARGO` selects Cargo; `PI_TEE_WASM_BUILD_DIR` selects the build directory. The build also writes [`THIRD_PARTY_LICENSES.txt`](../../packages/tinfoil/wasm/THIRD_PARTY_LICENSES.txt) covering NVIDIA, the Emscripten runtime, every vcpkg port, Rust crate and Go module linked into the modules.
+
+## Checks
+
+[`check-nvidia-verifier.ts`](../../scripts/check-nvidia-verifier.ts) appraises fresh public Gemma GPU evidence through the WebAssembly verifier. It checks authentic evidence and rejects a wrong nonce and corrupted report, signed-mode, certificate, reference-manifest and OCSP signatures. A loopback proxy relays authentic NVIDIA collateral as the positive control for the collateral cases. Each negative requires a specific NVIDIA result code; delivery errors cannot pass. No credentials or inference are sent. [`wasm-verifiers.test.ts`](../../tests/wasm-verifiers.test.ts) covers artifact authentication, the absent file system, cancellation, an offline release authentication and the collateral-origin restriction.
+
+Written by Claude.

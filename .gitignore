@@ -3,4 +3,3 @@ packages/*/dist/
 *.tgz
 .scratch/
 .env
-packages/tinfoil/verifier-source/

@@ -1,10 +1,8 @@
 import { createHash } from "node:crypto";
-import { execFile } from "node:child_process";
-import { readFile, mkdtemp, writeFile, rm } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
 import { readBoundedBody, TeeError } from "pi-tee-core";
 import assert from "node:assert/strict";
 import { computeBootMeasurements } from "./boot-measurements.js";
+import { PUBLIC_BUILD_HELPER_DIGEST, runPublicBuildHelper } from "./wasm-verifiers.js";
 
 const host = "gemma4-31b-inf8-0.tinfoil.containers.tinfoil.dev";
 const repo = "tinfoilsh/confidential-gemma4-31b";
@@ -46,13 +44,11 @@ function cacheFor(fetch: typeof globalThis.fetch, helperDigest: string) {
 // Artifact authentication only. Callers must independently appraise the CPU-bound
 // GPU bytes and qualify runtime/key/channel behavior before production admission.
 export async function verifyPublicBuildArtifacts(options: {
-  helperPath: string; raw: string; nonce: string; signal: AbortSignal; evidenceFetch?: typeof globalThis.fetch; expectedHelperDigest?: string;
+  raw: string; nonce: string; signal: AbortSignal; evidenceFetch?: typeof globalThis.fetch;
 }) {
-  const { helperPath, raw, nonce, signal } = options;
+  const { raw, nonce, signal } = options;
   const evidenceFetch = options.evidenceFetch ?? globalThis.fetch;
   let cache: ArtifactCache | undefined;
-  let privateDirectory: string | undefined;
-  let executable = helperPath;
   async function get(url: string, redirect: RequestRedirect = "error", maxBytes = 2 * 1024 * 1024, headers: Record<string, string> = {}, expectedDigest?: string, immutable = false): Promise<Buffer> {
     signal.throwIfAborted();
     const key = expectedDigest ? `sha256:${expectedDigest}` : immutable ? `immutable:${url}` : undefined;
@@ -69,33 +65,20 @@ export async function verifyPublicBuildArtifacts(options: {
     return bytes;
   }
   const input = `{"nonce":${JSON.stringify(nonce)},"envelope":${raw}}`;
-  function appraise(input: string, args: string[] = []): Promise<any> {
+  async function appraise(input: string, args: string[] = []): Promise<any> {
     signal.throwIfAborted();
     const key = args.length === 1 && ["--cvm-build", "--runtime-config", "--container-reference", "--container-build"].includes(args[0]!) ? `helper:${args[0]}:${sha256(Buffer.from(input))}` : undefined;
     const hit = key && cache?.get(key, 16384);
-    if (hit) return Promise.resolve(parseJson(hit));
-    return new Promise((resolveResult, reject) => {
-      const child = execFile(executable, args, { env: { TZ: "UTC" }, signal, timeout: 60000, maxBuffer: 16384 }, (error, stdout) => {
-        if (error) return reject(new TeeError("TEE_PUBLIC_BUILD_REJECTED"));
-        try {
-          const value = parseJson(stdout);
-          if (key) cache?.put(key, Buffer.from(stdout));
-          resolveResult(value);
-        } catch { reject(new TeeError("TEE_PUBLIC_BUILD_REJECTED")); }
-      });
-      child.stdin?.on("error", () => {});
-      child.stdin?.end(input);
-    });
+    if (hit) return parseJson(hit);
+    const result = await runPublicBuildHelper(input, args, signal);
+    if (result.code !== 0) throw new TeeError("TEE_PUBLIC_BUILD_REJECTED");
+    const value = parseJson(result.stdout);
+    if (key) cache?.put(key, Buffer.from(result.stdout));
+    return value;
   }
   try {
     signal.throwIfAborted();
-    const helperBytes = await readFile(helperPath);
-    const helperDigest = sha256(helperBytes);
-    if (options.expectedHelperDigest) assert.equal(helperDigest, options.expectedHelperDigest);
-    cache = cacheFor(evidenceFetch, helperDigest);
-    privateDirectory = await mkdtemp(resolve(dirname(helperPath), "public-build-session-"));
-    executable = resolve(privateDirectory, "verifier");
-    await writeFile(executable, helperBytes, { mode: 0o700, flag: "wx", signal });
+    cache = cacheFor(evidenceFetch, PUBLIC_BUILD_HELPER_DIGEST);
     const verified = await appraise(input);
     assert(verified.cpuVerified === true && verified.publicBuildVerified === true && verified.inferenceQualified === false, "TEE_PUBLIC_BUILD_REJECTED");
     assert.equal(verified.repo, repo);
@@ -227,7 +210,5 @@ export async function verifyPublicBuildArtifacts(options: {
     cache?.clear();
     signal.throwIfAborted();
     throw new TeeError("TEE_PUBLIC_BUILD_REJECTED");
-  } finally {
-    if (privateDirectory) await rm(privateDirectory, { recursive: true, force: true });
   }
 }
