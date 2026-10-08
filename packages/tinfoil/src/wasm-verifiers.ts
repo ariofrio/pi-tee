@@ -56,6 +56,8 @@ export async function runNvidiaVerifier(options: { evidence: unknown[]; nonce: s
   if (origin !== undefined && !/^http:\/\/127\.0\.0\.1:[1-9][0-9]{0,4}$/.test(origin)) throw new TeeError("TEE_REQUEST_REJECTED");
   await glueArtifact();
   const module = await compiled("nvattest.wasm");
+  // The abort listener below cannot observe an abort during the awaits above.
+  options.signal.throwIfAborted();
   return new Promise((resolve, reject) => {
     // Source checkouts run through a TypeScript loader that workers inherit.
     const worker = new Worker(new URL(`./nvattest-worker.${import.meta.url.endsWith(".ts") ? "ts" : "js"}`, import.meta.url), {

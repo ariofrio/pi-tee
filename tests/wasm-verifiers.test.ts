@@ -94,3 +94,10 @@ test("the NVIDIA verifier cannot be redirected to arbitrary collateral services"
     await assert.rejects(runNvidiaVerifier({ evidence: [], nonce: "0".repeat(64), signal: AbortSignal.timeout(10000), collateralOrigin: origin }), /TEE_REQUEST_REJECTED/);
   }
 });
+
+test("the NVIDIA verifier honors cancellation that arrives while it is starting", async () => {
+  const controller = new AbortController();
+  const pending = runNvidiaVerifier({ evidence: [], nonce: "0".repeat(64), signal: controller.signal });
+  controller.abort(new Error("cancelled"));
+  await assert.rejects(pending, /cancelled/);
+});

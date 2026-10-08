@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Harden the WebAssembly verifier hosts: the WASI shim resolves only its own imports and returns `EFAULT` for buffers past the end of guest memory instead of truncating them.
+- Harden the WebAssembly verifier hosts: the WASI shim resolves only its own imports and returns `EFAULT` for buffers past the end of guest memory instead of truncating them, and a cancellation that arrives while the NVIDIA verifier is loading now stops it before its worker starts.
 
 - Key SEV-SNP firmware floors on the report's CPU model and raise them to AMD-SB-3019/3020/3027 (Genoa SNP SPL 0x1B and microcode 0x56, Genoa-X 0x1B/0x51, Turin 0x04/0x51). Reject other CPU models and non-production machine policies on both platforms. Gemma's current Genoa workers fall below these floors and are rejected; its TDX workers still serve.
 
