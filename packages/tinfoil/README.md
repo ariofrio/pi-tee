@@ -31,6 +31,6 @@ Routes are selected at startup:
 
 Caller URL/header/fetch overrides, hosted tools, remote media and unclassified fields are rejected at the final serialized request boundary. Pi provider retries are disabled and security failures use terminal codes. The router's disclosed SDK resend remains confined to SDK policy.
 
-The actual Pi suite on the `direct-public` route covers native secret login, stored-key precedence, completion/usage, Unicode tools and follow-up, reasoning and RPC cancellation for all three models under the Node CLI. Gemma also passed live-delta cancellation and the Bun-compiled Pi binary. Cancellation establishes local abort/acknowledgement, not the remote engine's stop time. [Live harness and validation](../../README.md#validation).
+The actual Pi suite on the `direct-public` route covers native secret login, stored-key precedence, completion/usage, Unicode tools and follow-up, reasoning, RPC cancellation and separate live-delta cancellation for all three models, under the Node CLI and the Bun-compiled Pi binary. Cancellation establishes local abort/acknowledgement, not the remote engine's stop time. [Live harness and validation](../../README.md#validation).
 
 Written by Codex and Claude.

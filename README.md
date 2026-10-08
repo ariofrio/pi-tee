@@ -95,7 +95,7 @@ npm run check:nvidia      # WebAssembly NVIDIA verifier negatives; no inference
 npm run build:wasm        # maintainers: rebuild the WebAssembly verifiers
 ```
 
-On 2026-10-08, `npm run check` passed 77 tests; three more need private evidence fixtures or boot artifacts and also passed. The experimental `direct-public` route, which runs the full public-build appraisal through the WebAssembly verifiers, passed the actual Pi suite for all three models under Node: login, stored-key precedence, completion/usage, Unicode tools and follow-up, reasoning, and cancellation. With Gemma it also passed under the Bun-compiled Pi 1.0.4 binary and cancellation after a live text delta. [Portable verification evidence](docs/portable-verification.md#evidence).
+On 2026-10-08, `npm run check` passed 77 tests; three more need private evidence fixtures or boot artifacts and also passed. The experimental `direct-public` route, which runs the full public-build appraisal through the WebAssembly verifiers, passed the actual Pi suite for all three models under Node and the Bun-compiled Pi 1.0.4 binary: login, stored-key precedence, completion/usage, Unicode tools and follow-up, reasoning, and cancellation, including after a live text delta. [Portable verification evidence](docs/portable-verification.md#evidence).
 
 The [live Pi harness](scripts/live-pi.ts) sends capped synthetic prompts using an isolated credential store:
 
