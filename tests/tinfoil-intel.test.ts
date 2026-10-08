@@ -54,7 +54,7 @@ test("default public admission remains gated and stale selections cannot fall ba
       integration.setPolicy("sdk");
       assert.deepEqual(integration.provider.getModels().map(m => m.id), route ? ["gemma4-31b"] : ["gemma4-31b", "gpt-oss-120b"]);
       if (route === undefined) assert.deepEqual(integration.getReport().assumptions, TINFOIL_ASSUMPTIONS);
-      else assert.match(integration.getReport().assumptions[0]!, /^Experimental SDK-policy candidate:/);
+      else assert.match(integration.getReport().assumptions[0]!, /^Experimental SDK-policy route/);
     }
   } finally {
     for (const [name, value] of [["PI_TINFOIL_ROUTE", oldRoute], ["PI_TINFOIL_POLICY", oldPolicy]]) {

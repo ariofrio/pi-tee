@@ -27,13 +27,11 @@ export function createTinfoilProvider(options: {
 } = {}) {
   const route = options.route ?? process.env.PI_TINFOIL_ROUTE ?? "auto";
   if (route !== "auto" && route !== "router" && route !== "direct" && route !== "direct-public") throw new TeeError("TEE_ROUTE_INVALID");
+  // direct-public runs the production appraisal under SDK policy while
+  // production admission is closed, so it shares the profile's assumptions.
   const assumptions = route === "direct-public" ? [
-    "Experimental SDK-policy candidate: local Pi/runtime/extensions/tools and the hash-checked WebAssembly public-build helper and NVIDIA verifier are trusted.",
-    "Intel roots, revocation, UpToDate appraisal and local floors authenticate fresh CPU-bound device and endpoint keys; named public Tinfoil workload/guest/platform/freshness workflows authorize dynamic releases.",
-    "GitHub Actions OIDC/hosted builds and the finite Sigstore roots are trusted; the named release publisher endorses OCI build/source claims, without an independent builder signature or rebuild.",
-    "Public source, authenticated guest/kernel/initrd/OCI artifacts, RTMR1/RTMR2 and the constrained Gemma runtime configuration are bound to the CPU-accepted signed predicate before GPU appraisal or inference; full running key/channel/reset qualification and implementation review remain incomplete.",
-    "Exactly one CPU-bound Hopper report must pass local NVIDIA signed references, revocation, nonce, secure-boot/debug and authenticated SPT checks; driver/VBIOS use explicit minimum versions rather than deployment pins.",
-    "TLS SPKI authenticates the inference socket before credentials/EHBP ciphertext; send once, reject rotation and encrypt a fresh cache salt. Tinfoil retains availability and credential/billing authority.",
+    "Experimental SDK-policy route running the public-build appraisal below; production admission awaits independent review.",
+    ...PUBLIC_BUILD_PROFILE.assumptions,
   ] : route === "direct" ? [
     "Local Pi, runtime, extensions, tools, the pinned JS verifier and EHBP are trusted.",
     "This direct SDK-policy candidate pins one worker, artifact digest and launch measurement; it is not independently approved.",

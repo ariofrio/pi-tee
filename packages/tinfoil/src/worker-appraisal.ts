@@ -14,14 +14,14 @@ export const PUBLIC_MODELS = Object.freeze({
 export type PublicModel = keyof typeof PUBLIC_MODELS;
 export const WORKER_HOST = /^[a-z0-9-]+-inf[0-9]+(?:-[0-9]+)?\.tinfoil\.containers\.tinfoil\.dev$/;
 
-const REQUIRED_CLAIMS = [
+export const REQUIRED_CLAIMS = Object.freeze([
   "x-nvidia-gpu-arch-check", "x-nvidia-gpu-attestation-report-parsed", "x-nvidia-gpu-attestation-report-cert-chain-fwid-match",
   "x-nvidia-gpu-driver-rim-fetched", "x-nvidia-gpu-driver-rim-measurements-available", "x-nvidia-gpu-driver-rim-signature-verified",
   "x-nvidia-gpu-driver-rim-version-match", "x-nvidia-gpu-vbios-rim-fetched", "x-nvidia-gpu-vbios-rim-measurements-available",
   "x-nvidia-gpu-vbios-rim-signature-verified", "x-nvidia-gpu-vbios-rim-version-match", "x-nvidia-gpu-vbios-index-no-conflict",
   "x-nvidia-gpu-attestation-report-signature-verified", "x-nvidia-gpu-attestation-report-nonce-match",
-];
-const CERTIFICATE_CHAINS = ["x-nvidia-gpu-attestation-report-cert-chain", "x-nvidia-gpu-driver-rim-cert-chain", "x-nvidia-gpu-vbios-rim-cert-chain"];
+]);
+export const CERTIFICATE_CHAINS = Object.freeze(["x-nvidia-gpu-attestation-report-cert-chain", "x-nvidia-gpu-driver-rim-cert-chain", "x-nvidia-gpu-vbios-rim-cert-chain"]);
 
 function requireCondition(ok: unknown, code: string): asserts ok { if (!ok) throw new TeeError(code); }
 

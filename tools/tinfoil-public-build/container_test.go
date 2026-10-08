@@ -198,3 +198,50 @@ func TestPublicContainerBuildOCI11(t *testing.T) {
 		t.Fatal("attestation for another manifest admitted")
 	}
 }
+
+// The engine image's process definition is part of the runtime profile: the
+// flag allowlist assumes vLLM (optionally behind Tinfoil's sidecar) parses argv.
+func TestEngineImageConfigConstrainsProcessDefinition(t *testing.T) {
+	for _, fixture := range []string{"gemma-v0.0.25", "deepseek-v0.0.3"} {
+		raw, err := os.ReadFile("testdata/" + fixture + "-config.json")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := checkEngineImageConfig(raw); err != nil {
+			t.Fatalf("%s rejected: %v", fixture, err)
+		}
+	}
+	raw, _ := os.ReadFile("testdata/gemma-v0.0.25-config.json")
+	// GLM-5.3's image adds Tinfoil's usage middleware to the Python path.
+	var withUsage map[string]any
+	json.Unmarshal(raw, &withUsage)
+	config := withUsage["config"].(map[string]any)
+	config["Env"] = append(config["Env"].([]any), "PYTHONPATH=/opt/tinfoil")
+	if changed, _ := json.Marshal(withUsage); checkEngineImageConfig(changed) != nil {
+		t.Fatal("usage middleware path rejected")
+	}
+	for name, mutate := range map[string]func(config map[string]any){
+		"python entrypoint":     func(c map[string]any) { c["Entrypoint"] = []any{"python3", "-m", "vllm.entrypoints.openai.api_server"} },
+		"shell entrypoint":      func(c map[string]any) { c["Entrypoint"] = []any{"/bin/sh", "-c", "vllm serve"} },
+		"other sidecar path":    func(c map[string]any) { c["Entrypoint"] = []any{"/opt/other/sidecar", "vllm", "serve"} },
+		"extra default args":    func(c map[string]any) { c["Cmd"] = []any{"--enable-log-requests"} },
+		"remote code env":       func(c map[string]any) { c["Env"] = append(c["Env"].([]any), "VLLM_ALLOW_REMOTE_CODE=1") },
+		"sidecar listen env":    func(c map[string]any) { c["Env"] = append(c["Env"].([]any), "SIDECAR_LISTEN=9999") },
+		"hf endpoint env":       func(c map[string]any) { c["Env"] = append(c["Env"].([]any), "HF_ENDPOINT=https://example.com") },
+		"python path injection": func(c map[string]any) { c["Env"] = append(c["Env"].([]any), "PYTHONPATH=/tmp") },
+		"python path suffix":    func(c map[string]any) { c["Env"] = append(c["Env"].([]any), "PYTHONPATH=/opt/tinfoil:/tmp") },
+		"non-root user":         func(c map[string]any) { c["User"] = "1000" },
+		"image volume":          func(c map[string]any) { c["Volumes"] = map[string]any{"/data": map[string]any{}} },
+		"case-variant field":    func(c map[string]any) { c["entrypoint"] = []any{"bash"} },
+	} {
+		var image map[string]any
+		if json.Unmarshal(raw, &image) != nil {
+			t.Fatal("invalid fixture")
+		}
+		mutate(image["config"].(map[string]any))
+		changed, _ := json.Marshal(image)
+		if checkEngineImageConfig(changed) == nil {
+			t.Fatalf("%s accepted", name)
+		}
+	}
+}

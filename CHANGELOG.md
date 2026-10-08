@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Key SEV-SNP firmware floors on the report's CPU model and raise them to AMD-SB-3019/3020/3027 (Genoa SNP SPL 0x1B and microcode 0x56, Genoa-X 0x1B/0x51, Turin 0x04/0x51). Reject other CPU models and non-production machine policies on both platforms. Gemma's current Genoa workers fall below these floors and are rejected; its TDX workers still serve.
+
+- Constrain the engine image's process definition: `vllm serve`, optionally behind Tinfoil's inference-sidecar, no default arguments, user, volumes or unlisted inherited environment. Declare the sidecar and Tinfoil's usage middleware as plaintext recipients in the serving contract.
+
 - Probe which advertised Tinfoil workers accept connections before spending full appraisals on them, so unreachable hosts no longer exhaust the four attempts.
 
 - Harden the pinned TLS client: malformed response headers fail the request instead of crashing Node, a stalled reader pauses the socket, close-delimited bodies are rejected, and the negotiated TLS version is checked because Bun ignores `minVersion`.

@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"reflect"
 	"strings"
 	"testing"
 
@@ -24,9 +23,9 @@ func TestPolicyInspectionAppliesFloorsWithoutAlteringPublisherInput(t *testing.T
 			"identity": strings.Repeat("a", 32),
 			"artifact": map[string]any{
 				"format":       "https://tinfoil.sh/predicate/platform-endorsements/v1",
-				"machines":     map[string]string{strings.Repeat("a", 32): "test"},
+				"machines":     map[string]string{strings.Repeat("a", 32): "tdx-test-prod"},
 				"measurements": map[string]any{"test": map[string]any{"mrtd": strings.Repeat("0", 96), "rtmr0": strings.Repeat("0", 96), "shape": map[string]any{"cpus": 16, "memory_mb": 65536, "gpus": 1, "disks": 5}}},
-				"policies": map[string]any{"test": map[string]any{"platform": "tdx", "tdx": map[string]any{
+				"policies": map[string]any{"tdx-test-prod": map[string]any{"platform": "tdx", "tdx": map[string]any{
 					"qe_vendor_id": "939a7233f79c4ca9940a0db3957f0607", "minimum_tee_tcb_svn": minimum.svn,
 					"mr_seam": strings.Repeat("0", 96), "td_attributes": "0000001000000000", "xfam": strings.Repeat("0", 16),
 					"minimum_tcb_evaluation_data_number": minimum.edition, "platform_measurements": []string{"test"},
@@ -44,7 +43,27 @@ func TestPolicyInspectionAppliesFloorsWithoutAlteringPublisherInput(t *testing.T
 	}
 }
 
-func snpArtifact(t *testing.T, turin bool, weak bool) (*policy.Artifact, string) {
+func TestTDXFloorsRejectNonProductionPolicies(t *testing.T) {
+	input, _ := json.Marshal(map[string]any{
+		"identity": strings.Repeat("a", 32),
+		"artifact": map[string]any{
+			"format":       "https://tinfoil.sh/predicate/platform-endorsements/v1",
+			"machines":     map[string]string{strings.Repeat("a", 32): "tdx-test-dev"},
+			"measurements": map[string]any{"test": map[string]any{"mrtd": strings.Repeat("0", 96), "rtmr0": strings.Repeat("0", 96), "shape": map[string]any{"cpus": 16, "memory_mb": 65536, "gpus": 1, "disks": 5}}},
+			"policies": map[string]any{"tdx-test-dev": map[string]any{"platform": "tdx", "tdx": map[string]any{
+				"qe_vendor_id": "939a7233f79c4ca9940a0db3957f0607", "minimum_tee_tcb_svn": strings.Repeat("00", 16),
+				"mr_seam": strings.Repeat("0", 96), "td_attributes": "0000001000000000", "xfam": strings.Repeat("0", 16),
+				"minimum_tcb_evaluation_data_number": 0, "platform_measurements": []string{"test"},
+			}}},
+		},
+	})
+	var out bytes.Buffer
+	if runPolicyInspection(bytes.NewReader(input), &out) == 0 {
+		t.Fatalf("development policy accepted: %s", out.String())
+	}
+}
+
+func snpArtifact(t *testing.T, name string, turin bool, weak bool) (*policy.Artifact, string) {
 	t.Helper()
 	tcb := map[string]any{"bl_spl": 7, "tee_spl": 0, "snp_spl": 14, "ucode_spl": 72}
 	api, build := "1.55", 21
@@ -63,8 +82,8 @@ func snpArtifact(t *testing.T, turin bool, weak bool) (*policy.Artifact, string)
 	identity := strings.Repeat("b", 128)
 	raw, _ := json.Marshal(map[string]any{
 		"format":   "https://tinfoil.sh/predicate/platform-endorsements/v1",
-		"machines": map[string]string{identity: "test"},
-		"policies": map[string]any{"test": map[string]any{"platform": "sev-snp", "sev_snp": map[string]any{
+		"machines": map[string]string{identity: name},
+		"policies": map[string]any{name: map[string]any{"platform": "sev-snp", "sev_snp": map[string]any{
 			"minimum_build": build, "minimum_api_version": api, "minimum_abi_version": "0.0", "minimum_guest_svn": 0,
 			"minimum_tcb": tcb, "minimum_launch_tcb": tcb,
 			"guest_policy":  map[string]any{"debug": false, "smt": true, "migrate_ma": false, "single_socket": false},
@@ -80,36 +99,74 @@ func snpArtifact(t *testing.T, turin bool, weak bool) (*policy.Artifact, string)
 	return artifact, identity
 }
 
-// AMD has no UpToDate verdict: local floors backstop the publisher's, as for TDX.
-func TestSNPLocalFloorsRaiseWeakPublisherPolicy(t *testing.T) {
-	for _, turin := range []bool{false, true} {
-		reference, identity := snpArtifact(t, turin, false)
-		_, want, _ := reference.PolicyFor(identity, policy.PlatformSEVSNP)
-		weak, _ := snpArtifact(t, turin, true)
-		floored, err := floorSNPArtifact(weak, identity)
+func snpFloorsOf(t *testing.T, artifact *policy.Artifact, identity string) (snp, ucode uint8, api string) {
+	t.Helper()
+	_, selected, err := artifact.PolicyFor(identity, policy.PlatformSEVSNP)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := selected.SEVSNP
+	if *p.MinimumTCB.SnpSpl != *p.MinimumLaunchTCB.SnpSpl || *p.MinimumTCB.UcodeSpl != *p.MinimumLaunchTCB.UcodeSpl {
+		t.Fatalf("launch and current floors differ: %+v", p)
+	}
+	return *p.MinimumTCB.SnpSpl, *p.MinimumTCB.UcodeSpl, p.MinimumAPIVersion
+}
+
+// AMD has no UpToDate verdict: per-CPU floors from AMD-SB-3019/3020/3027
+// backstop the publisher's, keyed on the report's authenticated CPUID.
+func TestSNPLocalFloorsFollowAMDBulletinsPerCPU(t *testing.T) {
+	for _, item := range []struct {
+		name               string
+		cpu                [3]byte
+		turin              bool
+		wantSNP, wantUcode uint8
+	}{
+		{"Genoa B1", [3]byte{0x19, 0x11, 0x01}, false, 0x1b, 0x56},
+		{"Genoa-X B2", [3]byte{0x19, 0x11, 0x02}, false, 0x1b, 0x51},
+		{"Turin C1", [3]byte{0x1a, 0x02, 0x01}, true, 0x04, 0x51},
+	} {
+		weak, identity := snpArtifact(t, "amd-test-prod", item.turin, true)
+		floored, err := floorSNPArtifact(weak, identity, item.cpu)
 		if err != nil {
-			t.Fatal(err)
+			t.Fatalf("%s: %v", item.name, err)
 		}
-		_, got, _ := floored.PolicyFor(identity, policy.PlatformSEVSNP)
-		if !reflect.DeepEqual(got.SEVSNP.MinimumTCB, want.SEVSNP.MinimumTCB) || !reflect.DeepEqual(got.SEVSNP.MinimumLaunchTCB, want.SEVSNP.MinimumLaunchTCB) ||
-			*got.SEVSNP.MinimumBuild != *want.SEVSNP.MinimumBuild || got.SEVSNP.MinimumAPIVersion != want.SEVSNP.MinimumAPIVersion {
-			t.Fatalf("turin=%v: floors not applied: %+v", turin, got.SEVSNP)
+		if snp, ucode, _ := snpFloorsOf(t, floored, identity); snp != item.wantSNP || ucode != item.wantUcode {
+			t.Fatalf("%s: floors snp=%#x ucode=%#x", item.name, snp, ucode)
 		}
-		_, original, _ := weak.PolicyFor(identity, policy.PlatformSEVSNP)
-		if *original.SEVSNP.MinimumTCB.UcodeSpl != 0 {
-			t.Fatal("publisher input was altered")
+		if snp, _, _ := snpFloorsOf(t, weak, identity); snp != 0 {
+			t.Fatalf("%s: publisher input was altered", item.name)
 		}
 		// Stronger publisher floors are preserved.
-		strong, _ := snpArtifact(t, turin, false)
-		_, selected, _ := strong.PolicyFor(identity, policy.PlatformSEVSNP)
-		*selected.SEVSNP.MinimumTCB.UcodeSpl = 250
+		strong, _ := snpArtifact(t, "amd-test-prod", item.turin, false)
+		name, selected, _ := strong.PolicyFor(identity, policy.PlatformSEVSNP)
+		*selected.SEVSNP.MinimumTCB.UcodeSpl, *selected.SEVSNP.MinimumLaunchTCB.UcodeSpl = 250, 250
 		selected.SEVSNP.MinimumAPIVersion = "9.12"
-		name, _, _ := strong.PolicyFor(identity, policy.PlatformSEVSNP)
 		strong.Policies[name] = *selected
-		floored, err = floorSNPArtifact(strong, identity)
-		_, got, _ = floored.PolicyFor(identity, policy.PlatformSEVSNP)
-		if err != nil || *got.SEVSNP.MinimumTCB.UcodeSpl != 250 || got.SEVSNP.MinimumAPIVersion != "9.12" {
-			t.Fatalf("turin=%v: stronger floors not preserved: %v %+v", turin, err, got.SEVSNP)
+		floored, err = floorSNPArtifact(strong, identity, item.cpu)
+		if _, ucode, api := snpFloorsOf(t, floored, identity); err != nil || ucode != 250 || api != "9.12" {
+			t.Fatalf("%s: stronger floors not preserved: %v", item.name, err)
+		}
+	}
+}
+
+func TestSNPFloorsRejectUnknownCPUsMismatchedShapesAndNonProductionPolicies(t *testing.T) {
+	genoa, turin := [3]byte{0x19, 0x11, 0x01}, [3]byte{0x1a, 0x02, 0x01}
+	for _, item := range []struct {
+		name   string
+		policy string
+		turin  bool
+		cpu    [3]byte
+	}{
+		{"Milan", "amd-test-prod", false, [3]byte{0x19, 0x01, 0x01}},
+		{"Turin Dense", "amd-test-prod", true, [3]byte{0x1a, 0x11, 0x00}},
+		{"Genoa stepping 0", "amd-test-prod", false, [3]byte{0x19, 0x11, 0x00}},
+		{"Genoa CPU, Turin policy", "amd-test-prod", true, genoa},
+		{"Turin CPU, Genoa policy", "amd-test-prod", false, turin},
+		{"development policy", "amd-genoa-dev", false, genoa},
+	} {
+		artifact, identity := snpArtifact(t, item.policy, item.turin, false)
+		if _, err := floorSNPArtifact(artifact, identity, item.cpu); err == nil {
+			t.Fatalf("%s: accepted", item.name)
 		}
 	}
 }

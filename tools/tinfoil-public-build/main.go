@@ -167,7 +167,10 @@ func verify(raw, nonce []byte, now time.Time) (*result, error) {
 	case policy.PlatformTDX:
 		floored, err = floorTDXArtifact(platform.Artifact, authenticated.Identity)
 	case policy.PlatformSEVSNP:
-		floored, err = floorSNPArtifact(platform.Artifact, authenticated.Identity)
+		var cpu [3]byte
+		if cpu, err = snpCPU(doc.CPUEvidence.ReportBase64); err == nil {
+			floored, err = floorSNPArtifact(platform.Artifact, authenticated.Identity, cpu)
+		}
 	default:
 		err = errors.New("TEE_CPU_PLATFORM_REJECTED")
 	}

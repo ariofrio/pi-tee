@@ -1,6 +1,8 @@
 package main
 
 import (
+	"encoding/base64"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -89,6 +91,9 @@ func floorTDXArtifact(artifact *policy.Artifact, identity string) (*policy.Artif
 	if err != nil {
 		return nil, err
 	}
+	if !productionPolicy(name) {
+		return nil, errors.New("TEE_CPU_POLICY_REJECTED")
+	}
 	minimum, err := policy.DecodeHex("minimum", selected.TDX.MinimumTEETCBSVN, 16)
 	if err != nil || selected.TDX.TDAttributes != "0000001000000000" || selected.TDX.QEVendorID != "939a7233f79c4ca9940a0db3957f0607" {
 		return nil, errors.New("TEE_CPU_POLICY_REJECTED")
@@ -102,17 +107,27 @@ func floorTDXArtifact(artifact *policy.Artifact, identity string) (*policy.Artif
 	return copy, nil
 }
 
-// Local SEV-SNP backstops: the floors Tinfoil's SDK hard-coded before v3
-// delegated them to the platform publisher (tinfoil-go 05e8179
-// verifier/attestation/sev.go). The verifier ties each policy's shape to the
-// report's product line: Turin policies carry fmc_spl, Genoa ones do not.
-var snpFloors = map[bool]struct {
+// Local SEV-SNP floors per CPU, keyed on the report's authenticated CPUID
+// family/model/stepping. AMD has no UpToDate verdict, so these track AMD's
+// bulletins and must be raised as AMD publishes fixes:
+//   - AMD-SB-3019 (CVE-2024-56161), AMD-SB-3020 (CVE-2025-0033): SNP SPL
+//     0x1B on Genoa/Genoa-X, 0x04 on Turin.
+//   - AMD-SB-3027 (CVE-2025-29943): microcode SPL 0x56 Genoa B1, 0x51
+//     Genoa-X B2, 0x51 Turin C1.
+//
+// Bootloader/TEE/FMC floors and the build/API minimums come from Tinfoil's
+// SDK before v3 delegated them (tinfoil-go 05e8179 verifier/attestation/sev.go).
+type snpFloor struct {
+	turin bool
 	build int
 	api   [2]int
 	tcb   policy.TCB
-}{
-	false: {21, [2]int{1, 55}, policy.TCB{BlSpl: u8(7), TeeSpl: u8(0), SnpSpl: u8(14), UcodeSpl: u8(72)}},
-	true:  {0, [2]int{1, 58}, policy.TCB{FmcSpl: u8(1), BlSpl: u8(1), TeeSpl: u8(1), SnpSpl: u8(4), UcodeSpl: u8(82)}},
+}
+
+var snpFloors = map[[3]byte]snpFloor{
+	{0x19, 0x11, 0x01}: {false, 21, [2]int{1, 55}, policy.TCB{BlSpl: u8(7), TeeSpl: u8(0), SnpSpl: u8(0x1b), UcodeSpl: u8(0x56)}},
+	{0x19, 0x11, 0x02}: {false, 21, [2]int{1, 55}, policy.TCB{BlSpl: u8(7), TeeSpl: u8(0), SnpSpl: u8(0x1b), UcodeSpl: u8(0x51)}},
+	{0x1a, 0x02, 0x01}: {true, 0, [2]int{1, 58}, policy.TCB{FmcSpl: u8(1), BlSpl: u8(1), TeeSpl: u8(1), SnpSpl: u8(0x04), UcodeSpl: u8(0x51)}},
 }
 
 func u8(value uint8) *uint8 { return &value }
@@ -132,11 +147,30 @@ func versionParts(version string) ([2]int, bool) {
 	return [2]int{a, b}, ok && errA == nil && errB == nil
 }
 
-// SEV-SNP has no manufacturer "UpToDate" verdict; the publisher's TCB floors,
-// raised to the local backstops, and AMD's document-carried CRL govern
-// firmware. Independently require a non-debug, non-migratable guest at VMPL0
-// on released firmware.
-func floorSNPArtifact(artifact *policy.Artifact, identity string) (*policy.Artifact, error) {
+// Platform publishers also sign development policies; only production ones
+// may serve inference.
+func productionPolicy(name string) bool { return strings.HasSuffix(name, "-prod") }
+
+// snpCPU reads CPUID family/model/stepping (report version 3+, offsets
+// 0x188-0x18A) from the report bytes quote.Authenticate verified.
+func snpCPU(reportBase64 string) ([3]byte, error) {
+	report, err := base64.StdEncoding.DecodeString(reportBase64)
+	if err != nil || len(report) != 0x4a0 || binary.LittleEndian.Uint32(report[0:4]) < 3 {
+		return [3]byte{}, errors.New("TEE_CPU_POLICY_REJECTED")
+	}
+	return [3]byte{report[0x188], report[0x189], report[0x18a]}, nil
+}
+
+// SEV-SNP: the publisher's floors, raised to the local per-CPU floors, and
+// AMD's document-carried CRL govern firmware. Independently require a
+// production policy for a non-debug, non-migratable guest at VMPL0 on
+// released firmware.
+func floorSNPArtifact(artifact *policy.Artifact, identity string, cpu [3]byte) (*policy.Artifact, error) {
+	reject := errors.New("TEE_CPU_POLICY_REJECTED")
+	floor, known := snpFloors[cpu]
+	if !known {
+		return nil, reject
+	}
 	raw, err := json.Marshal(artifact)
 	if err != nil {
 		return nil, err
@@ -150,14 +184,13 @@ func floorSNPArtifact(artifact *policy.Artifact, identity string) (*policy.Artif
 		return nil, err
 	}
 	snp := selected.SEVSNP
-	if snp == nil || snp.GuestPolicy.Debug || snp.GuestPolicy.MigrateMA || snp.PermitProvisionalFirmware || snp.VMPL == nil || *snp.VMPL != 0 ||
-		snp.MinimumBuild == nil || (snp.MinimumTCB.FmcSpl == nil) != (snp.MinimumLaunchTCB.FmcSpl == nil) {
-		return nil, errors.New("TEE_CPU_POLICY_REJECTED")
+	if !productionPolicy(name) || snp == nil || snp.GuestPolicy.Debug || snp.GuestPolicy.MigrateMA || snp.PermitProvisionalFirmware || snp.VMPL == nil || *snp.VMPL != 0 ||
+		snp.MinimumBuild == nil || (snp.MinimumTCB.FmcSpl != nil) != floor.turin || (snp.MinimumLaunchTCB.FmcSpl != nil) != floor.turin {
+		return nil, reject
 	}
-	floor := snpFloors[snp.MinimumTCB.FmcSpl != nil]
 	version, ok := versionParts(snp.MinimumAPIVersion)
 	if !ok {
-		return nil, errors.New("TEE_CPU_POLICY_REJECTED")
+		return nil, reject
 	}
 	if version[0] < floor.api[0] || (version[0] == floor.api[0] && version[1] < floor.api[1]) {
 		snp.MinimumAPIVersion = fmt.Sprintf("%d.%d", floor.api[0], floor.api[1])

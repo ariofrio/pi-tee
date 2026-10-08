@@ -8,6 +8,7 @@ import (
 	"errors"
 	"io"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/tinfoilsh/tinfoil-go/verifier/provenance"
@@ -189,7 +190,7 @@ func authenticateContainer(i *containerInput) (map[string]any, error) {
 			Labels map[string]string `json:"Labels"`
 		} `json:"config"`
 	}
-	if strictDecode(configRaw, &imageConfig, true) != nil || imageConfig.Architecture != "amd64" || imageConfig.OS != "linux" {
+	if strictDecode(configRaw, &imageConfig, true) != nil || imageConfig.Architecture != "amd64" || imageConfig.OS != "linux" || checkEngineImageConfig(configRaw) != nil {
 		return nil, rejected
 	}
 	var statement struct {
@@ -320,4 +321,50 @@ func runContainerReference(reader io.Reader, writer io.Writer) int {
 	}
 	json.NewEncoder(writer).Encode(map[string]any{"artifactReferenceVerified": false, "inferenceQualified": false, "failure": "TEE_CONTAINER_BUILD_REJECTED"})
 	return 1
+}
+
+// Engine process definitions the runtime profile's flag analysis assumes:
+// vLLM's own CLI, optionally behind Tinfoil's inference-sidecar, which
+// proxies the declared port to vLLM on loopback and appends only
+// --host/--port. Both are inside the workload-publisher-endorsed image.
+var engineEntrypoints = [][]string{
+	{"vllm", "serve"},
+	{"/opt/tinfoil/inference-sidecar", "vllm", "serve"},
+}
+
+// Inherited image environment: CUDA/NVIDIA runtime selection, build-time
+// installer settings, vLLM build labels and the image-internal path of
+// Tinfoil's usage middleware (loaded only by the allowlisted --middleware
+// flag). Anything else could change engine behavior outside the flag
+// allowlist (remote code, endpoints, other Python paths).
+var engineImageEnv = regexp.MustCompile(`^(PYTHONPATH=/opt/tinfoil$|(PATH|LD_LIBRARY_PATH|NVARCH|NVIDIA_REQUIRE_CUDA|NVIDIA_VISIBLE_DEVICES|NVIDIA_DRIVER_CAPABILITIES|NV_CUDA_CUDART_VERSION|CUDA_VERSION|DEBIAN_FRONTEND|UV_HTTP_TIMEOUT|UV_INDEX_STRATEGY|UV_LINK_MODE|UV_PYTHON_INSTALL_DIR|UV_CACHE_DIR|UV_OVERRIDE|TORCH_CUDA_ARCH_LIST|VLLM_ENABLE_CUDA_COMPATIBILITY|VLLM_USAGE_SOURCE|VLLM_BUILD_COMMIT|VLLM_BUILD_PIPELINE|VLLM_BUILD_URL|VLLM_IMAGE_TAG)=)`)
+
+func checkEngineImageConfig(raw []byte) error {
+	reject := errors.New("TEE_CONTAINER_BUILD_REJECTED")
+	var image struct {
+		Config struct {
+			Entrypoint  []string        `json:"Entrypoint"`
+			Cmd         []string        `json:"Cmd"`
+			Env         []string        `json:"Env"`
+			User        string          `json:"User"`
+			Volumes     map[string]any  `json:"Volumes"`
+			Shell       []string        `json:"Shell"`
+			OnBuild     []string        `json:"OnBuild"`
+			Healthcheck json.RawMessage `json:"Healthcheck"`
+		} `json:"config"`
+	}
+	if strictDecode(raw, &image, true) != nil {
+		return reject
+	}
+	c := image.Config
+	if !slices.ContainsFunc(engineEntrypoints, func(entry []string) bool { return slices.Equal(entry, c.Entrypoint) }) ||
+		len(c.Cmd) != 0 || c.User != "" || len(c.Volumes) != 0 || len(c.Shell) != 0 || len(c.OnBuild) != 0 || (len(c.Healthcheck) != 0 && string(c.Healthcheck) != "null") {
+		return reject
+	}
+	for _, entry := range c.Env {
+		if !engineImageEnv.MatchString(entry) {
+			return reject
+		}
+	}
+	return nil
 }
