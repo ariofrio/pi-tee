@@ -6,7 +6,7 @@ import { TeeError } from "./policy.js";
 // environment, clocks, randomness, bounded stdin/stdout and nothing else.
 // There are no preopened directories or sockets, so a module cannot read or
 // write local files or open connections.
-const ERRNO_SUCCESS = 0, ERRNO_BADF = 8, ERRNO_INVAL = 28, ERRNO_NOSYS = 52, ERRNO_NOTCAPABLE = 76;
+const ERRNO_SUCCESS = 0, ERRNO_BADF = 8, ERRNO_FAULT = 21, ERRNO_INVAL = 28, ERRNO_NOSYS = 52, ERRNO_NOTCAPABLE = 76;
 const FILETYPE_CHARACTER_DEVICE = 2;
 const EVENTTYPE_CLOCK = 0;
 
@@ -47,10 +47,13 @@ export function runWasiSync(module: WebAssembly.Module, options: WasiRunOptions)
     view().setUint32(size, list.reduce((total, item) => total + item.length, 0), true);
     return ERRNO_SUCCESS;
   }
+  // Guest pointers and lengths are unsigned; a range past the end of memory is
+  // EFAULT, never a shorter read or write.
+  const inMemory = (pointer: number, length: number) => (pointer >>> 0) + (length >>> 0) <= memory.buffer.byteLength;
   function iovecs(pointer: number, length: number) {
     const result: [number, number][] = [];
     for (let index = 0; index < length; index++) result.push([view().getUint32(pointer + index * 8, true), view().getUint32(pointer + index * 8 + 4, true)]);
-    return result;
+    return result.every(([buffer, size]) => inMemory(buffer, size)) ? result : undefined;
   }
   const stdio = (fd: number) => fd === 0 || fd === 1 || fd === 2;
   const imports: Record<string, (...args: any[]) => number> = {
@@ -65,13 +68,17 @@ export function runWasiSync(module: WebAssembly.Module, options: WasiRunOptions)
       return ERRNO_SUCCESS;
     },
     random_get: (pointer: number, length: number) => {
+      if (!inMemory(pointer, length)) return ERRNO_FAULT;
+      pointer >>>= 0; length >>>= 0;
       for (let offset = 0; offset < length; offset += 65536) crypto.getRandomValues(bytes().subarray(pointer + offset, pointer + Math.min(length, offset + 65536)));
       return ERRNO_SUCCESS;
     },
     fd_write: (fd: number, pointer: number, length: number, written: number) => {
       if (fd !== 1 && fd !== 2) return ERRNO_BADF;
+      const buffers = iovecs(pointer, length);
+      if (!buffers) return ERRNO_FAULT;
       let total = 0;
-      for (const [buffer, size] of iovecs(pointer, length)) {
+      for (const [buffer, size] of buffers) {
         if (fd === 1) {
           stdoutBytes += size;
           if (stdoutBytes > options.maxStdout) throw new OutputLimit();
@@ -84,8 +91,10 @@ export function runWasiSync(module: WebAssembly.Module, options: WasiRunOptions)
     },
     fd_read: (fd: number, pointer: number, length: number, read: number) => {
       if (fd !== 0) return ERRNO_BADF;
+      const buffers = iovecs(pointer, length);
+      if (!buffers) return ERRNO_FAULT;
       let total = 0;
-      for (const [buffer, size] of iovecs(pointer, length)) {
+      for (const [buffer, size] of buffers) {
         const chunk = stdin.subarray(stdinOffset, stdinOffset + size);
         bytes().set(chunk, buffer); stdinOffset += chunk.length; total += chunk.length;
         if (chunk.length < size) break;
@@ -132,7 +141,7 @@ export function runWasiSync(module: WebAssembly.Module, options: WasiRunOptions)
     proc_raise: () => ERRNO_NOSYS,
   };
   const denied = new Proxy(imports, {
-    get: (target, name: string) => target[name] ?? ((..._args: unknown[]) => name.startsWith("path_") ? ERRNO_NOTCAPABLE : name.startsWith("fd_") ? ERRNO_BADF : name.startsWith("sock_") ? ERRNO_NOSYS : ERRNO_INVAL),
+    get: (target, name: string) => Object.hasOwn(target, name) ? target[name] : ((..._args: unknown[]) => name.startsWith("path_") ? ERRNO_NOTCAPABLE : name.startsWith("fd_") ? ERRNO_BADF : name.startsWith("sock_") ? ERRNO_NOSYS : ERRNO_INVAL),
   });
   const required = WebAssembly.Module.imports(module);
   if (required.some(item => item.module !== "wasi_snapshot_preview1" || item.kind !== "function")) throw new TeeError("TEE_VERIFIER_ARTIFACT_REJECTED");
