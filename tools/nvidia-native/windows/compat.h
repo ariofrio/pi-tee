@@ -1,5 +1,6 @@
 #pragma once
 #include <cstdlib>
+#include <iso646.h>  // NVIDIA headers use alternative tokens such as `and`.
 #include <ctime>
 #include <sys/stat.h>
 #include <windows.h>
