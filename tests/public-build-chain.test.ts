@@ -46,6 +46,8 @@ test("the artifact chain rejects substituted delivery bytes using the WebAssembl
         assert.equal(init?.body, undefined, "No artifact check sends a prompt or credentials.");
         assert(!url.includes("chat/completions") && !url.includes("nvidia"));
         const bytes = change?.url === url ? change.bytes : artifacts.get(url);
+        // GitHub answers 404 for a digest with no attestations.
+        if (!bytes && url.startsWith("https://api.github.com/repos/tinfoilsh/cvmimage/attestations/")) return new Response("{}", { status: 404 });
         assert(bytes, `Unexpected delivery endpoint ${url}`);
         if (unavailable?.(url, requests.filter(seen => seen === url).length)) return new Response("unavailable", { status: 503 });
         return new Response(new Uint8Array(bytes));
@@ -76,14 +78,46 @@ test("the artifact chain rejects substituted delivery bytes using the WebAssembl
   assert.equal((await flaky.result).codeStatementDigest, verified.codeStatementDigest);
   const attestations = `https://api.github.com/repos/tinfoilsh/cvmimage/attestations/sha256:${hash(manifest)}?per_page=100`;
   const down = await run(undefined, false, url => url === attestations);
-  await assert.rejects(down.result, /TEE_PUBLIC_BUILD_REJECTED/);
+  await assert.rejects(down.result, /TEE_PUBLIC_ARTIFACT_UNAVAILABLE/);
   assert.equal(down.requests.filter(url => url === attestations).length, 3);
+  // GitHub API metadata persists across processes once a chain verifies, and
+  // a failing chain discards what it read.
+  const { mkdtemp, readdir, writeFile } = await import("node:fs/promises");
+  const persistentCacheDir = await mkdtemp(resolve(".scratch/work/github-metadata-"));
+  const githubApi = (requests: string[]) => requests.filter(url => url.startsWith("https://api.github.com/"));
+  const persist = async (fresh = true) => {
+    const requests: string[] = [];
+    const fetch = (async (input: RequestInfo | URL) => {
+      const url = String(input); requests.push(url);
+      const bytes = artifacts.get(url); assert(bytes, `Unexpected delivery endpoint ${url}`);
+      return new Response(new Uint8Array(bytes));
+    }) as typeof globalThis.fetch;
+    const result = verifyPublicBuildArtifacts({ repo, raw: JSON.stringify(evidence.envelope), nonce: evidence.nonce, signal: AbortSignal.timeout(60000), evidenceFetch: fetch, persistentCacheDir });
+    return { result, requests, fresh };
+  };
+  const first = await persist();
+  await first.result;
+  assert.equal(githubApi(first.requests).length, 2);
+  assert.equal((await readdir(persistentCacheDir)).length, 2);
+  const second = await persist();
+  await second.result;
+  assert.equal(githubApi(second.requests).length, 0, "A new process reuses verified GitHub metadata.");
+  for (const name of await readdir(persistentCacheDir)) await writeFile(resolve(persistentCacheDir, name), '{"parents":[{"sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}],"attestations":[]}');
+  const poisoned = await persist();
+  await assert.rejects(poisoned.result, /TEE_PUBLIC_BUILD_REJECTED/);
+  assert.equal((await readdir(persistentCacheDir).catch(() => [])).length, 0, "A failing chain discards persisted metadata.");
+  const recovered = await persist();
+  await recovered.result;
+  assert.equal(githubApi(recovered.requests).length, 2);
+  // Delivery outages are reported as unavailability, not rejection.
+  const outage = await run(undefined, false, url => url.startsWith("https://api.github.com/"));
+  await assert.rejects(outage.result, /TEE_PUBLIC_ARTIFACT_UNAVAILABLE/);
   for (const [url, bytes] of artifacts) {
     if (url.includes("ghcr.io/token")) continue;
     const altered = Buffer.from(bytes);
     altered[0] = altered[0]! ^ 1;
     const negative = await run({ url, bytes: altered });
-    await assert.rejects(negative.result, /TEE_PUBLIC_BUILD_REJECTED/);
+    await assert.rejects(negative.result, /TEE_PUBLIC_BUILD_REJECTED/, url);
     assert(negative.requests.includes(url), "The substituted artifact must actually reach its check.");
   }
   for (const change of [

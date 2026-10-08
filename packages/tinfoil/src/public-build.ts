@@ -2,6 +2,9 @@ import { createHash } from "node:crypto";
 import { readBoundedBody, TeeError } from "pi-tee-core";
 import assert from "node:assert/strict";
 import { setTimeout as delay } from "node:timers/promises";
+import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { computeBootMeasurements } from "./boot-measurements.js";
 import { computeSnpLaunchDigest } from "./snp-measurement.js";
 import { PUBLIC_BUILD_HELPER_DIGEST, runPublicBuildHelper } from "./wasm-verifiers.js";
@@ -41,15 +44,31 @@ function cacheFor(fetch: typeof globalThis.fetch, helperDigest: string) {
   return cache;
 }
 
+// GitHub's API allows 60 unauthenticated requests per hour per address, and
+// each Pi process starts with an empty in-memory cache. The two immutable
+// API lookups (guest-build attestations by manifest digest, a release
+// commit's parents) are persisted locally, but only after a chain that used
+// them fully verified; a failing chain that read any of them discards them all.
+function defaultPersistentCacheDir() {
+  return join(process.env.XDG_CACHE_HOME || join(homedir(), ".cache"), "pi-tee", "github-metadata");
+}
+const persistable = (url: string) => url.startsWith("https://api.github.com/");
+
 // Artifact authentication only. Callers must independently appraise the CPU-bound
 // GPU bytes and qualify runtime/key/channel behavior before production admission.
 export async function verifyPublicBuildArtifacts(options: {
   raw: string; nonce: string; signal: AbortSignal; repo: string; evidenceFetch?: typeof globalThis.fetch;
+  /** Defaults to the user cache directory for production delivery; off for injected fetches unless given. */
+  persistentCacheDir?: string;
 }) {
   const { raw, nonce, signal, repo } = options;
   const evidenceFetch = options.evidenceFetch ?? globalThis.fetch;
+  const persistentDir = options.persistentCacheDir ?? (options.evidenceFetch ? undefined : defaultPersistentCacheDir());
+  const persistedReads: string[] = [];
+  const pendingWrites = new Map<string, Buffer>();
+  const persistentPath = (url: string) => persistentDir && join(persistentDir, sha256(Buffer.from(url)));
   let cache: ArtifactCache | undefined;
-  async function get(url: string, redirect: RequestRedirect = "error", maxBytes = 2 * 1024 * 1024, headers: Record<string, string> = {}, expectedDigest?: string, immutable = false): Promise<Buffer> {
+  async function get(url: string, redirect: RequestRedirect = "error", maxBytes = 2 * 1024 * 1024, headers: Record<string, string> = {}, expectedDigest?: string, immutable = false, missingRejects = false): Promise<Buffer> {
     signal.throwIfAborted();
     const key = expectedDigest ? `sha256:${expectedDigest}` : immutable ? `immutable:${url}` : undefined;
     const hit = key && cache?.get(key, maxBytes);
@@ -57,18 +76,34 @@ export async function verifyPublicBuildArtifacts(options: {
       if (expectedDigest) assert.equal(sha256(hit), expectedDigest);
       return hit;
     }
+    const path = immutable && persistable(url) ? persistentPath(url) : undefined;
+    if (path) {
+      const stored = await readFile(path).catch(() => undefined);
+      if (stored && stored.length <= maxBytes) {
+        persistedReads.push(path);
+        if (key) cache?.put(key, stored);
+        return stored;
+      }
+    }
     // Content checks authenticate every byte, so transient delivery failures
     // can be retried without widening what is accepted.
-    let response = await evidenceFetch(url, { signal, redirect, headers });
+    const unavailable = () => new TeeError("TEE_PUBLIC_ARTIFACT_UNAVAILABLE");
+    const request = () => evidenceFetch(url, { signal, redirect, headers }).catch(error => { signal.throwIfAborted(); throw error instanceof TeeError ? error : unavailable(); });
+    let response = await request();
     for (let attempt = 0; attempt < 2 && [502, 503, 504].includes(response.status); attempt++) {
       await response.body?.cancel();
       await delay(500 * 2 ** attempt, undefined, { signal });
-      response = await evidenceFetch(url, { signal, redirect, headers });
+      response = await request();
     }
-    assert(response.ok && response.body, "TEE_PUBLIC_ARTIFACT_UNAVAILABLE");
+    if (!response.ok || !response.body) {
+      await response.body?.cancel();
+      // A content-addressed lookup that finds nothing rejects those bytes.
+      throw missingRejects && response.status === 404 ? new TeeError("TEE_CVM_BUILD_REJECTED") : unavailable();
+    }
     const bytes = Buffer.from(await readBoundedBody(response.body, maxBytes, signal));
     if (expectedDigest) assert.equal(sha256(bytes), expectedDigest);
     if (key) cache?.put(key, bytes);
+    if (path) pendingWrites.set(path, bytes);
     return bytes;
   }
   const input = `{"nonce":${JSON.stringify(nonce)},"envelope":${raw}}`;
@@ -110,7 +145,7 @@ export async function verifyPublicBuildArtifacts(options: {
     // can authorize the exact release workflow, source commit and artifact bytes.
     // This bounded page is a candidate set, not an assertion that every attestation
     // was examined. No matching candidate means failure, never unchecked acceptance.
-    const candidates = parseJson(await get(`https://api.github.com/repos/tinfoilsh/cvmimage/attestations/sha256:${sha256(manifest)}?per_page=100`, "error", 2 * 1024 * 1024, {}, undefined, true));
+    const candidates = parseJson(await get(`https://api.github.com/repos/tinfoilsh/cvmimage/attestations/sha256:${sha256(manifest)}?per_page=100`, "error", 2 * 1024 * 1024, {}, undefined, true, true));
     assert(Array.isArray(candidates.attestations) && candidates.attestations.length <= 100, "TEE_CVM_BUILD_REJECTED");
     let cvm;
     for (const candidate of candidates.attestations) {
@@ -210,6 +245,7 @@ export async function verifyPublicBuildArtifacts(options: {
     ]);
     assert(Array.isArray(sourceCommit.parents) && sourceCommit.parents.length === 1 && sourceCommit.parents[0].sha === container.sourceCommit, "TEE_PUBLIC_CONTAINER_SOURCE_REJECTED");
     assert.equal(sha256(dockerfile), container.dockerfileDigest, "TEE_PUBLIC_CONTAINER_SOURCE_REJECTED");
+    if (persistentDir && pendingWrites.size) await persistMetadata(persistentDir, pendingWrites);
     return {
       ...verified, publicArtifactDigestMatched: true, publicSourceConfigMatched: true,
       sourceUrl: `https://github.com/${repo}/blob/${verified.commit}/tinfoil-config.yml`,
@@ -224,7 +260,22 @@ export async function verifyPublicBuildArtifacts(options: {
     };
   } catch (error) {
     cache?.clear();
+    // Any persisted entry may be the cause; the cache holds only a few
+    // small, re-fetchable lookups, so drop all of it.
+    if (persistentDir && persistedReads.length) await rm(persistentDir, { recursive: true, force: true }).catch(() => {});
     signal.throwIfAborted();
-    throw new TeeError("TEE_PUBLIC_BUILD_REJECTED");
+    throw new TeeError(error instanceof TeeError && error.code === "TEE_PUBLIC_ARTIFACT_UNAVAILABLE" ? error.code : "TEE_PUBLIC_BUILD_REJECTED");
   }
+}
+
+// Best effort: a cache that cannot be written only costs future requests.
+async function persistMetadata(dir: string, entries: Map<string, Buffer>) {
+  try {
+    await mkdir(dir, { recursive: true, mode: 0o700 });
+    for (const [path, bytes] of entries) {
+      const temporary = `${path}.${process.pid}.tmp`;
+      await writeFile(temporary, bytes, { mode: 0o600 });
+      await rename(temporary, path);
+    }
+  } catch { /* ignored */ }
 }

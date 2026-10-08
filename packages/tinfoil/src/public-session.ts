@@ -78,6 +78,7 @@ export async function selectPublicWorker(model: PublicModel, signal: AbortSignal
   // Each candidate gets a fresh challenge and full appraisal; discovery and
   // reachability never authorize one, and a failure relaxes nothing for the next.
   let rejection: TeeError | undefined;
+  let unavailable: TeeError | undefined;
   for (const host of candidates.slice(0, MAX_WORKER_ATTEMPTS)) {
     signal.throwIfAborted();
     try {
@@ -88,10 +89,11 @@ export async function selectPublicWorker(model: PublicModel, signal: AbortSignal
       signal.throwIfAborted();
       if (lastHealthy.get(model) === host) lastHealthy.delete(model);
       // Report a verification failure in preference to unreachable workers.
-      if (error instanceof TeeError && error.code !== "TEE_ATTESTATION_REJECTED") rejection ??= error;
+      if (error instanceof TeeError && error.code !== "TEE_ATTESTATION_REJECTED" && error.code !== "TEE_PUBLIC_ARTIFACT_UNAVAILABLE") rejection ??= error;
+      else if (error instanceof TeeError && error.code === "TEE_PUBLIC_ARTIFACT_UNAVAILABLE") unavailable = error;
     }
   }
-  throw rejection ?? new TeeError("TEE_PUBLIC_BUILD_DEPLOYMENT_UNAVAILABLE");
+  throw rejection ?? unavailable ?? new TeeError("TEE_PUBLIC_BUILD_DEPLOYMENT_UNAVAILABLE");
 }
 
 /** Experimental SDK-policy route over the same appraisal. */

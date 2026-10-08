@@ -201,7 +201,8 @@ try {
     console.log(`PASS: ${provider} Pi CLI Unicode tool call, execution, and result follow-up.`);
 
     if (models.find(m => m.id === model)?.reasoning) {
-      const reasoning = await runCli(model, "What is 17 times 19? Reason briefly, then reply with exactly 323.", { thinking: "low" });
+      // Effort-only models such as GLM-5.3 may skip thinking at low effort.
+      const reasoning = await runCli(model, "What is 17 times 19? Reason briefly, then reply with exactly 323.", { thinking: "medium" });
       accepted(reasoning.assistants);
       assert.ok(reasoning.assistants.some(m => m.content?.some((p: Event) => p.type === "thinking" && p.thinking.trim())), "No reasoning content was observed.");
       assert.ok(reasoning.assistants.some(m => m.content?.some((p: Event) => p.type === "text" && p.text.includes("323"))), "Expected arithmetic answer missing.");
