@@ -1,4 +1,5 @@
 import { randomInt } from "node:crypto";
+import { connect as netConnect } from "node:net";
 import { TeeError, type PublicBuildProfile, type SdkTransport } from "pi-tee-core";
 import { openEncryptedWorkerTransport } from "./direct.js";
 import { PUBLIC_BUILD_AUTHORITY_POLICY_DIGEST, PUBLIC_BUILD_PROFILE_ID } from "./public-policy.js";
@@ -14,21 +15,49 @@ const lastHealthy = new Map<string, string>();
 
 function isPublicModel(model: string): model is PublicModel { return Object.hasOwn(PUBLIC_MODELS, model); }
 
-async function appraiseDiscoveredWorker(model: PublicModel, signal: AbortSignal) {
-  const candidates = (await discoverTinfoilWorkers({ model, repository: PUBLIC_MODELS[model], signal })).map(candidate => candidate.host);
+type WorkerKeys = Awaited<ReturnType<typeof appraiseWorker>>;
+type SelectionDeps = {
+  discover: (model: PublicModel, signal: AbortSignal) => Promise<string[]>;
+  reachable: (hosts: string[], signal: AbortSignal) => Promise<string[]>;
+  appraise: (model: PublicModel, host: string, signal: AbortSignal) => Promise<WorkerKeys>;
+};
+
+// TCP reachability only: many advertised workers accept no direct
+// connections. It authorizes nothing; it keeps them from using up appraisals.
+function reachableHosts(hosts: string[], signal: AbortSignal): Promise<string[]> {
+  return Promise.all(hosts.map(host => new Promise<string | undefined>(done => {
+    const socket = netConnect({ host, port: 443 });
+    const finish = (ok: boolean) => { clearTimeout(timer); signal.removeEventListener("abort", abort); socket.destroy(); done(ok ? host : undefined); };
+    const abort = () => finish(false);
+    const timer = setTimeout(() => finish(false), 3000);
+    signal.addEventListener("abort", abort, { once: true });
+    socket.once("connect", () => finish(true)).once("error", () => finish(false));
+  }))).then(results => results.filter((host): host is string => host !== undefined));
+}
+
+const defaultDeps: SelectionDeps = {
+  discover: async (model, signal) => (await discoverTinfoilWorkers({ model, repository: PUBLIC_MODELS[model], signal })).map(candidate => candidate.host),
+  reachable: reachableHosts,
+  appraise: (model, host, signal) => appraiseWorker({ model, host, signal: AbortSignal.any([signal, AbortSignal.timeout(120000)]) }),
+};
+
+export async function selectPublicWorker(model: PublicModel, signal: AbortSignal, deps: Partial<SelectionDeps> = {}) {
+  const { discover, reachable, appraise } = { ...defaultDeps, ...deps };
+  const candidates = await reachable(await discover(model, signal), signal);
+  signal.throwIfAborted();
   for (let index = candidates.length - 1; index > 0; index--) {
     const other = randomInt(index + 1);
     [candidates[index], candidates[other]] = [candidates[other]!, candidates[index]!];
   }
   const preferred = lastHealthy.get(model);
   if (preferred && candidates.includes(preferred)) candidates.unshift(...candidates.splice(candidates.indexOf(preferred), 1));
-  // Each candidate gets a fresh challenge and full appraisal; discovery data
-  // never authorizes one, and a failure on one host relaxes nothing for the next.
+  // Each candidate gets a fresh challenge and full appraisal; discovery and
+  // reachability never authorize one, and a failure relaxes nothing for the next.
   let rejection: TeeError | undefined;
   for (const host of candidates.slice(0, MAX_WORKER_ATTEMPTS)) {
     signal.throwIfAborted();
     try {
-      const keys = await appraiseWorker({ model, host, signal: AbortSignal.any([signal, AbortSignal.timeout(120000)]) });
+      const keys = await appraise(model, host, signal);
       lastHealthy.set(model, host);
       return { host, keys };
     } catch (error) {
@@ -44,7 +73,7 @@ async function appraiseDiscoveredWorker(model: PublicModel, signal: AbortSignal)
 /** Experimental SDK-policy route over the same appraisal. */
 export async function openPublicWorkerTransport(signal: AbortSignal, model: string): Promise<SdkTransport> {
   if (!isPublicModel(model)) throw new TeeError("TEE_MODEL_UNAVAILABLE");
-  const { host, keys } = await appraiseDiscoveredWorker(model, signal);
+  const { host, keys } = await selectPublicWorker(model, signal);
   return openEncryptedWorkerTransport(signal, host, keys, "cache_salt", keys.publicBuild.expiresAt, PUBLIC_BUILD_BASE_URL);
 }
 
@@ -65,7 +94,7 @@ export const PUBLIC_BUILD_PROFILE: PublicBuildProfile = Object.freeze({
   baseUrl: PUBLIC_BUILD_BASE_URL,
   async openSession({ signal, model }: Parameters<PublicBuildProfile["openSession"]>[0]) {
     if (!isPublicModel(model.id)) throw new TeeError("TEE_MODEL_UNAVAILABLE");
-    const { host, keys } = await appraiseDiscoveredWorker(model.id, signal);
+    const { host, keys } = await selectPublicWorker(model.id, signal);
     signal.throwIfAborted();
     const { platform: _platform, gpus: _gpus, ...admission } = keys.publicBuild;
     return {
