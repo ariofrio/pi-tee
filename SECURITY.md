@@ -4,7 +4,7 @@ This file defines what the extensions protect and what contributors must preserv
 
 ## Supported guarantees
 
-The default `public-builds` policy currently admits Tinfoil Gemma on the tested macOS ARM64/OrbStack setup. Each dispatch requires fresh hardware verification, authenticated public build artifacts and the [declared serving contract](docs/tinfoil-public-profile.md). Named software publishers and build workflows may authorize compatible updates automatically. They include provider-operated authorities: this policy does not trust only hardware manufacturers or require independent review of every release.
+The default `public-builds` policy currently admits no models. Tinfoil Gemma is paused while its GPU verifier is replaced and requalified. Once requalified, each dispatch requires fresh hardware verification, authenticated public build artifacts and the [declared serving contract](docs/tinfoil-public-profile.md). Named software publishers and build workflows may authorize compatible updates automatically. They include provider-operated authorities: this policy does not trust only hardware manufacturers or require independent review of every release.
 
 NEAR's experimental SDK route is implemented and tested. Its public-build profile is not implemented; the [NEAR assessment](docs/nearai-status.md) separates unfinished client checks, missing deployment evidence and backend protocol requirements. `sdk` policy explicitly accepts the selected route's weaker assumptions. `approved` is reserved for independent frozen-workload approval and currently admits no models. Verification failures never fall back to a weaker policy.
 

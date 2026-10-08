@@ -6,7 +6,7 @@ Build from the repository's locked Node 24 workspace, then load `dist/extension.
 
 ## Public builds
 
-The default policy is `public-builds`, and the default route is `auto`. It exposes only `gemma4-31b` and opens a verified direct worker session. Every request authenticates fresh Intel TDX evidence, the exact CPU-bound NVIDIA report, named public workload/guest/platform/freshness workflows, dynamic guest/OCI/model roots and the constrained runtime configuration. Boot registers are recomputed against quote-bound signed values. NVIDIA driver/VBIOS updates require signed references and revocation checks above local floors (`595.71.05`, `96.00.D9.00.02`); compatible releases need no maintained deployment pins. [Artifact chain](src/public-build.ts), [appraisal](src/intel-appraisal.ts).
+The default policy is `public-builds`, and the default route is `auto`. Public admission currently exposes no models while the GPU verifier is replaced and requalified. The paused Gemma chain authenticates fresh Intel TDX evidence, the exact CPU-bound NVIDIA report, named public workload/guest/platform/freshness workflows, dynamic guest/OCI/model roots and the constrained runtime configuration. Boot registers are recomputed against quote-bound signed values. NVIDIA driver/VBIOS updates require signed references and revocation checks above local floors (`595.71.05`, `96.00.D9.00.02`); compatible releases need no maintained deployment pins. [Artifact chain](src/public-build.ts), [appraisal](src/intel-appraisal.ts).
 
 The supported client setup is macOS ARM64, Node 24, OrbStack, Docker 29.4.0, buildx 0.33.0 and the containerd image store. Only this setup has been tested end to end. The local socket guard recognizes Docker Desktop, but its setup is unvalidated. Classic image stores and incompatible builders fail closed. Remote Docker contexts are rejected before collecting evidence. The local OS, clock, CLI and daemon remain trusted. [Setup inventory and reproducibility](../../docs/intel-candidate.md#local-setup).
 
@@ -34,7 +34,7 @@ Routes are selected at startup:
 
 | `PI_TINFOIL_ROUTE` | Behavior |
 | --- | --- |
-| `auto` | Default. Public builds use the qualified Gemma worker. Explicit SDK policy uses the router catalog. |
+| `auto` | Default. Public builds are paused. Explicit SDK policy uses the router catalog. |
 | `direct-public` | Same public profile; in SDK policy exercises the dynamic Intel appraiser as an experimental route. |
 | `router` | SDK policy only. Tinfoil 1.2.2 verifies the router with AMD Genoa/Sigstore tagged-release rules, no AMD revocation or rollback floor. It trusts backend/hardware release authorities and can re-attest/resend on rotation. [SDK recovery](https://github.com/tinfoilsh/tinfoil-js/blob/eac102f50ad3c1bfc3fd3cefe8a615671d86fa52/packages/tinfoil/src/secure-client.ts#L370). |
 | `direct` | SDK policy only. Frozen AMD Gemma worker/artifact/measurement, owned TLS/EHBP send-once transport; no fresh v3, AMD revocation or independent GPU appraisal. [Assessment](../../docs/direct-access.md). |

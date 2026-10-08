@@ -10,6 +10,10 @@ import { verifyPublicBuildArtifacts } from "./public-build.js";
 
 export const PUBLIC_BUILD_VERIFIER_SHA256 = "08bcbf2f96f01d46c4129c0cca2e9135e76c44e1710bc51ff5cbc0652c7af1ba";
 
+// Public admission is paused until the native GPU verifier replaces the
+// pinned Linux verifier and passes independent review.
+export const GPU_VERIFIER_QUALIFIED = false;
+
 export const INTEL_CANDIDATE = Object.freeze({
   host: "gemma4-31b-inf8-0.tinfoil.containers.tinfoil.dev",
   model: "gemma4-31b",
@@ -69,6 +73,7 @@ export async function qualifyIntelCandidate(options: {
     const bytes = await pinnedFile(resolve(nvatDir, path), digest);
     if (path === "bin/nvattest" || path === "lib/libnvat.so.1.2.2") nvat.set(path, bytes);
   }
+  requireCondition(GPU_VERIFIER_QUALIFIED, "TEE_GPU_VERIFIER_UNQUALIFIED");
   const nonce = randomBytes(32).toString("hex");
   const response = await (options.evidenceFetch ?? globalThis.fetch)(`https://${INTEL_CANDIDATE.host}/.well-known/tinfoil-attestation?nonce=${nonce}`, { signal, redirect: "error" });
   requireCondition(response.ok, "TEE_ATTESTATION_REJECTED");

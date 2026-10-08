@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { INTEL_CANDIDATE, NVAT_HASHES, PUBLIC_BUILD_VERIFIER_SHA256 } from "./intel-appraisal.js";
+import { GPU_VERIFIER_QUALIFIED, INTEL_CANDIDATE, NVAT_HASHES, PUBLIC_BUILD_VERIFIER_SHA256 } from "./intel-appraisal.js";
 import { GPU_VERSION_FLOORS } from "./gpu-policy.js";
 
 // Authority/rule identity, not a catalog of deployment digests. The local
@@ -33,8 +33,6 @@ const authorityPolicy = {
 export const PUBLIC_BUILD_PROFILE_ID = authorityPolicy.profile;
 export const PUBLIC_BUILD_AUTHORITY_POLICY_DIGEST = createHash("sha256").update(JSON.stringify(authorityPolicy)).digest("hex");
 
-// Enabled after the Opus 5.5 reviews of the public-build chain, owned session
-// (da48839), local verifier setup (c91d3f8) and policy routing (9840501).
-// Supported only on macOS ARM64 with the documented local setup; other
-// environments fail closed. Deliberately not configurable by environment.
-export const PUBLIC_BUILD_PROFILE_ENABLED = true;
+// Paused until the replacement GPU verifier is integrated, reviewed and
+// qualified. Deliberately not configurable by environment.
+export const PUBLIC_BUILD_PROFILE_ENABLED = GPU_VERIFIER_QUALIFIED;

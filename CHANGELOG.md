@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Pause Tinfoil public-build admission until the native GPU verifier replaces the pinned Linux verifier and passes review. Admission and the Intel research route fail before collecting evidence; the default policy exposes no models.
+
 - Verify native-candidate GPU reference-manifest signatures with the certificate-chain leaf key and require whole-document references. The patch is applied to a hash-checked copy of the pinned NVIDIA source.
 
 - Restrict native-verifier builds to a toolchain environment, package a hash-checked OpenSSL configuration and strip runtime overrides. Add reference/OCSP signature negatives with authentic delivery controls to the six-target workflow. Remove source paths from application compilation and fix a Windows logging-macro collision. The native verifier remains a candidate; production admission is unchanged.

@@ -1,6 +1,6 @@
 # Tinfoil public-build serving contract
 
-This contract covers one direct Intel TDX worker, one Hopper GPU in SPT mode and the `gemma-single-gpu-v1` runtime. It accepts software updates from the named public publishers below. It does not require reviewing or rebuilding each release independently. Production admission is enabled on the tested macOS ARM64/OrbStack setup after the combined verifier/session, pinned setup and route-enablement reviews. [Implementation](../packages/tinfoil/src/intel-appraisal.ts), [review requirements](../CONTRIBUTING.md).
+This contract covers one direct Intel TDX worker, one Hopper GPU in SPT mode and the `gemma-single-gpu-v1` runtime. It accepts software updates from the named public publishers below. It does not require reviewing or rebuilding each release independently. Production admission is paused while the GPU verifier is replaced and requalified. [Implementation](../packages/tinfoil/src/intel-appraisal.ts), [review requirements](../CONTRIBUTING.md).
 
 Independent Opus 5.5 reviews cover the [combined verifier/session](reviews/pi-tee-public-session-opus-review.md), [pinned local setup](reviews/pi-tee-local-setup-opus-review.md) and [routing/enablement](reviews/pi-tee-enablement-opus-review.md). Their scopes and live-test limitations are recorded in those reports.
 

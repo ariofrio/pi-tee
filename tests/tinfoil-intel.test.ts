@@ -6,7 +6,7 @@ import { qualifyIntelCandidate } from "../packages/tinfoil/src/intel-appraisal.j
 import { createTinfoilProvider, TINFOIL_ASSUMPTIONS } from "../packages/tinfoil/src/index.js";
 import { normalizeContext } from "@earendil-works/pi-ai/compat";
 
-test("malformed public CPU evidence cannot reach artifact discovery or release endpoint keys", { skip: !process.env.PI_TEE_PUBLIC_BUILD_TEST_HELPER || !process.env.PI_TEE_PUBLIC_BUILD_TEST_NVAT }, async () => {
+test("an unqualified GPU verifier cannot collect evidence or release endpoint keys", { skip: !process.env.PI_TEE_PUBLIC_BUILD_TEST_HELPER || !process.env.PI_TEE_PUBLIC_BUILD_TEST_NVAT }, async () => {
   let metadataRequests = 0;
   await assert.rejects(qualifyIntelCandidate({
     cpuVerifier: process.env.PI_TEE_PUBLIC_BUILD_TEST_HELPER!, nvatDir: process.env.PI_TEE_PUBLIC_BUILD_TEST_NVAT!,
@@ -19,11 +19,11 @@ test("malformed public CPU evidence cannot reach artifact discovery or release e
       assert.equal(options?.body, undefined);
       return Response.json({});
     },
-  }), /TEE_PUBLIC_BUILD_REJECTED/);
-  assert.equal(metadataRequests, 1);
+  }), /TEE_GPU_VERIFIER_UNQUALIFIED/);
+  assert.equal(metadataRequests, 0);
 });
 
-test("default public admission exposes only qualified models and rejects an untrusted helper without SDK fallback", async () => {
+test("default public admission remains gated and stale selections cannot fall back to SDK", async () => {
   await mkdir(".scratch/work", { recursive: true });
   const dir = await mkdtemp(resolve(".scratch/work/untrusted-public-verifier-"));
   const oldVerifier = process.env.PI_TINFOIL_PUBLIC_BUILD_VERIFIER;
@@ -47,12 +47,13 @@ test("default public admission exposes only qualified models and rejects an untr
       });
       await integration.initializeCatalog();
       assert.equal(integration.getReport().policy, "public-builds");
-      assert.deepEqual(integration.provider.getModels().map(m => m.id), ["gemma4-31b"]);
-      assert.ok(integration.getReport().assumptions.some(value => value.includes("public Tinfoil")));
+      assert.deepEqual(integration.provider.getModels().map(m => m.id), []);
+      integration.setPolicy("sdk");
       const model = integration.provider.getModels()[0];
+      integration.setPolicy("public-builds");
       assert.ok(model);
       const result = await integration.provider.streamSimple(model, normalizeContext({ messages: [{ role: "user", content: "synthetic prompt", timestamp: 1 }] }), { apiKey: "synthetic-key", maxRetries: 10 }).result();
-      assert.equal(result.errorMessage, process.platform === "darwin" && process.arch === "arm64" ? "TEE_VERIFIER_ARTIFACT_REJECTED" : "TEE_RUNTIME_UNSUPPORTED");
+      assert.equal(result.errorMessage, "TEE_PUBLIC_BUILD_DEPLOYMENT_UNAVAILABLE");
       assert.equal(sdkOpened, 0);
       assert.equal(integration.getReport().publicBuildVerification, "not-established");
       integration.setPolicy("approved");

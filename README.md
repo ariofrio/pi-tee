@@ -2,7 +2,7 @@
 
 NEAR AI and Tinfoil providers for Pi, with native API-key login, live model discovery, tools, reasoning, usage accounting and encrypted inference.
 
-**Work in progress; packages are unpublished.** The default `public-builds` policy supports Tinfoil `gemma4-31b` on the tested macOS ARM64/OrbStack setup. NEAR's experimental direct `sdk` route works; its public-build profile needs more client implementation, deployment evidence and backend bindings. [What is missing for NEAR](docs/nearai-status.md).
+**Work in progress; packages are unpublished.** The default `public-builds` policy currently admits no models. Tinfoil Gemma is paused while its GPU verifier is replaced and requalified. NEAR's experimental direct `sdk` route works; its public-build profile needs more client implementation, deployment evidence and backend bindings. [What is missing for NEAR](docs/nearai-status.md).
 
 | Package | Purpose |
 | --- | --- |
@@ -21,7 +21,7 @@ npm ci --ignore-scripts
 npm run check
 ```
 
-For Tinfoil public builds, install the local verifiers. The tested setup requires **macOS ARM64, Go, OrbStack, Docker 29.4.0, buildx 0.33.0 and the containerd image store**. Setup selects Go 1.26.6 and checks the built helper and image hashes. Docker Desktop sockets are recognized, but its setup is unvalidated; incompatible builders fail closed. [Setup and artifact inventory](docs/intel-candidate.md#local-setup).
+The existing local verifier setup remains for maintainer research; it cannot authorize public-build inference while admission is paused. The tested setup requires **macOS ARM64, Go, OrbStack, Docker 29.4.0, buildx 0.33.0 and the containerd image store**. Setup selects Go 1.26.6 and checks the built helper and image hashes. Docker Desktop sockets are recognized, but its setup is unvalidated; incompatible builders fail closed. [Setup and artifact inventory](docs/intel-candidate.md#local-setup).
 
 ```sh
 node packages/tinfoil/dist/setup.js --directory "$PWD/local-verifiers"
@@ -48,7 +48,7 @@ Pi stores credentials and handles `/logout`. Stored keys take precedence over `N
 
 | Policy | Behavior |
 | --- | --- |
-| `public-builds` | Default. Tinfoil admits the supported Gemma profile after fresh verification. NEAR is blocked. |
+| `public-builds` | Default. Currently admits no models; Tinfoil Gemma is paused pending GPU verifier requalification. NEAR is blocked. |
 | `sdk` | Enables experimental routes under their disclosed trust assumptions. |
 | `approved` | Reserved for independently approved frozen workloads; no profile is implemented. |
 
@@ -58,7 +58,7 @@ Routes are selected at startup:
 
 | Setting | Route |
 | --- | --- |
-| `PI_TINFOIL_ROUTE=auto` | Default. Public policy uses the verified Intel Gemma worker; SDK policy uses the router catalog. |
+| `PI_TINFOIL_ROUTE=auto` | Default. Public policy is paused; SDK policy uses the router catalog. |
 | `PI_TINFOIL_ROUTE=direct-public` | Same public profile, explicitly selected. |
 | `PI_TINFOIL_ROUTE=router` | SDK policy only. Trusts the router's backend release policy and permits its SDK key-rotation resend. |
 | `PI_TINFOIL_ROUTE=direct` | SDK policy only. Frozen AMD Gemma worker; lacks fresh v3, revocation and independent GPU appraisal. |
@@ -76,7 +76,7 @@ Both providers fetch chat/tool models from public catalogs, mapping prices, cont
 
 NEAR defaults to **TEE-only discovery**: metadata must match the model and declare `providerType: "vllm"` and `attestationSupported: true`. Non-TEE, unknown and failed lookups are hidden. `/nearai models all` or `PI_NEARAI_MODEL_VISIBILITY=all` shows labeled entries whose inference remains blocked; `/nearai models tee` restores the filter. Session choices are not persisted.
 
-NEAR public-build and Approved policies show no selectable models. Tinfoil public builds show only Gemma; unsupported runtimes, missing helpers and failed appraisal reject before inference. Missing prices are labeled, and NEAR pricing tiers beyond base costs are not modeled.
+NEAR public-build and Approved policies show no selectable models. Tinfoil public builds show no models while the GPU verifier is requalified. Missing prices are labeled, and NEAR pricing tiers beyond base costs are not modeled.
 
 ## Security scope
 

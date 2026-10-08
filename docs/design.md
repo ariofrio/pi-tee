@@ -12,7 +12,7 @@ Three settings are explicit:
 
 | Policy | Software authorization | Current inference availability |
 | --- | --- | --- |
-| `public-builds` | Named public publisher/workflow identities, authenticated artifacts and fresh endorsements; complete hardware and serving-path requirements still apply. | Tinfoil Gemma on the tested macOS ARM64/OrbStack setup; NEAR blocked. |
+| `public-builds` | Named public publisher/workflow identities, authenticated artifacts and fresh endorsements; complete hardware and serving-path requirements still apply. | None; Tinfoil Gemma is paused pending GPU verifier requalification. NEAR blocked. |
 | `sdk` | The selected route's disclosed SDK/candidate rules. | Experimental routes documented in the package READMEs. |
 | `approved` | Optional independent approval of a frozen workload. | No implemented profile. Retained for compatibility; no maintained vendor pin catalog is planned. |
 
