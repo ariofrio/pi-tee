@@ -2,11 +2,17 @@ import { createHash, X509Certificate } from "node:crypto";
 import { isIP } from "node:net";
 import { connect, type TLSSocket } from "node:tls";
 import { TeeError } from "./policy.js";
-import { MAX_REQUEST_BYTES, readBoundedBody } from "./transport.js";
+import { MAX_ENCRYPTED_RESPONSE_BYTES, MAX_REQUEST_BYTES, readBoundedBody } from "./transport.js";
 
 const MAX_RESPONSE_HEADER_BYTES = 64 * 1024;
 // Bytes queued for a stalled reader before the socket is paused.
 const RESPONSE_HIGH_WATER_BYTES = 1024 * 1024;
+// Bun keeps reading into native buffers while a socket is paused, so pausing
+// cannot bound memory there. Instead every runtime fails a response whose
+// received bytes exceed the transport's encrypted-response limit, and only
+// Node pauses for a stalled reader.
+const MAX_RECEIVED_RESPONSE_BYTES = MAX_ENCRYPTED_RESPONSE_BYTES + 1024 * 1024;
+const CAN_PAUSE = !process.versions.bun;
 const HEADER_NAME = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
 const HEADER_VALUE = /^[\t\x20-\x7e\x80-\xff]*$/;
 const FORBIDDEN_REQUEST_HEADERS = new Set(["host", "connection", "content-length", "transfer-encoding", "keep-alive", "upgrade", "te", "trailer", "expect"]);
@@ -130,7 +136,7 @@ function bodyStream(socket: TLSSocket, headers: Headers, initial: Buffer, signal
     start(controller) {
       const enqueue = (bytes: Buffer) => {
         controller.enqueue(new Uint8Array(bytes));
-        if ((controller.desiredSize ?? 0) <= 0) socket.pause();
+        if (CAN_PAUSE && (controller.desiredSize ?? 0) <= 0) socket.pause();
       };
       const abort = () => { if (!done) { done = true; controller.error(new TeeError("TEE_CONNECTION_FAILED")); } socket.destroy(); };
       signal.addEventListener("abort", abort, { once: true });
@@ -166,8 +172,11 @@ function bodyStream(socket: TLSSocket, headers: Headers, initial: Buffer, signal
           }
         }
       };
+      let received = initial.length;
       const onData = (chunk: Buffer) => {
         if (done) return;
+        received += chunk.length;
+        if (received > MAX_RECEIVED_RESPONSE_BYTES) { done = true; controller.error(new TeeError("TEE_RESPONSE_REJECTED")); socket.destroy(); return; }
         pending = pending.length ? Buffer.concat([pending, chunk]) : chunk;
         try { drain(); } catch (error) { done = true; controller.error(error); socket.destroy(); }
       };
@@ -180,7 +189,7 @@ function bodyStream(socket: TLSSocket, headers: Headers, initial: Buffer, signal
       });
       try { drain(); } catch (error) { done = true; controller.error(error); socket.destroy(); }
     },
-    pull() { if (!done) socket.resume(); },
+    pull() { if (!done && CAN_PAUSE) socket.resume(); },
     cancel() { done = true; socket.destroy(); },
   }, { highWaterMark: RESPONSE_HIGH_WATER_BYTES, size: chunk => chunk.byteLength });
 }

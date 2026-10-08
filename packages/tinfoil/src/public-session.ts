@@ -24,15 +24,39 @@ type SelectionDeps = {
 
 // TCP reachability only: many advertised workers accept no direct
 // connections. It authorizes nothing; it keeps them from using up appraisals.
+// At most 16 attempts run at once, and probing stops after eight reachable
+// hosts, twice the appraisal budget.
 function reachableHosts(hosts: string[], signal: AbortSignal): Promise<string[]> {
-  return Promise.all(hosts.map(host => new Promise<string | undefined>(done => {
+  return new Promise(resolve => {
+    const reachable: string[] = [];
+    let next = 0, running = 0, finished = false;
+    const done = () => { if (!finished) { finished = true; resolve(reachable); } };
+    const launch = () => {
+      while (!finished && running < 16 && next < hosts.length && reachable.length < 8 && !signal.aborted) {
+        const host = hosts[next++]!;
+        running++;
+        probe(host, signal).then(ok => {
+          running--;
+          if (ok) reachable.push(host);
+          if (reachable.length >= 8 || signal.aborted || (next >= hosts.length && running === 0)) done();
+          else launch();
+        });
+      }
+      if (running === 0) done();
+    };
+    launch();
+  });
+}
+
+function probe(host: string, signal: AbortSignal): Promise<boolean> {
+  return new Promise(done => {
     const socket = netConnect({ host, port: 443 });
-    const finish = (ok: boolean) => { clearTimeout(timer); signal.removeEventListener("abort", abort); socket.destroy(); done(ok ? host : undefined); };
+    const finish = (ok: boolean) => { clearTimeout(timer); signal.removeEventListener("abort", abort); socket.destroy(); done(ok); };
     const abort = () => finish(false);
     const timer = setTimeout(() => finish(false), 3000);
     signal.addEventListener("abort", abort, { once: true });
     socket.once("connect", () => finish(true)).once("error", () => finish(false));
-  }))).then(results => results.filter((host): host is string => host !== undefined));
+  });
 }
 
 const defaultDeps: SelectionDeps = {
@@ -81,7 +105,7 @@ export const PUBLIC_BUILD_PROFILE: PublicBuildProfile = Object.freeze({
   id: PUBLIC_BUILD_PROFILE_ID,
   assumptions: Object.freeze([
     "Local OS, clock, Pi/runtime, enabled extensions/hooks/tools, locked dependencies and the hash-checked WebAssembly CPU-helper/NVIDIA verifier modules are trusted.",
-    "Intel TDX and AMD SEV-SNP manufacturer roots, hardware/firmware, signed collateral and revocation authenticate fresh CPU-bound device bytes and endpoint keys. Only production machine policies are accepted. TDX requires UpToDate appraisal and local floors; SEV-SNP requires firmware at or above AMD's current SEV-SNP bulletin fixes for the reported CPU, AMD's CRL, a non-debug, non-migratable VMPL0 guest and the pinned tinfoilsh/edk2 OVMF in the recomputed launch digest.",
+    "Intel TDX and AMD SEV-SNP manufacturer roots, hardware/firmware, signed collateral and revocation authenticate fresh CPU-bound device bytes and endpoint keys. Only production machine policies are accepted. TDX requires UpToDate appraisal and local floors; SEV-SNP requires firmware with the fixes from AMD-SB-3019, 3020 and 3027 for the reported CPU, AMD's CRL, a non-debug, non-migratable VMPL0 guest and the pinned tinfoilsh/edk2 OVMF in the recomputed launch digest.",
     "NVIDIA device/reference roots, fresh OCSP, signed golden references and the authenticated protected mode (SPT for one GPU, Blackwell MPT for several) are trusted with the manufacturer's protected-transfer/reset contract; local version floors constrain upgrades.",
     "The public Tinfoil workload repositories for Gemma 4 31B, DeepSeek V4.1 Flash and GLM-5.3, plus the guest, platform and freshness workflows, GitHub OIDC/hosted builds and the finite Sigstore roots, authorize updates automatically.",
     "Those accepted publishers are trusted for correct measurements, safe dependency selection, private per-boot keys, immutable runtime/model inputs, closed engine egress and preserved GPU-channel/reset behavior. The engine image runs vLLM, optionally behind Tinfoil's inference-sidecar proxy, which also sees plaintext.",

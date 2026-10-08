@@ -193,4 +193,46 @@ The same route appraises AMD SEV-SNP and up to eight Blackwell GPUs in MPT for t
 3. **F3.** Catch header-construction errors in `readResponse` and add regression tests.
 4. **Recommended before or soon after enablement:** F4 (backpressure), F5 (reject close-delimited bodies), F6 (assert TLS 1.3), F7 (refresh the assumption text and README). F8 and F9 are optional.
 
+## Re-review at `ad71a91` (fixes `0e3add3`, `ea382e6`, `8b33709`)
+
+Reviewed [`246891b..ad71a91`](https://github.com/ariofrio/pi-tee/compare/246891bed9c27c9791a4c16b179ac436efff6325...ad71a91f007a78c75942fddb948a306f99a4fc15) in a fresh detached worktree, under the same rules as above. The commits are [`8b33709`](https://github.com/ariofrio/pi-tee/commit/8b337098382433c6827e09376aaec995ad95da28) (SNP floors, production policies, engine image, authority digest, assumptions), [`0e3add3`](https://github.com/ariofrio/pi-tee/commit/0e3add314af18112522bad2321d83ce8eb70af14) (TLS client) and [`ea382e6`](https://github.com/ariofrio/pi-tee/commit/ea382e6c5927ef3d62292c136d9e7e86dd801cd0) (reachability probe). The in-repo copy of this report (`docs/reviews/`) predates this section.
+
+### Verdict: enable
+
+All three enablement conditions are met. The remaining items are Low or Info, can only affect availability, and only the attested peer or delivery can trigger them.
+
+### Status of each finding
+
+| # | Status | Evidence |
+| --- | --- | --- |
+| F1 | **Fixed** | Floors are now keyed on the authenticated report CPUID (`snpCPU` reads report bytes `0x188-0x18A` and requires version ≥ 3 and 1184 bytes): Genoa B1 `19/11/01` SPL 0x1B/µcode 0x56, Genoa-X `19/11/02` 0x1B/0x51, Turin C1 `1a/02/01` 0x04/0x51. These meet AMD-SB-3019, SB-3020 and SB-3027. Other CPUs are rejected, and the policy shape must match the CPU ([release.go#L127-L201](https://github.com/ariofrio/pi-tee/blob/ad71a91f007a78c75942fddb948a306f99a4fc15/tools/tinfoil-public-build/release.go#L127-L201)). Observed: the same live Genoa evidence (`local-amd-evidence.json`, SPL 23/µcode 84) passes the helper at `246891b` and fails at `ad71a91` with `TEE_CPU_POLICY_REJECTED`. Fresh evidence checked with the `ad71a91` helper under my own nonces: `gemma4-31b-inf6-3` (Genoa) rejected; `glm-5-3-inf17` (Turin), `gemma4-31b-inf8-0` and `deepseek-v4-1-flash-inf16` (TDX) accepted. `glm-5-3-inf20/21` are rejected at both commits because the platform publisher does not endorse their CHIP_IDs, as the docs state. The AMD contract row now names the bulletins and the duty to raise floors. |
+| Shape-based selection | **Removed** | Selection no longer uses the publisher policy's shape. A mismatched shape is rejected locally and again by tinfoil-go. |
+| Non-production policies (new) | **Correct** | `productionPolicy` requires the matched policy name to end in `-prod`, for TDX and SNP. This is a naming backstop, not an authority: the publisher names its policies. Live TDX and Turin policies are `*-prod`. |
+| F2 | **Fixed** | `checkEngineImageConfig` ([container.go#L330-L370](https://github.com/ariofrio/pi-tee/blob/ad71a91f007a78c75942fddb948a306f99a4fc15/tools/tinfoil-public-build/container.go#L330-L370)) strictly decodes the image config, rejecting duplicate and case-variant keys, so Docker's lenient decoder cannot see different values. It requires `Entrypoint` ∈ {`vllm serve`, `/opt/tinfoil/inference-sidecar vllm serve`}, empty `Cmd`, `User`, `Volumes`, `Shell`, `OnBuild` and `Healthcheck`, and allowlisted `Env` names. `SIDECAR_*` and `VLLM_*` behavior switches are excluded; `PYTHONPATH` must be exactly `/opt/tinfoil`. `PATH` and `LD_LIBRARY_PATH` values are unconstrained, but they only select files inside the publisher-endorsed image. The contract now names `inference-sidecar` and `tinfoil_usage` as plaintext recipients trusted through the workload publisher, and the authority digest records the entrypoints. |
+| F3 | **Fixed** | Names must match `token`, values `field-value`, and `append` is wrapped ([pinned-tls.ts#L96-L102](https://github.com/ariofrio/pi-tee/blob/ad71a91f007a78c75942fddb948a306f99a4fc15/packages/core/src/pinned-tls.ts#L96-L102)). My original probes (invalid name, bare LF, NUL, space before colon) now return `TEE_RESPONSE_REJECTED` on Node and Bun, with no crash. Obsolete folding is rejected too. |
+| F4 | **Fixed on Node; partial on Bun** | The stream now has a 1 MiB byte high-water mark and `pause()`/`pull()→resume()`. Node: 0/8 failures of the repo's backpressure test; my in-process flood stalled the peer at 3–6 MiB in 6/6 runs. **Bun 1.3.13:** the repo's own test `a stalled consumer applies backpressure to the pinned peer` failed 2/15 runs in isolation, and once each in two full-file runs. The failures read "the peer pushed 268435456 bytes while the consumer stalled", and again at 213909504 bytes. Instrumentation shows no JavaScript `data` event while paused, yet the Node peer finished writing up to 256 MiB. One run measured client RSS at 251 MiB, and the bytes later arrived intact and in order. So Bun's native socket layer sometimes keeps reading after `pause()`. This is not a data-integrity issue, and only the attested peer can trigger it. **Recommendation (Low):** add a runtime-independent cap, for example error and destroy when bytes received minus bytes consumed exceeds a limit, or treat the test as Node-only and document the Bun gap. The test is flaky in Bun CI as written. |
+| F5 | **Fixed** | Responses must be chunked or carry a valid `Content-Length`, and close before the end is always `TEE_CONNECTION_FAILED` ([pinned-tls.ts#L121-L124](https://github.com/ariofrio/pi-tee/blob/ad71a91f007a78c75942fddb948a306f99a4fc15/packages/core/src/pinned-tls.ts#L121-L124)). My close-without-`close_notify` probe is now rejected on both runtimes. |
+| F6 | **Fixed** (with a correction to my original evidence) | `socket.getProtocol() !== "TLSv1.3"` rejects before resolve, and therefore before any write. **Correction:** my original Bun probe hosted the "TLS 1.2" server in Bun, which also ignores `maxVersion`, so that handshake was really TLS 1.3. Re-tested properly against a Node peer capped at TLS 1.2: a plain Bun client with `minVersion: "TLSv1.3"` connects at `TLSv1.2`, so the F6 conclusion stands. The fixed `pinnedTlsFetch` now rejects with `TEE_TLS_KEY_REJECTED` on Bun (`TEE_CONNECTION_FAILED` on Node) and accepts a TLS 1.3 peer on both. The repo's new tests use a Node peer for exactly this reason. |
+| F7 | **Mostly fixed** | `direct-public` now reuses the profile's assumptions. [packages/tinfoil/README.md#L9](https://github.com/ariofrio/pi-tee/blob/ad71a91f007a78c75942fddb948a306f99a4fc15/packages/tinfoil/README.md#L9) still says "One Hopper GPU must report SPT; several Blackwell GPUs must report MPT", omitting single-GPU Blackwell in SPT (Info). The profile assumption "AMD's current SEV-SNP bulletin fixes" ages silently; naming SB-3019/3020/3027 would be exact (Info). |
+| F8 | **Fixed** | The authority digest now includes the required claims, certificate chains, expiry formula, entrypoints, per-CPU floors and the `*-prod` rule. |
+| F9 | Accepted as is | — |
+
+### New code in `ea382e6`
+
+[`reachableHosts`](https://github.com/ariofrio/pi-tee/blob/ad71a91f007a78c75942fddb948a306f99a4fc15/packages/tinfoil/src/public-session.ts#L27-L38) opens a plain TCP connection to port 443 of each discovered host. Hosts are limited to `*.tinfoil.containers.tinfoil.dev`, discovery returns at most 128, and each probe has a 3 s timeout and honors abort. Sockets are destroyed without sending data.
+
+The probe only filters and orders candidates. Each remaining candidate still gets a fresh nonce and full appraisal, the four-attempt cap is unchanged, and an empty reachable set yields `TEE_PUBLIC_BUILD_DEPLOYMENT_UNAVAILABLE`. Nothing is authorized by reachability. The only cost is up to 128 parallel DNS lookups and connections per dispatch (Info).
+
+### Re-run results at `ad71a91`
+
+- `go test ./...` and `go vet ./...` pass, including the new SNP-floor, production-policy and engine-image tests.
+- Typecheck is clean, and `npm test` reports 81 pass, 0 fail, 3 skipped (private fixtures).
+- `public-build-chain.test.ts` passes with the private TDX evidence. With the private Genoa evidence it now fails with `TEE_PUBLIC_BUILD_REJECTED`, which is expected (F1).
+- The SNP digest and GPU suites pass.
+- The helper WASM reproduces offline (Go 1.26.6, vendored, patched in-toto): `7877fe36da37652692f56711b263c74fc496963228b7c8c86c537f9ce13a428e`, equal to the pin.
+
+### Consequence to note
+
+With F1 fixed, Gemma is served only by its TDX workers until Tinfoil patches the Genoa hosts. GLM-5.3 stays on endorsed Turin workers, and DeepSeek on TDX.
+
 Written by Claude

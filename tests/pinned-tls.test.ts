@@ -155,17 +155,22 @@ test("malformed, unframed or downgraded responses from the pinned peer fail the 
   } finally { await legacy.close(); }
 });
 
-test("a stalled consumer applies backpressure to the pinned peer", { timeout: 60000 }, async () => {
+test("a stalled consumer bounds what the pinned peer can make the client buffer", { timeout: 60000 }, async () => {
   const peer = await rawPeer("flood");
   try {
     const reader = (await peer.fetch()).body!.getReader();
     await reader.read();
-    // Runtime buffers absorb a few tens of MiB; after that the peer must stall.
+    // Node pauses the socket; Bun keeps reading natively, so the client fails
+    // the response once it exceeds the encrypted-response limit.
     await new Promise(done => setTimeout(done, 3000));
     const plateau = peer.written();
     await new Promise(done => setTimeout(done, 3000));
-    assert(peer.written() - plateau <= 8 * 1024 * 1024, `the client kept reading while its consumer stalled: ${plateau} then ${peer.written()} bytes`);
+    assert(peer.written() - plateau <= 8 * 1024 * 1024, `the client kept reading: ${plateau} then ${peer.written()} bytes`);
     assert(plateau < 128 * 1024 * 1024, `the peer pushed ${plateau} bytes while the consumer stalled`);
-    await reader.cancel();
+    try {
+      while (!(await reader.read()).done) { /* drain what was buffered */ }
+    } catch (error) {
+      assert.match(String((error as Error).message ?? error), /TEE_RESPONSE_REJECTED/);
+    }
   } finally { await peer.close(); }
 });
