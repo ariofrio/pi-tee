@@ -110,6 +110,13 @@ test("the artifact chain rejects substituted delivery bytes using the WebAssembl
   await recovered.result;
   assert.equal(githubApi(recovered.requests).length, 2);
   // Delivery outages are reported as unavailability, not rejection.
+  // A cache directory other accounts can write is ignored.
+  const { chmod, rm: remove } = await import("node:fs/promises");
+  await chmod(persistentCacheDir, 0o777);
+  const shared = await persist();
+  await shared.result;
+  assert.equal(githubApi(shared.requests).length, 2, "A group- or world-writable cache is not trusted.");
+  await remove(persistentCacheDir, { recursive: true, force: true });
   const outage = await run(undefined, false, url => url.startsWith("https://api.github.com/"));
   await assert.rejects(outage.result, /TEE_PUBLIC_ARTIFACT_UNAVAILABLE/);
   for (const [url, bytes] of artifacts) {

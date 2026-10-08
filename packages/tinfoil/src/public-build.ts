@@ -1,10 +1,10 @@
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { readBoundedBody, TeeError } from "pi-tee-core";
 import assert from "node:assert/strict";
 import { setTimeout as delay } from "node:timers/promises";
-import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { isAbsolute, join } from "node:path";
 import { computeBootMeasurements } from "./boot-measurements.js";
 import { computeSnpLaunchDigest } from "./snp-measurement.js";
 import { PUBLIC_BUILD_HELPER_DIGEST, runPublicBuildHelper } from "./wasm-verifiers.js";
@@ -50,7 +50,15 @@ function cacheFor(fetch: typeof globalThis.fetch, helperDigest: string) {
 // commit's parents) are persisted locally, but only after a chain that used
 // them fully verified; a failing chain that read any of them discards them all.
 function defaultPersistentCacheDir() {
-  return join(process.env.XDG_CACHE_HOME || join(homedir(), ".cache"), "pi-tee", "github-metadata");
+  const xdg = process.env.XDG_CACHE_HOME;
+  return join(xdg && isAbsolute(xdg) ? xdg : join(homedir(), ".cache"), "pi-tee", "github-metadata");
+}
+
+// Use the cache only if it is a real directory owned by this user with no
+// group or other access, so another local account cannot plant or redirect it.
+async function privateDirectory(dir: string): Promise<boolean> {
+  const info = await lstat(dir).catch(() => undefined);
+  return !!info && info.isDirectory() && (info.mode & 0o077) === 0 && (typeof process.getuid !== "function" || info.uid === process.getuid());
 }
 const persistable = (url: string) => url.startsWith("https://api.github.com/");
 
@@ -77,7 +85,7 @@ export async function verifyPublicBuildArtifacts(options: {
       return hit;
     }
     const path = immutable && persistable(url) ? persistentPath(url) : undefined;
-    if (path) {
+    if (path && await privateDirectory(persistentDir!)) {
       const stored = await readFile(path).catch(() => undefined);
       if (stored && stored.length <= maxBytes) {
         persistedReads.push(path);
@@ -272,9 +280,10 @@ export async function verifyPublicBuildArtifacts(options: {
 async function persistMetadata(dir: string, entries: Map<string, Buffer>) {
   try {
     await mkdir(dir, { recursive: true, mode: 0o700 });
+    if (!await privateDirectory(dir)) return;
     for (const [path, bytes] of entries) {
-      const temporary = `${path}.${process.pid}.tmp`;
-      await writeFile(temporary, bytes, { mode: 0o600 });
+      const temporary = `${path}.${randomBytes(8).toString("hex")}.tmp`;
+      await writeFile(temporary, bytes, { mode: 0o600, flag: "wx" });
       await rename(temporary, path);
     }
   } catch { /* ignored */ }
