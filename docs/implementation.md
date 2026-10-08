@@ -1,6 +1,6 @@
 # Pi NEAR AI and Tinfoil implementation
 
-Date: 2026-10-07. Author: Codex. Scope: SDK-policy extensions, live Pi validation and automatic public-release/CPU verification. Tinfoil Gemma public builds await review of the WebAssembly verifiers that replaced the macOS ARM64/OrbStack setup; NEAR public builds and independently approved workloads remain gated.
+Date: 2026-10-07. Author: Codex. Scope: SDK-policy extensions, live Pi validation and automatic public-release/CPU verification. Tinfoil public builds for Gemma 4 31B, DeepSeek V4.1 Flash and GLM-5.3 await review of the WebAssembly verifiers that replaced the macOS ARM64/OrbStack setup, and of the multi-model/SEV-SNP generalization; NEAR public builds and independently approved workloads remain gated.
 
 Repository: [ariofrio/pi-tee](https://github.com/ariofrio/pi-tee). Initial integration: `7331cfd`; model visibility: `bc2cc98`.
 
@@ -12,7 +12,7 @@ The implementation is in [pi-tee](../README.md), with two independently installa
 | `pi-tinfoil` | [Native registration and commands](../packages/tinfoil/src/extension.ts), [EHBP SDK transport](../packages/tinfoil/src/index.ts), [catalog mapping](../packages/tinfoil/src/catalog.ts). |
 | `pi-tee-core` | [Provider policy, native login and catalog refresh](../packages/core/src/provider.ts), [final serialized request guard](../packages/core/src/transport.ts), [response signature barrier](../packages/core/src/response.ts). This library is not another extension. |
 
-Default `public-builds` targets automatic release adoption under named public publisher/workflow identities, with complete hardware and serving-path checks. Tinfoil exposes only its qualified Gemma profile and rejects failed appraisal before inference; NEAR has no qualifying profile. Explicit `sdk` enables the experimental routes and reports public-build verification, independent approval, the closed trust set and protected-session enforcement as unestablished. `approved` retains optional independent frozen-workload semantics; no profile is implemented. See [SECURITY.md](../SECURITY.md) and the [current design](design.md).
+Default `public-builds` targets automatic release adoption under named public publisher/workflow identities, with complete hardware and serving-path checks. Once reviewed, Tinfoil exposes its three directly reachable models and rejects failed appraisal before inference; NEAR has no qualifying profile. Explicit `sdk` enables the experimental routes and reports public-build verification, independent approval, the closed trust set and protected-session enforcement as unestablished. `approved` retains optional independent frozen-workload semantics; no profile is implemented. See [SECURITY.md](../SECURITY.md) and the [current design](design.md).
 
 Both extensions use Pi's native API-key login and stored model-refresh APIs. Commands select policy, report status, show discovery and force refresh. Provider requests reuse Pi's OpenAI conversion, tools, reasoning and usage. The final transport fixes the endpoint/model/auth headers and rejects hosted tools, remote media and unclassified payload fields. Errors use fixed terminal codes and Pi provider retries are disabled. Tinfoil's auto route selects the owned public worker; explicit SDK policy retains the router's disclosed rotation resend. Its explicit direct route owns EHBP and the attested TLS socket and sends once.
 
@@ -43,4 +43,4 @@ NEAR's deployed shared certificates/signers permit evidence relay between key ho
 
 The WIP source is published in [ariofrio/pi-tee](https://github.com/ariofrio/pi-tee). The npm packages remain unpublished. No vendor PR, issue or message was created.
 
-Written by Codex.
+Written by Codex and Claude.

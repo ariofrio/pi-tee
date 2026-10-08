@@ -17,7 +17,7 @@ NVIDIA's verification sources are unchanged except for hash-locked patches, each
 - [`collectors-disabled.cpp`](collectors-disabled.cpp) replaces NVIDIA's three local-GPU collectors with functions that reject collection.
 - [`nv-http-host.cpp`](nv-http-host.cpp) replaces the libcurl transport with a request bridge to the host. libcurl remains linked only for its URL parser.
 
-The Go helper is unchanged. Its vendored copy of in-toto replaces one Unix-only file-writability check that verification never calls ([replacement](../tinfoil-public-build/wasi/in_toto_util_unix.go.in)).
+The Go helper's own source is in [`tools/tinfoil-public-build`](../tinfoil-public-build/README.md). Its vendored copy of in-toto replaces one Unix-only file-writability check that verification never calls ([replacement](../tinfoil-public-build/wasi/in_toto_util_unix.go.in)).
 
 ## Runtime boundary
 
@@ -36,6 +36,6 @@ Maintainers need Git, CMake, a C/C++ host toolchain, Rust 1.90.0 with the `wasm3
 
 ## Checks
 
-[`check-nvidia-verifier.ts`](../../scripts/check-nvidia-verifier.ts) appraises fresh public Gemma GPU evidence through the WebAssembly verifier. It checks authentic evidence and rejects a wrong nonce and corrupted report, signed-mode, certificate, reference-manifest and OCSP signatures. A loopback proxy relays authentic NVIDIA collateral as the positive control for the collateral cases. Each negative requires a specific NVIDIA result code; delivery errors cannot pass. No credentials or inference are sent. [`wasm-verifiers.test.ts`](../../tests/wasm-verifiers.test.ts) covers artifact authentication, the absent file system, cancellation, an offline release authentication and the collateral-origin restriction.
+[`check-nvidia-verifier.ts`](../../scripts/check-nvidia-verifier.ts) appraises fresh public Gemma (one Hopper) GPU evidence through the WebAssembly verifier; live appraisal of the eight-GPU Blackwell workers exercises the multi-GPU path. It checks authentic evidence and rejects a wrong nonce and corrupted report, signed-mode, certificate, reference-manifest and OCSP signatures. A loopback proxy relays authentic NVIDIA collateral as the positive control for the collateral cases. Each negative requires a specific NVIDIA result code; delivery errors cannot pass. No credentials or inference are sent. [`wasm-verifiers.test.ts`](../../tests/wasm-verifiers.test.ts) covers artifact authentication, the absent file system, cancellation, an offline release authentication and the collateral-origin restriction.
 
 Written by Claude.

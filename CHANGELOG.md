@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Extend the Tinfoil public-build profile to DeepSeek V4.1 Flash and GLM-5.3, alongside Gemma 4 31B. Accept AMD SEV-SNP evidence (Genoa/Turin roots, AMD CRL, publisher TCB floors, non-debug non-migratable VMPL0 guests) as well as Intel TDX. Appraise every CPU-bound GPU: one claim per device, one supported hardware model, distinct devices, per-model firmware floors, and SPT for one GPU or Blackwell MPT for several. Replace the Gemma-only runtime profile with `tinfoil-vllm-v1`, and discover and freshly appraise workers on each dispatch instead of pinning one host. Tinfoil's remaining models are reachable only through a router that does not enforce the policy and stay excluded. Production admission stays closed pending review.
+
+- Recompute the SEV-SNP launch digest from the authenticated kernel, initrd and command line with a pinned, attested OVMF, matching the existing TDX register recomputation.
+
+- Retry transient 502/503/504 responses while fetching public artifacts; every byte is still authenticated by digest or signature.
+
 - Replace the Docker-hosted NVIDIA verifier and native Go helpers with WebAssembly modules shipped in `pi-tinfoil`: NVIDIA's verifier with the reference-signer patch (Emscripten) and the public-build CPU/release verifier (WASI). Both are hash-checked before compilation and run in terminable worker threads; the CPU verifier has no file system or network, and the NVIDIA verifier reaches only NVIDIA's reference and OCSP services. No setup step remains. Remove the frozen `direct-intel` route, `pi-tinfoil-setup`, the native NVIDIA candidate and the Go TLS helper. The experimental `sdk`-policy `direct-public` route runs the full appraisal; production `public-builds` admission stays closed pending review.
 
 - Send pinned-TLS requests as one HTTP/1.1 exchange on the verified `node:tls` socket instead of through `https.Agent`, which Bun cannot bind to an existing socket. The actual Pi suite, including live-delta cancellation, passes under Node and the Bun-compiled Pi 1.0.4 binary.

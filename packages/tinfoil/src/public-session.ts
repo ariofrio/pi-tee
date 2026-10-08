@@ -52,7 +52,7 @@ export const PUBLIC_BUILD_PROFILE: PublicBuildProfile = Object.freeze({
   id: PUBLIC_BUILD_PROFILE_ID,
   assumptions: Object.freeze([
     "Local OS, clock, Pi/runtime, enabled extensions/hooks/tools, locked dependencies and the hash-checked WebAssembly CPU-helper/NVIDIA verifier modules are trusted.",
-    "Intel TDX and AMD SEV-SNP manufacturer roots, hardware/firmware, signed collateral and revocation authenticate fresh CPU-bound device bytes and endpoint keys. TDX requires UpToDate appraisal and local floors; SEV-SNP requires publisher TCB floors, AMD's CRL and a non-debug, non-migratable VMPL0 guest.",
+    "Intel TDX and AMD SEV-SNP manufacturer roots, hardware/firmware, signed collateral and revocation authenticate fresh CPU-bound device bytes and endpoint keys. TDX requires UpToDate appraisal and local floors; SEV-SNP requires publisher TCB floors, AMD's CRL, a non-debug, non-migratable VMPL0 guest and the pinned tinfoilsh/edk2 OVMF in the recomputed launch digest.",
     "NVIDIA device/reference roots, fresh OCSP, signed golden references and the authenticated protected mode (SPT for one GPU, Blackwell MPT for several) are trusted with the manufacturer's protected-transfer/reset contract; local version floors constrain upgrades.",
     "The public Tinfoil workload repositories for Gemma 4 31B, DeepSeek V4.1 Flash and GLM-5.3, plus the guest, platform and freshness workflows, GitHub OIDC/hosted builds and the finite Sigstore roots, authorize updates automatically.",
     "Those accepted publishers are trusted for correct measurements, safe dependency selection, private per-boot keys, immutable runtime/model inputs, closed engine egress and preserved GPU-channel/reset behavior.",

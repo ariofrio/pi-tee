@@ -2,7 +2,7 @@
 
 NEAR AI and Tinfoil providers for Pi, with native API-key login, live model discovery, tools, reasoning, usage accounting and encrypted inference.
 
-**Work in progress; packages are unpublished.** The default `public-builds` policy currently admits no models: Tinfoil Gemma awaits independent review of its new WebAssembly verifiers. The same appraisal already serves the experimental `sdk`-policy `direct-public` route. NEAR's `sdk` routes work, but NEAR public builds are not possible today: NEAR's operator deploys serving software at runtime without a public release process, so no client can confine its keys. [Why](docs/nearai-status.md).
+**Work in progress; packages are unpublished.** The default `public-builds` policy currently admits no models: Tinfoil Gemma 4 31B, DeepSeek V4.1 Flash and GLM-5.3 await independent review of the new verifiers. The same appraisal already serves them on the experimental `sdk`-policy `direct-public` route. Tinfoil's other models are reachable only through a router that does not enforce the policy. [Coverage](docs/design.md#provider-assessment). NEAR's `sdk` routes work, but NEAR public builds are not possible today: NEAR's operator deploys serving software at runtime without a public release process, so no client can confine its keys. [Why](docs/nearai-status.md).
 
 | Package | Purpose |
 | --- | --- |
@@ -44,7 +44,7 @@ Pi stores credentials and handles `/logout`. Stored keys take precedence over `N
 
 | Policy | Behavior |
 | --- | --- |
-| `public-builds` | Default. Currently admits no models; Tinfoil Gemma awaits review of its WebAssembly verifiers. NEAR cannot qualify. |
+| `public-builds` | Default. Currently admits no models; Tinfoil Gemma 4 31B, DeepSeek V4.1 Flash and GLM-5.3 await review. NEAR cannot qualify. |
 | `sdk` | Enables experimental routes under their disclosed trust assumptions. |
 | `approved` | Reserved for independently approved frozen workloads; no profile is implemented. |
 
@@ -71,11 +71,11 @@ Both providers fetch chat/tool models from public catalogs, mapping prices, cont
 
 NEAR defaults to **TEE-only discovery**: metadata must match the model and declare `providerType: "vllm"` and `attestationSupported: true`. Non-TEE, unknown and failed lookups are hidden. `/nearai models all` or `PI_NEARAI_MODEL_VISIBILITY=all` shows labeled entries whose inference remains blocked; `/nearai models tee` restores the filter. Session choices are not persisted.
 
-NEAR public-build and Approved policies show no selectable models. Tinfoil public builds show no models until the WebAssembly verifiers are reviewed. Missing prices are labeled, and NEAR pricing tiers beyond base costs are not modeled.
+NEAR public-build and Approved policies show no selectable models. Tinfoil public builds show no models until review. Missing prices are labeled, and NEAR pricing tiers beyond base costs are not modeled.
 
 ## Security scope
 
-Public-build policy trusts the named public maintainers, workflows and build processes, plus Intel/AMD/NVIDIA and the local installation, including the hash-checked WebAssembly verifiers. Compatible vendor releases are verified automatically without maintained deployment pins. A malicious authorized release can be accepted before detection; public evidence permits later auditing, not guaranteed detection. Changes to authorities, supported schemas/GPU families or local verifier artifacts can require a client update. [Exact trust set and serving contract](docs/tinfoil-public-profile.md).
+Public-build policy trusts the named public maintainers, workflows and build processes, plus Intel/AMD/NVIDIA and the local installation, including the hash-checked WebAssembly verifiers. Compatible vendor releases are verified automatically without maintained deployment pins. A malicious authorized release can be accepted before detection; public evidence permits later auditing, not guaranteed detection. Changes to authorities, workload repositories, supported schemas/GPU configurations, SEV-SNP firmware or local verifier artifacts can require a client update. [Exact trust set and serving contract](docs/tinfoil-public-profile.md).
 
 The final request guard fixes model, endpoint and authentication after Pi's payload hooks, rejecting transport overrides, hosted tools, remote media and unsupported fields. Direct routes bind the actual TLS socket before credentials or ciphertext, send once and reject reconnect/resend. Pi provider retries are disabled; terminal security errors also suppress Pi 1.0.4's turn/summarization retries. The SDK router retains its disclosed rotation resend.
 
@@ -95,7 +95,7 @@ npm run check:nvidia      # WebAssembly NVIDIA verifier negatives; no inference
 npm run build:wasm        # maintainers: rebuild the WebAssembly verifiers
 ```
 
-On 2026-10-07, `npm run check` passed 70 tests; two more need private evidence fixtures and also passed. The experimental `direct-public` route, which runs the full public-build appraisal through the WebAssembly verifiers, passed the actual Pi suite under Node and the Bun-compiled Pi 1.0.4 binary: login, stored-key precedence, completion/usage, Unicode tools and follow-up, reasoning, and cancellation, including after a live text delta. [Portable verification evidence](docs/portable-verification.md#evidence).
+On 2026-10-08, `npm run check` passed 77 tests; three more need private evidence fixtures or boot artifacts and also passed. The experimental `direct-public` route, which runs the full public-build appraisal through the WebAssembly verifiers, passed the actual Pi suite for all three models under Node: login, stored-key precedence, completion/usage, Unicode tools and follow-up, reasoning, and cancellation. With Gemma it also passed under the Bun-compiled Pi 1.0.4 binary and cancellation after a live text delta. [Portable verification evidence](docs/portable-verification.md#evidence).
 
 The [live Pi harness](scripts/live-pi.ts) sends capped synthetic prompts using an isolated credential store:
 
