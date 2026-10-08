@@ -5,6 +5,10 @@ import { TeeError } from "./policy.js";
 import { MAX_REQUEST_BYTES, readBoundedBody } from "./transport.js";
 
 const MAX_RESPONSE_HEADER_BYTES = 64 * 1024;
+// Bytes queued for a stalled reader before the socket is paused.
+const RESPONSE_HIGH_WATER_BYTES = 1024 * 1024;
+const HEADER_NAME = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
+const HEADER_VALUE = /^[\t\x20-\x7e\x80-\xff]*$/;
 const FORBIDDEN_REQUEST_HEADERS = new Set(["host", "connection", "content-length", "transfer-encoding", "keep-alive", "upgrade", "te", "trailer", "expect"]);
 
 /** Credentials are transmitted only after the exact socket presents the attested SPKI. */
@@ -38,6 +42,8 @@ export function pinnedTlsFetch(endpoint: string, fingerprint: string, expiresAt?
             if (!certificate) throw new TeeError("TEE_TLS_KEY_REJECTED");
             const spki = new X509Certificate(certificate).publicKey.export({ type: "spki", format: "der" });
             if (createHash("sha256").update(spki).digest("hex") !== fingerprint) throw new TeeError("TEE_TLS_KEY_REJECTED");
+            // Bun ignores minVersion, so check the negotiated version on every runtime.
+            if (socket.getProtocol() !== "TLSv1.3") throw new TeeError("TEE_TLS_KEY_REJECTED");
             resolve();
           } catch { reject(new TeeError("TEE_TLS_KEY_REJECTED")); }
         });
@@ -90,8 +96,9 @@ function readResponse(socket: TLSSocket, signal: AbortSignal): Promise<Response>
         const headers = new Headers();
         for (const line of head.slice(1)) {
           const colon = line.indexOf(":");
-          if (colon <= 0) return fail(new TeeError("TEE_RESPONSE_REJECTED"));
-          headers.append(line.slice(0, colon).trim(), line.slice(colon + 1).trim());
+          const name = line.slice(0, colon), value = line.slice(colon + 1).trim();
+          if (colon <= 0 || !HEADER_NAME.test(name) || !HEADER_VALUE.test(value)) return fail(new TeeError("TEE_RESPONSE_REJECTED"));
+          try { headers.append(name, value); } catch { return fail(new TeeError("TEE_RESPONSE_REJECTED")); }
         }
         socket.off("data", onData);
         let stream: ReadableStream<Uint8Array> | null = null;
@@ -111,14 +118,20 @@ function bodyStream(socket: TLSSocket, headers: Headers, initial: Buffer, signal
   const encoding = headers.get("transfer-encoding")?.toLowerCase();
   const declared = headers.get("content-length");
   if (encoding !== undefined && encoding !== null && encoding !== "chunked") { socket.destroy(); throw new TeeError("TEE_RESPONSE_REJECTED"); }
-  if (encoding !== "chunked" && declared !== null && !/^[0-9]{1,15}$/.test(declared)) { socket.destroy(); throw new TeeError("TEE_RESPONSE_REJECTED"); }
-  let remaining = encoding === "chunked" ? 0 : declared === null ? Infinity : Number(declared);
+  // A close-delimited body could be truncated by anyone on the path who
+  // closes the TCP connection; accept only self-delimiting framing.
+  if (encoding !== "chunked" && (declared === null || !/^[0-9]{1,15}$/.test(declared))) { socket.destroy(); throw new TeeError("TEE_RESPONSE_REJECTED"); }
+  let remaining = encoding === "chunked" ? 0 : Number(declared);
   let pending = initial;
   let chunkLeft = -1; // chunked: bytes left in the current chunk; -1 awaiting a size line, -2 awaiting CRLF
   let done = false;
   const finish = () => { done = true; socket.destroy(); };
   return new ReadableStream<Uint8Array>({
     start(controller) {
+      const enqueue = (bytes: Buffer) => {
+        controller.enqueue(new Uint8Array(bytes));
+        if ((controller.desiredSize ?? 0) <= 0) socket.pause();
+      };
       const abort = () => { if (!done) { done = true; controller.error(new TeeError("TEE_CONNECTION_FAILED")); } socket.destroy(); };
       signal.addEventListener("abort", abort, { once: true });
       const drain = () => {
@@ -126,7 +139,7 @@ function bodyStream(socket: TLSSocket, headers: Headers, initial: Buffer, signal
           if (pending.length) {
             const take = pending.subarray(0, Math.min(pending.length, remaining));
             remaining -= take.length; pending = Buffer.alloc(0);
-            if (take.length) controller.enqueue(new Uint8Array(take));
+            if (take.length) enqueue(take);
           }
           if (remaining === 0) { finish(); signal.removeEventListener("abort", abort); controller.close(); }
           return;
@@ -148,7 +161,7 @@ function bodyStream(socket: TLSSocket, headers: Headers, initial: Buffer, signal
             if (!pending.length) return;
             const take = pending.subarray(0, Math.min(pending.length, chunkLeft));
             pending = pending.subarray(take.length); chunkLeft -= take.length;
-            controller.enqueue(new Uint8Array(take));
+            enqueue(take);
             if (chunkLeft === 0) chunkLeft = -2;
           }
         }
@@ -163,12 +176,11 @@ function bodyStream(socket: TLSSocket, headers: Headers, initial: Buffer, signal
       socket.once("close", () => {
         if (done) return;
         done = true;
-        // Only a close-delimited body may end with the connection.
-        if (encoding !== "chunked" && remaining === Infinity) controller.close();
-        else controller.error(new TeeError("TEE_CONNECTION_FAILED"));
+        controller.error(new TeeError("TEE_CONNECTION_FAILED"));
       });
       try { drain(); } catch (error) { done = true; controller.error(error); socket.destroy(); }
     },
+    pull() { if (!done) socket.resume(); },
     cancel() { done = true; socket.destroy(); },
-  });
+  }, { highWaterMark: RESPONSE_HIGH_WATER_BYTES, size: chunk => chunk.byteLength });
 }

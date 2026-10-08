@@ -102,3 +102,70 @@ test("native transport bounds a stalled TLS handshake without sending HTTP", { t
     await new Promise<void>(resolve => server.close(() => resolve()));
   }
 });
+
+// A raw TLS peer holding the pinned key: only it can send these bytes, so the
+// client must fail the request, never the process, and bound its own memory.
+// The peer runs under Node for both runtimes (Bun's TLS server ignores maxVersion).
+async function rawPeer(mode: "raw" | "flood", response = "", maxVersion = "TLSv1.3") {
+  const { spawn } = await import("node:child_process");
+  await mkdir(".scratch/work", { recursive: true });
+  const dir = await mkdtemp(resolve(".scratch/work/tls-raw-"));
+  const certificate = join(dir, "cert.pem"), privateKey = join(dir, "key.pem");
+  const generated = spawnSync("openssl", ["req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1", "-subj", "/CN=synthetic-fixture", "-keyout", privateKey, "-out", certificate], { stdio: "ignore" });
+  assert.equal(generated.status, 0, "Generating the ephemeral TLS fixture requires openssl.");
+  const cert = await readFile(certificate);
+  const child = spawn(process.versions.bun ? "node" : process.execPath,
+    ["tests/fixtures/raw-tls-peer.mjs", certificate, privateKey, maxVersion, mode, Buffer.from(response).toString("base64")], { stdio: ["ignore", "pipe", "inherit"] });
+  let written = 0;
+  const port = await new Promise<number>((done, fail) => {
+    let first = true;
+    child.stdout!.setEncoding("utf8").on("data", (text: string) => {
+      for (const line of text.split("\n").filter(Boolean)) {
+        if (first) { first = false; done(Number(line)); }
+        else if (line.startsWith("written ")) written = Number(line.slice(8));
+      }
+    });
+    child.once("exit", () => fail(new Error("peer exited")));
+  });
+  const endpoint = `https://localhost:${port}/v1/chat/completions`;
+  const fingerprint = createHash("sha256").update(new X509Certificate(cert).publicKey.export({ type: "spki", format: "der" })).digest("hex");
+  const fetch = () => pinnedTlsFetch(endpoint, fingerprint)(endpoint, { method: "POST", body: "synthetic", signal: AbortSignal.timeout(10000) });
+  return { fetch, written: () => written, close: async () => { child.kill(); await rm(dir, { recursive: true, force: true }); } };
+}
+
+test("malformed, unframed or downgraded responses from the pinned peer fail the request", { timeout: 60000 }, async () => {
+  for (const [name, head] of [
+    ["invalid header name", "HTTP/1.1 200 OK\r\nBad Name: x\r\nContent-Length: 2\r\n\r\nok"],
+    ["bare LF in a value", "HTTP/1.1 200 OK\r\nX: a\nTransfer-Encoding: chunked\r\nContent-Length: 2\r\n\r\nok"],
+    ["NUL in a value", "HTTP/1.1 200 OK\r\nX: a\0b\r\nContent-Length: 2\r\n\r\nok"],
+    ["close-delimited body", "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nok"],
+  ] as const) {
+    const peer = await rawPeer("raw", head);
+    try {
+      await assert.rejects(async () => { await (await peer.fetch()).text(); }, /TEE_RESPONSE_REJECTED|TEE_CONNECTION_FAILED/, name);
+    } finally { await peer.close(); }
+  }
+  const framed = await rawPeer("raw", "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok");
+  try {
+    assert.equal(await (await framed.fetch()).text(), "ok", "A well-formed response is the positive control.");
+  } finally { await framed.close(); }
+  const legacy = await rawPeer("raw", "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok", "TLSv1.2");
+  try {
+    await assert.rejects(legacy.fetch(), /TEE_TLS_KEY_REJECTED|TEE_CONNECTION_FAILED/, "TLS 1.2");
+  } finally { await legacy.close(); }
+});
+
+test("a stalled consumer applies backpressure to the pinned peer", { timeout: 60000 }, async () => {
+  const peer = await rawPeer("flood");
+  try {
+    const reader = (await peer.fetch()).body!.getReader();
+    await reader.read();
+    // Runtime buffers absorb a few tens of MiB; after that the peer must stall.
+    await new Promise(done => setTimeout(done, 3000));
+    const plateau = peer.written();
+    await new Promise(done => setTimeout(done, 3000));
+    assert(peer.written() - plateau <= 8 * 1024 * 1024, `the client kept reading while its consumer stalled: ${plateau} then ${peer.written()} bytes`);
+    assert(plateau < 128 * 1024 * 1024, `the peer pushed ${plateau} bytes while the consumer stalled`);
+    await reader.cancel();
+  } finally { await peer.close(); }
+});
