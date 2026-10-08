@@ -20,7 +20,7 @@ const server = createServer({ cert: readFileSync(cert), key: readFileSync(key), 
     const frame = Buffer.concat([Buffer.from(piece.length.toString(16) + "\r\n"), piece, Buffer.from("\r\n")]);
     let written = 0;
     const report = setInterval(() => console.log(`written ${written}`), 100);
-    socket.on("close", () => clearInterval(report));
+    socket.on("close", () => { clearInterval(report); console.log(`written ${written}`); });
     const pump = () => {
       while (written < 256 * 1024 * 1024) {
         written += piece.length;

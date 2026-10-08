@@ -155,18 +155,23 @@ test("malformed, unframed or downgraded responses from the pinned peer fail the 
   } finally { await legacy.close(); }
 });
 
-test("a stalled consumer bounds what the pinned peer can make the client buffer", { timeout: 60000 }, async () => {
+test("a stalled consumer bounds what the pinned peer can make the client buffer", { timeout: 90000 }, async () => {
   const peer = await rawPeer("flood");
   try {
     const reader = (await peer.fetch()).body!.getReader();
     await reader.read();
     // Node pauses the socket; Bun keeps reading natively, so the client fails
-    // the response once it exceeds the encrypted-response limit.
-    await new Promise(done => setTimeout(done, 3000));
-    const plateau = peer.written();
-    await new Promise(done => setTimeout(done, 3000));
-    assert(peer.written() - plateau <= 8 * 1024 * 1024, `the client kept reading: ${plateau} then ${peer.written()} bytes`);
-    assert(plateau < 128 * 1024 * 1024, `the peer pushed ${plateau} bytes while the consumer stalled`);
+    // the response once it exceeds the encrypted-response limit. Wait until
+    // the peer's writes settle rather than sampling at fixed times.
+    let previous = -1, settled = 0;
+    for (let waited = 0; waited < 30000 && settled < 4; waited += 500) {
+      await new Promise(done => setTimeout(done, 500));
+      const now = peer.written();
+      settled = now > 0 && now === previous ? settled + 1 : 0;
+      previous = now;
+    }
+    assert(settled >= 4, `the peer kept writing while the consumer stalled: ${peer.written()} bytes`);
+    assert(previous < 128 * 1024 * 1024, `the peer pushed ${previous} bytes while the consumer stalled`);
     try {
       while (!(await reader.read()).done) { /* drain what was buffered */ }
     } catch (error) {

@@ -10,7 +10,7 @@ This contract covers direct Tinfoil workers serving the models below with the `t
 
 The deployment column describes what was observed, not a pin. Either CPU platform and any GPU configuration the policy below admits are accepted for every model. Other Tinfoil models are reachable only through a decrypting router that does not enforce this policy. [Model coverage](design.md#provider-assessment).
 
-Independent Opus 5.5 reviews cover the [combined verifier/session](reviews/pi-tee-public-session-opus-review.md), [pinned local setup](reviews/pi-tee-local-setup-opus-review.md) and [routing/enablement](reviews/pi-tee-enablement-opus-review.md). Their scopes and live-test limitations are recorded in those reports. A [review of the multi-model, SEV-SNP and TLS changes](reviews/pi-tee-multimodel-snp-tls-opus-review.md) found the firmware-floor, engine-image and TLS issues fixed since; a separate review covered the WebAssembly verifiers and reference-signer patch. Both must re-check the fixes before production admission.
+Independent Opus 5.5 reviews cover the [combined verifier/session](reviews/pi-tee-public-session-opus-review.md), [pinned local setup](reviews/pi-tee-local-setup-opus-review.md) and [routing/enablement](reviews/pi-tee-enablement-opus-review.md). Their scopes and live-test limitations are recorded in those reports. A [review of the multi-model, SEV-SNP and TLS changes](reviews/pi-tee-multimodel-snp-tls-opus-review.md) found the firmware-floor, engine-image and TLS issues fixed since; a separate review covered the WebAssembly verifiers and NVIDIA reference-manifest patch. Both must re-check the fixes before production admission.
 
 ## Closed authorities
 
