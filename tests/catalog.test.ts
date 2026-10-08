@@ -14,6 +14,9 @@ test("NEAR catalog maps million-token costs and excludes embeddings and hosted t
   assert.ok(Math.abs((models[0]?.cost.cacheRead ?? NaN) - 0.05) < 1e-12);
   assert.deepEqual(models[0]?.input, ["text", "image"]);
   assert.equal(models[0]?.baseUrl, "https://cloud-api.near.ai/v1");
+  // NEAR's advertised max_output_length is not enforced; Pi clamps max_tokens to remaining context.
+  assert.equal(models[0]?.maxTokens, 131072);
+  assert.equal(models[0]?.contextWindow, 131072);
 });
 
 test("Tinfoil maps provider-declared thinking controls without accepting transport overrides", () => {

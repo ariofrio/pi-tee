@@ -8,7 +8,9 @@ export function parseNearCatalog(value: unknown) {
     const pricing = record(raw.pricing);
     const model = catalogModel({
       provider: "nearai", baseUrl: NEAR_BASE_URL, id: raw.id as string, name: raw.name,
-      contextWindow: raw.context_length, maxTokens: raw.max_output_length ?? record(raw.top_provider).max_completion_tokens,
+      // NEAR does not enforce max_output_length; context is the real bound, and
+      // Pi clamps max_tokens to the remaining context.
+      contextWindow: raw.context_length, maxTokens: raw.context_length,
       reasoning: strings(raw.supported_features).includes("reasoning"),
       image: strings(raw.input_modalities ?? record(raw.architecture).inputModalities).includes("image"),
       cost: {

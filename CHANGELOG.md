@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Map NEAR models' Pi `maxTokens` to their context length. NEAR advertises `max_output_length` 8192 for several models but does not enforce it, and Pi already clamps requests to the remaining context.
+
 - Pause Tinfoil public-build admission until the native GPU verifier replaces the pinned Linux verifier and passes review. Admission and the Intel research route fail before collecting evidence; the default policy exposes no models.
 
 - Verify native-candidate GPU reference-manifest signatures with the certificate-chain leaf key and require whole-document references. The patch is applied to a hash-checked copy of the pinned NVIDIA source.
