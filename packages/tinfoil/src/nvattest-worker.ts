@@ -30,7 +30,7 @@ async function bounded(response: Response, limit: number) {
 
 let requests = 0;
 async function request(method: string, url: string, headers: Record<string, unknown>, body: Uint8Array<ArrayBuffer>) {
-  if (++requests > 64) throw Error("too many requests");
+  if (++requests > 192) throw Error("too many requests");
   const target = new URL(url);
   const origin = (service: string) => target.origin === service || (collateralOrigin !== undefined && target.origin === collateralOrigin);
   const rim = method === "GET" && origin(RIM) && /^\/v1\/rim\/[A-Za-z0-9._-]{1,160}$/.test(target.pathname);

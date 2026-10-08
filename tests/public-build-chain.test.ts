@@ -39,7 +39,7 @@ test("the artifact chain rejects substituted delivery bytes using the WebAssembl
   }
   const run = async (change?: { url: string; bytes: Buffer }, repeat = false) => {
     const requests: string[] = [];
-    const options = {
+    const options = { repo,
       raw: JSON.stringify(evidence.envelope), nonce: evidence.nonce, signal: AbortSignal.timeout(60000),
       evidenceFetch: (async (input, init) => {
         const url = String(input); requests.push(url);

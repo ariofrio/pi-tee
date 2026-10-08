@@ -17,18 +17,18 @@ NVIDIA's verification sources are unchanged except for hash-locked patches, each
 - [`collectors-disabled.cpp`](collectors-disabled.cpp) replaces NVIDIA's three local-GPU collectors with functions that reject collection.
 - [`nv-http-host.cpp`](nv-http-host.cpp) replaces the libcurl transport with a request bridge to the host. libcurl remains linked only for its URL parser.
 
-The Go helper is unchanged. Its vendored copy of in-toto replaces one Unix-only file-writability check that verification never calls ([replacement](../tinfoil-public-build/wasi/in_toto_util_unix.go)).
+The Go helper is unchanged. Its vendored copy of in-toto replaces one Unix-only file-writability check that verification never calls ([replacement](../tinfoil-public-build/wasi/in_toto_util_unix.go.in)).
 
 ## Runtime boundary
 
 Each verifier runs in a worker thread that is terminated on cancellation or after a timeout.
 
 - The CPU helper runs under the minimal [WASI shim](../../packages/core/src/wasi.ts): arguments, `TZ=UTC`, clocks, randomness and bounded stdin/stdout. It has no preopened directories or sockets.
-- The NVIDIA verifier's only network path is the [request bridge](../../packages/tinfoil/src/nvattest-worker.ts). It admits `GET https://rim.attestation.nvidia.com/v1/rim/<id>` and `POST https://ocsp.ndis.nvidia.com`, with bounded bodies, no redirects, proxies or credentials, and at most 64 requests. Evidence is written to an in-memory file system. Emscripten's environment is isolated from the host's, so `OPENSSL_*` and NVIDIA service overrides cannot reach it.
+- The NVIDIA verifier's only network path is the [request bridge](../../packages/tinfoil/src/nvattest-worker.ts). It admits `GET https://rim.attestation.nvidia.com/v1/rim/<id>` and `POST https://ocsp.ndis.nvidia.com`, with bounded bodies, no redirects, proxies or credentials, and at most 192 requests (eight GPUs need about 88). Evidence is written to an in-memory file system. Emscripten's environment is isolated from the host's, so `OPENSSL_*` and NVIDIA service overrides cannot reach it.
 
 ## Reproducibility
 
-A rebuild in the same directory produced identical artifacts, and the Go helper, JavaScript glue and license inventory were identical across directories. The Regorus library is not: Cargo hashes the absolute path of out-of-workspace path dependencies into symbol names. The committed artifacts therefore come from the [CI workflow](../../.github/workflows/wasm-verifiers.yml), which builds in `/home/runner/pi-tee-wasm-build`, uploads the result and fails if it differs from the committed bytes. Pushes to `main` also record GitHub build-provenance attestations.
+Pins cover the uncompressed modules, since gzip output varies between zlib versions. The Go helper, JavaScript glue and license inventory are byte-identical across build directories and between macOS and Linux. The NVIDIA module is not: Cargo hashes the absolute path of Regorus, an out-of-workspace path dependency, into symbol names. Its committed copy therefore comes from the [CI workflow](../../.github/workflows/wasm-verifiers.yml), which builds in `/home/runner/pi-tee-wasm-build`, uploads the result and fails if a pin differs from the rebuild. Pushes to `main` also record GitHub build-provenance attestations.
 
 The triplet removes vcpkg and Emscripten source paths from objects. A hash-locked [port patch](patches/vcpkg-openssl-fixed-paths.patch) and a triplet option fix the OpenSSL module/engine and libxml2 catalog paths that would otherwise embed the build root.
 

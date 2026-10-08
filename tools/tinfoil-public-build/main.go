@@ -15,16 +15,25 @@ import (
 	"github.com/sigstore/sigstore-go/pkg/bundle"
 	"github.com/sigstore/sigstore-go/pkg/fulcio/certificate"
 	"github.com/tinfoilsh/tinfoil-go/verifier/envelope"
+	"github.com/tinfoilsh/tinfoil-go/verifier/policy"
 	"github.com/tinfoilsh/tinfoil-go/verifier/provenance"
 	"github.com/tinfoilsh/tinfoil-go/verifier/quote"
 )
 
 const (
 	maxInputBytes = 2 * 1024 * 1024
-	codeRepo      = "tinfoilsh/confidential-gemma4-31b"
 	codeWorkflow  = "tinfoil-release-publish.yml"
 	platformRepo  = "tinfoilsh/platform-endorsements"
 )
+
+// Workload publishers admitted under the runtime profile, with the model name
+// each must serve. Each is trusted only through its tagged release workflow;
+// another repository is rejected.
+var publicRepos = map[string]string{
+	"tinfoilsh/confidential-gemma4-31b":          "gemma4-31b",
+	"tinfoilsh/confidential-deepseek-v4-1-flash": "deepseek-v4-1-flash",
+	"tinfoilsh/confidential-glm5-3-nvfp4":        "glm-5-3",
+}
 
 var stableTag = regexp.MustCompile(`^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$`)
 
@@ -39,6 +48,7 @@ type result struct {
 	GPUVerified         bool      `json:"gpuVerified"`
 	InferenceQualified  bool      `json:"inferenceQualified"`
 	Repo                string    `json:"repo"`
+	Platform            string    `json:"platform"`
 	Workflow            string    `json:"workflow"`
 	Tag                 string    `json:"tag"`
 	Commit              string    `json:"commit"`
@@ -56,11 +66,11 @@ type result struct {
 
 // The SDK accepts any tagged workflow in the code repository. Narrow it to the
 // one release workflow explicitly trusted here, without freezing its commits.
-func requireCodeWorkflow(raw []byte, tag string) error {
-	if !stableTag.MatchString(tag) {
+func requireCodeWorkflow(raw []byte, repo, tag string) error {
+	if publicRepos[repo] == "" || !stableTag.MatchString(tag) {
 		return errors.New("TEE_PUBLIC_BUILD_IDENTITY_REJECTED")
 	}
-	return requirePublicWorkflow(raw, codeRepo, codeWorkflow, "refs/tags/"+tag)
+	return requirePublicWorkflow(raw, repo, codeWorkflow, "refs/tags/"+tag)
 }
 
 func requirePublicWorkflow(raw []byte, repo, workflow, ref string) error {
@@ -91,7 +101,7 @@ func verify(raw, nonce []byte, now time.Time) (*result, error) {
 	if err != nil {
 		return nil, errors.New("TEE_ENVELOPE_REJECTED")
 	}
-	if doc.CPUEvidence.Format != envelope.TDXQuoteV1Format {
+	if doc.CPUEvidence.Format != envelope.TDXQuoteV1Format && doc.CPUEvidence.Format != envelope.SEVSNPReportV1Format {
 		return nil, errors.New("TEE_CPU_PLATFORM_REJECTED")
 	}
 	// A single conventional code entry is shared with the Node artifact chain.
@@ -108,10 +118,11 @@ func verify(raw, nonce []byte, now time.Time) (*result, error) {
 		return nil, errors.New("TEE_PUBLIC_BUILD_IDENTITY_REJECTED")
 	}
 	ref, err := doc.ReferenceValuesCollateral(envelope.CollateralSigstoreCodeV1Format)
-	if err != nil || ref.Repo != codeRepo {
+	if err != nil || publicRepos[ref.Repo] == "" {
 		return nil, errors.New("TEE_PUBLIC_BUILD_IDENTITY_REJECTED")
 	}
-	if err = requireCodeWorkflow(ref.SigstoreBundle, ref.Tag); err != nil {
+	codeRepo := ref.Repo
+	if err = requireCodeWorkflow(ref.SigstoreBundle, codeRepo, ref.Tag); err != nil {
 		return nil, err
 	}
 	code, err := provenance.AuthenticateCode(ref.SigstoreBundle, codeRepo, ref.Tag, ref.Digest)
@@ -150,7 +161,15 @@ func verify(raw, nonce []byte, now time.Time) (*result, error) {
 	if err != nil {
 		return nil, errors.New("TEE_CPU_SIGNATURE_REJECTED")
 	}
-	floored, err := floorTDXArtifact(platform.Artifact, authenticated.Identity)
+	var floored *policy.Artifact
+	switch authenticated.Platform {
+	case policy.PlatformTDX:
+		floored, err = floorTDXArtifact(platform.Artifact, authenticated.Identity)
+	case policy.PlatformSEVSNP:
+		floored, err = floorSNPArtifact(platform.Artifact, authenticated.Identity)
+	default:
+		err = errors.New("TEE_CPU_PLATFORM_REJECTED")
+	}
 	if err != nil {
 		return nil, errors.New("TEE_CPU_POLICY_REJECTED")
 	}
@@ -158,7 +177,7 @@ func verify(raw, nonce []byte, now time.Time) (*result, error) {
 	if err != nil || assembled.Validate() != nil {
 		return nil, errors.New("TEE_CPU_POLICY_REJECTED")
 	}
-	return &result{CPUVerified: true, PublicBuildVerified: true, Repo: codeRepo, Workflow: codeWorkflow,
+	return &result{CPUVerified: true, PublicBuildVerified: true, Repo: codeRepo, Platform: authenticated.Platform, Workflow: codeWorkflow,
 		Tag: code.Tag, Commit: code.Commit, Digest: code.Digest,
 		PlatformTag: platform.Tag, PlatformCommit: platform.Commit, PlatformDigest: platform.Digest,
 		CodeStatementDigest: statementDigest, RTMR1: predicate.TDX.RTMR1, RTMR2: predicate.TDX.RTMR2, Shape: predicate.Shape,

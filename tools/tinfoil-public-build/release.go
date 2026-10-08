@@ -55,12 +55,12 @@ func codePredicate(raw []byte, code *provenance.Code) (*deployment, string, erro
 	return p, digest256(payload), nil
 }
 
-func authenticateDeployment(tag string, raw, releaseBundle []byte) (*provenance.Code, *deployment, string, error) {
+func authenticateDeployment(repo, tag string, raw, releaseBundle []byte) (*provenance.Code, *deployment, string, error) {
 	reject := errors.New("TEE_PUBLIC_BUILD_BINDING_REJECTED")
-	if requireCodeWorkflow(releaseBundle, tag) != nil {
+	if requireCodeWorkflow(releaseBundle, repo, tag) != nil {
 		return nil, nil, "", reject
 	}
-	code, err := provenance.AuthenticateCode(releaseBundle, codeRepo, tag, digest256(raw))
+	code, err := provenance.AuthenticateCode(releaseBundle, repo, tag, digest256(raw))
 	if err != nil {
 		return nil, nil, "", reject
 	}
@@ -96,5 +96,28 @@ func floorTDXArtifact(artifact *policy.Artifact, identity string) (*policy.Artif
 	selected.TDX.MinimumTEETCBSVN = hex.EncodeToString(minimum)
 	*selected.TDX.MinimumTCBEvaluationDataNumber = max(*selected.TDX.MinimumTCBEvaluationDataNumber, 20)
 	copy.Policies[name] = *selected
+	return copy, nil
+}
+
+// SEV-SNP has no manufacturer "UpToDate" verdict; the publisher's TCB floors
+// and AMD's document-carried CRL govern firmware. Independently require a
+// non-debug, non-migratable guest at VMPL0 on released firmware.
+func floorSNPArtifact(artifact *policy.Artifact, identity string) (*policy.Artifact, error) {
+	raw, err := json.Marshal(artifact)
+	if err != nil {
+		return nil, err
+	}
+	copy, err := policy.Parse(raw)
+	if err != nil {
+		return nil, err
+	}
+	_, selected, err := copy.PolicyFor(identity, policy.PlatformSEVSNP)
+	if err != nil {
+		return nil, err
+	}
+	snp := selected.SEVSNP
+	if snp == nil || snp.GuestPolicy.Debug || snp.GuestPolicy.MigrateMA || snp.PermitProvisionalFirmware || snp.VMPL == nil || *snp.VMPL != 0 {
+		return nil, errors.New("TEE_CPU_POLICY_REJECTED")
+	}
 	return copy, nil
 }

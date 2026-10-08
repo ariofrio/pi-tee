@@ -35,17 +35,20 @@ export async function openDirectTinfoilTransport(signal: AbortSignal, attestatio
   return openEncryptedWorkerTransport(signal, profile.host, { tls: attestation.tlsPublicKeyFingerprint, hpke: attestation.hpkePublicKey }, "user_cache_secret");
 }
 
-export async function openEncryptedWorkerTransport(signal: AbortSignal, host: string, keys: { tls: string; hpke: string }, cacheField: "user_cache_secret" | "cache_salt", expiresAt?: number): Promise<SdkTransport> {
+// `logicalBaseUrl` lets a profile with discovered workers keep one canonical
+// endpoint: callers address it, and only this transport's attested host is dialed.
+export async function openEncryptedWorkerTransport(signal: AbortSignal, host: string, keys: { tls: string; hpke: string }, cacheField: "user_cache_secret" | "cache_salt", expiresAt?: number, logicalBaseUrl?: string): Promise<SdkTransport> {
   const { Identity } = await import("ehbp");
   const identity = await Identity.fromPublicKeyHex(keys.hpke);
-  const baseUrl = `https://${host}/v1`;
-  const endpoint = `${baseUrl}/chat/completions`;
+  const endpoint = `https://${host}/v1/chat/completions`;
+  const baseUrl = logicalBaseUrl ?? `https://${host}/v1`;
+  const addressed = `${baseUrl}/chat/completions`;
   const fetch = pinnedTlsFetch(endpoint, keys.tls, expiresAt);
   const cacheSecret = randomBytes(32).toString("hex");
   let sent = false;
   return { baseUrl, fetch: async (input, init) => {
     const request = new Request(input, init);
-    if (request.url !== endpoint || request.method !== "POST" || sent) throw new TeeError("TEE_REQUEST_REJECTED");
+    if (request.url !== addressed || request.method !== "POST" || sent) throw new TeeError("TEE_REQUEST_REJECTED");
     sent = true;
     const requestSignal = AbortSignal.any([signal, request.signal]);
     requestSignal.throwIfAborted();

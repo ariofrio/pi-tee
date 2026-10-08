@@ -54,7 +54,8 @@ jobs:
           path: |
             packages/tinfoil/wasm/
             packages/tinfoil/src/wasm-artifacts.ts
-      - run: git diff --stat --exit-code -- packages/tinfoil/wasm packages/tinfoil/src/wasm-artifacts.ts
+      # Pins cover uncompressed modules; gzip bytes may differ between zlib versions.
+      - run: git diff --stat --exit-code -- packages/tinfoil/src/wasm-artifacts.ts packages/tinfoil/wasm/nvattest.mjs packages/tinfoil/wasm/THIRD_PARTY_LICENSES.txt
       - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         if: github.event_name == 'push'
         with:

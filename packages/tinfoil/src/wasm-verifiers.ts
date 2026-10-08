@@ -10,23 +10,24 @@ import { WASM_ARTIFACTS } from "./wasm-artifacts.js";
 // threads: the CPU helper has no filesystem or network access; the NVIDIA
 // verifier reaches only NVIDIA's reference and revocation services through
 // the bounded request bridge below.
-type ArtifactName = keyof typeof WASM_ARTIFACTS;
-const location = (name: ArtifactName) => new URL(`../wasm/${name}`, import.meta.url);
+// Pins cover the uncompressed module bytes and the JavaScript glue.
+const location = (name: string) => new URL(`../wasm/${name}`, import.meta.url);
 const sha256 = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex");
 
-async function artifact(name: ArtifactName): Promise<Buffer> {
-  let bytes: Buffer;
-  try { bytes = await readFile(location(name)); } catch { throw new TeeError("TEE_VERIFIER_ARTIFACT_REJECTED"); }
-  if (sha256(bytes) !== WASM_ARTIFACTS[name]) throw new TeeError("TEE_VERIFIER_ARTIFACT_REJECTED");
-  return bytes;
+async function read(name: string): Promise<Buffer> {
+  try { return await readFile(location(name)); } catch { throw new TeeError("TEE_VERIFIER_ARTIFACT_REJECTED"); }
+}
+async function glueArtifact() {
+  if (sha256(await read("nvattest.mjs")) !== WASM_ARTIFACTS["nvattest.mjs"]) throw new TeeError("TEE_VERIFIER_ARTIFACT_REJECTED");
 }
 const modules = new Map<string, Promise<WebAssembly.Module>>();
-function compiled(name: "tinfoil-public-build.wasm.gz" | "nvattest.wasm.gz") {
+function compiled(name: "tinfoil-public-build.wasm" | "nvattest.wasm") {
   let module = modules.get(name);
   if (!module) {
-    module = artifact(name).then(bytes => {
-      const wasm = new Uint8Array(gunzipSync(bytes));
-      return compileVerifiedWasm(wasm, sha256(wasm));
+    module = read(`${name}.gz`).then(bytes => {
+      let wasm: Uint8Array<ArrayBuffer>;
+      try { wasm = new Uint8Array(gunzipSync(bytes, { maxOutputLength: 128 * 1024 * 1024 })); } catch { throw new TeeError("TEE_VERIFIER_ARTIFACT_REJECTED"); }
+      return compileVerifiedWasm(wasm, WASM_ARTIFACTS[name]);
     });
     module.catch(() => modules.delete(name));
     modules.set(name, module);
@@ -34,12 +35,12 @@ function compiled(name: "tinfoil-public-build.wasm.gz" | "nvattest.wasm.gz") {
   return module;
 }
 
-export const PUBLIC_BUILD_HELPER_DIGEST = WASM_ARTIFACTS["tinfoil-public-build.wasm.gz"];
-export const NVIDIA_VERIFIER_DIGEST = createHash("sha256").update(JSON.stringify([WASM_ARTIFACTS["nvattest.wasm.gz"], WASM_ARTIFACTS["nvattest.mjs"]])).digest("hex");
+export const PUBLIC_BUILD_HELPER_DIGEST = WASM_ARTIFACTS["tinfoil-public-build.wasm"];
+export const NVIDIA_VERIFIER_DIGEST = createHash("sha256").update(JSON.stringify([WASM_ARTIFACTS["nvattest.wasm"], WASM_ARTIFACTS["nvattest.mjs"]])).digest("hex");
 
 /** Runs one public-build helper command; the JSON protocol is unchanged from the native helper. */
 export async function runPublicBuildHelper(input: string, args: string[], signal: AbortSignal): Promise<{ code: number; stdout: string }> {
-  const module = await compiled("tinfoil-public-build.wasm.gz");
+  const module = await compiled("tinfoil-public-build.wasm");
   const result = await runWasiCommand(module, {
     args: ["tinfoil-public-build-verifier", ...args], env: { TZ: "UTC" }, stdin: new TextEncoder().encode(input),
     maxStdout: 16384, signal, timeoutMs: 60000,
@@ -53,8 +54,8 @@ export async function runNvidiaVerifier(options: { evidence: unknown[]; nonce: s
   // Tests may relay NVIDIA collateral through a loopback proxy; nothing else can redirect it.
   const origin = options.collateralOrigin;
   if (origin !== undefined && !/^http:\/\/127\.0\.0\.1:[1-9][0-9]{0,4}$/.test(origin)) throw new TeeError("TEE_REQUEST_REJECTED");
-  await artifact("nvattest.mjs");
-  const module = await compiled("nvattest.wasm.gz");
+  await glueArtifact();
+  const module = await compiled("nvattest.wasm");
   return new Promise((resolve, reject) => {
     // Source checkouts run through a TypeScript loader that workers inherit.
     const worker = new Worker(new URL(`./nvattest-worker.${import.meta.url.endsWith(".ts") ? "ts" : "js"}`, import.meta.url), {

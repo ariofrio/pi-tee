@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { test } from "node:test";
+import { gpuVersionsAllowed, requiredGpuMode } from "../packages/tinfoil/src/gpu-policy.js";
 
 // The evidence CLI parses protocol fields; it never authenticates a device.
 // Numeric expectations follow NVIDIA's Python verifier, not our parser.
@@ -40,23 +41,31 @@ test("the GPU evidence CLI rejects ambiguous, unsupported and truncated mode fie
   }
 });
 
-test("GPU version compatibility permits authenticated upgrades only above the public policy floors", () => {
-  for (const [driver, vbios, policy, compatible] of [
-    ["595.71.05", "96.00.D9.00.02", "public-builds", true],
-    ["596.10.01", "96.00.DA.00.01", "public-builds", true],
-    ["595.71.04", "96.00.D9.00.02", "public-builds", false],
-    ["594.99.99", "96.00.D9.00.02", "public-builds", false],
-    ["595.71.05", "96.00.D9.00.01", "public-builds", false],
-    ["596.10.01", "96.00.DA.00.01", "frozen", false],
-    ["595.71.05", "96.00.D9.00.02", "frozen", true],
-    ["595.71.05-extra", "96.00.D9.00.02", "public-builds", false],
-    ["595.71.05", "96.00.D9.00.02.00", "public-builds", false],
-    ["99999999999999.1.1", "96.00.D9.00.02", "public-builds", false],
-  ] as const) {
-    const result = spawnSync(process.execPath, ["--import", "tsx", "scripts/research/nvidia-gpu-mode.ts"], {
-      input: JSON.stringify({ report: report(0).toString("base64"), versions: { driver, vbios, policy } }), encoding: "utf8", timeout: 10000,
-    });
-    assert.equal(result.status, 0, result.stderr);
-    assert.deepEqual(JSON.parse(result.stdout), { mode: "spt", versionPolicyCompatible: compatible, gpuSignatureVerified: false, inferenceQualified: false });
-  }
+test("GPU version floors are per hardware model and admit authenticated upgrades only", () => {
+  for (const [hwmodel, driver, vbios, compatible] of [
+    ["GH100 A01 GSP BROM", "595.71.05", "96.00.D0.00.03", true],
+    ["GH100 A01 GSP BROM", "596.10.01", "96.00.DA.00.01", true],
+    ["GH100 A01 GSP BROM", "595.71.04", "96.00.D9.00.02", false],
+    ["GH100 A01 GSP BROM", "595.71.05", "96.00.D0.00.02", false],
+    ["GB100 A01 GSP BROM", "595.71.05", "97.00.D9.00.35", true],
+    ["GB100 A01 GSP BROM", "595.71.05", "97.00.D9.00.34", false],
+    // Another model's numbering cannot satisfy a floor.
+    ["GB100 A01 GSP BROM", "595.71.05", "96.00.FF.00.FF", false],
+    ["GB110 A01 GSP BROM", "595.71.05", "97.10.64.00.0C", true],
+    ["GB110 A01 GSP BROM", "595.71.05", "97.00.FF.00.FF", false],
+    ["GH200 A01 GSP BROM", "595.71.05", "96.00.D9.00.02", false],
+    ["GH100 A01 GSP BROM", "595.71.05-extra", "96.00.D9.00.02", false],
+    ["GH100 A01 GSP BROM", "595.71.05", "96.00.D9.00.02.00", false],
+    ["GH100 A01 GSP BROM", "99999999999999.1.1", "96.00.D9.00.02", false],
+  ] as const) assert.equal(gpuVersionsAllowed(hwmodel, driver, vbios), compatible, `${hwmodel} ${driver} ${vbios}`);
+});
+
+test("one GPU must report SPT; several Blackwell GPUs must report MPT; Hopper multi-GPU is unsupported", () => {
+  assert.equal(requiredGpuMode("GH100 A01 GSP BROM", 1), "spt");
+  assert.equal(requiredGpuMode("GH100 A01 GSP BROM", 2), undefined);
+  assert.equal(requiredGpuMode("GB100 A01 GSP BROM", 1), "spt");
+  assert.equal(requiredGpuMode("GB110 A01 GSP BROM", 8), "mpt");
+  assert.equal(requiredGpuMode("GB110 A01 GSP BROM", 9), undefined);
+  assert.equal(requiredGpuMode("GB110 A01 GSP BROM", 0), undefined);
+  assert.equal(requiredGpuMode("unknown", 1), undefined);
 });

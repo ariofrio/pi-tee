@@ -18,8 +18,8 @@ try {
   let versionPolicyCompatible: boolean | undefined;
   if (input.versions !== undefined) {
     const v = input.versions;
-    if (!v || typeof v !== "object" || Array.isArray(v) || Object.keys(v).length !== 3 || !Object.hasOwn(v, "driver") || !Object.hasOwn(v, "vbios") || (v.policy !== "frozen" && v.policy !== "public-builds")) throw Error();
-    versionPolicyCompatible = gpuVersionsAllowed(v.driver, v.vbios, v.policy);
+    if (!v || typeof v !== "object" || Array.isArray(v) || Object.keys(v).length !== 3 || !Object.hasOwn(v, "driver") || !Object.hasOwn(v, "vbios") || !Object.hasOwn(v, "hwmodel")) throw Error();
+    versionPolicyCompatible = gpuVersionsAllowed(v.hwmodel, v.driver, v.vbios);
   }
   console.log(JSON.stringify({ mode: parseHopperGpuMode(input.report), ...(versionPolicyCompatible !== undefined ? { versionPolicyCompatible } : {}), gpuSignatureVerified: false, inferenceQualified: false }));
 } catch {

@@ -30,8 +30,8 @@ const entry = publicCandidate ? join(scratch, "public-candidate.ts") : resolve("
 if (publicCandidate) await writeFile(entry, `
 import { createTeeProvider } from ${JSON.stringify(resolve("packages/core/dist/index.js"))};
 import { parseTinfoilCatalog, TINFOIL_BASE_URL } from ${JSON.stringify(resolve("packages/tinfoil/dist/index.js"))};
-import { INTEL_PUBLIC_BUILD_PROFILE } from ${JSON.stringify(resolve("packages/tinfoil/dist/intel.js"))};
-const profile = INTEL_PUBLIC_BUILD_PROFILE;
+import { PUBLIC_BUILD_PROFILE } from ${JSON.stringify(resolve("packages/tinfoil/dist/public-session.js"))};
+const profile = PUBLIC_BUILD_PROFILE;
 export default async function(pi) {
   // Synthetic candidate registration; it does not change production routing.
   const integration = createTeeProvider({

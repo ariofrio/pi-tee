@@ -2,14 +2,14 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
 import { resolve } from "node:path";
-import { qualifyIntelCandidate } from "../packages/tinfoil/src/intel-appraisal.js";
+import { appraiseWorker } from "../packages/tinfoil/src/worker-appraisal.js";
 import { createTinfoilProvider, TINFOIL_ASSUMPTIONS } from "../packages/tinfoil/src/index.js";
 import { normalizeContext } from "@earendil-works/pi-ai/compat";
 
 test("malformed public CPU evidence cannot reach artifact discovery, GPU appraisal or endpoint keys", async () => {
   let metadataRequests = 0;
-  await assert.rejects(qualifyIntelCandidate({
-    signal: AbortSignal.timeout(30000),
+  await assert.rejects(appraiseWorker({
+    model: "gemma4-31b", host: "gemma4-31b-inf8-0.tinfoil.containers.tinfoil.dev", signal: AbortSignal.timeout(30000),
     // The loopback origin would be the only permitted NVIDIA collateral source; nothing may reach it.
     nvidiaCollateralOrigin: "http://127.0.0.1:9",
     evidenceFetch: async (input, options) => {

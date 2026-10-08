@@ -4,7 +4,8 @@ import {
   TeeError, type PolicyMode, type ProviderDefinition,
 } from "pi-tee-core";
 import { openDirectTinfoilTransport, TINFOIL_DIRECT_PROFILE } from "./direct.js";
-import { INTEL_PUBLIC_BUILD_PROFILE, openIntelTinfoilTransport } from "./intel.js";
+import { openPublicWorkerTransport, PUBLIC_BUILD_PROFILE } from "./public-session.js";
+import { PUBLIC_MODELS } from "./worker-appraisal.js";
 import { PUBLIC_BUILD_PROFILE_ENABLED } from "./public-policy.js";
 import { parseTinfoilCatalog, TINFOIL_BASE_URL } from "./catalog.js";
 export { parseTinfoilCatalog, TINFOIL_BASE_URL } from "./catalog.js";
@@ -44,9 +45,9 @@ export function createTinfoilProvider(options: {
     id: "tinfoil", name: "Tinfoil", baseUrl: TINFOIL_BASE_URL, apiKeyEnv: "TINFOIL_API_KEY",
     policy: options.policy ?? resolvePolicy(process.env.PI_TINFOIL_POLICY),
     parseCatalog: parseTinfoilCatalog, catalogFetch: options.catalogFetch, assumptions,
-    publicBuildProfile: (route === "auto" || route === "direct-public") && PUBLIC_BUILD_PROFILE_ENABLED ? INTEL_PUBLIC_BUILD_PROFILE : undefined,
-    availableModelIds: route !== "router" && route !== "auto" ? [TINFOIL_DIRECT_PROFILE.model] : undefined,
-    openSdkTransport: options.openSdkTransport ?? (route === "direct-public" ? ({ signal }) => openIntelTinfoilTransport(signal) : route === "direct" ? ({ signal }) => openDirectTinfoilTransport(signal) : async ({ signal }) => {
+    publicBuildProfile: (route === "auto" || route === "direct-public") && PUBLIC_BUILD_PROFILE_ENABLED ? PUBLIC_BUILD_PROFILE : undefined,
+    availableModelIds: route === "direct-public" ? Object.keys(PUBLIC_MODELS) : route === "direct" ? [TINFOIL_DIRECT_PROFILE.model] : undefined,
+    openSdkTransport: options.openSdkTransport ?? (route === "direct-public" ? ({ signal, model }) => openPublicWorkerTransport(signal, model.id) : route === "direct" ? ({ signal }) => openDirectTinfoilTransport(signal) : async ({ signal }) => {
       const { SecureClient } = await import("tinfoil");
       signal.throwIfAborted();
       const client = new SecureClient({ baseURL: TINFOIL_BASE_URL, transport: "ehbp", userCacheSecret: randomBytes(32).toString("hex") });

@@ -4,8 +4,6 @@ import assert from "node:assert/strict";
 import { computeBootMeasurements } from "./boot-measurements.js";
 import { PUBLIC_BUILD_HELPER_DIGEST, runPublicBuildHelper } from "./wasm-verifiers.js";
 
-const host = "gemma4-31b-inf8-0.tinfoil.containers.tinfoil.dev";
-const repo = "tinfoilsh/confidential-gemma4-31b";
 const parseJson = (bytes: string | Uint8Array): any => JSON.parse(typeof bytes === "string" ? bytes : new TextDecoder("utf-8", { fatal: true }).decode(bytes));
 const sha256 = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex");
 
@@ -44,9 +42,9 @@ function cacheFor(fetch: typeof globalThis.fetch, helperDigest: string) {
 // Artifact authentication only. Callers must independently appraise the CPU-bound
 // GPU bytes and qualify runtime/key/channel behavior before production admission.
 export async function verifyPublicBuildArtifacts(options: {
-  raw: string; nonce: string; signal: AbortSignal; evidenceFetch?: typeof globalThis.fetch;
+  raw: string; nonce: string; signal: AbortSignal; repo: string; evidenceFetch?: typeof globalThis.fetch;
 }) {
-  const { raw, nonce, signal } = options;
+  const { raw, nonce, signal, repo } = options;
   const evidenceFetch = options.evidenceFetch ?? globalThis.fetch;
   let cache: ArtifactCache | undefined;
   async function get(url: string, redirect: RequestRedirect = "error", maxBytes = 2 * 1024 * 1024, headers: Record<string, string> = {}, expectedDigest?: string, immutable = false): Promise<Buffer> {
@@ -125,9 +123,15 @@ export async function verifyPublicBuildArtifacts(options: {
     ]);
     assert.equal(sha256(kernel), cvm.hashes.kernel, "TEE_PUBLIC_KERNEL_DIGEST_REJECTED");
     assert.equal(sha256(initrd), cvm.hashes.initrd, "TEE_PUBLIC_INITRD_DIGEST_REJECTED");
-    const boot = computeBootMeasurements(kernel, initrd, verified.vmShape.memory_mb, expectedCommand);
-    assert.equal(boot.rtmr1, verified.rtmr1, "TEE_PUBLIC_BOOT_MEASUREMENT_REJECTED");
-    assert.equal(boot.rtmr2, verified.rtmr2, "TEE_PUBLIC_BOOT_MEASUREMENT_REJECTED");
+    // TDX: independently recompute the boot registers from the authenticated
+    // kernel, initrd and command line. SEV-SNP: the helper already required the
+    // quote's launch digest to equal the release's signed SNP measurement.
+    assert(verified.platform === "tdx" || verified.platform === "sev-snp", "TEE_CPU_PLATFORM_REJECTED");
+    const boot = verified.platform === "tdx" ? computeBootMeasurements(kernel, initrd, verified.vmShape.memory_mb, expectedCommand) : undefined;
+    if (boot) {
+      assert.equal(boot.rtmr1, verified.rtmr1, "TEE_PUBLIC_BOOT_MEASUREMENT_REJECTED");
+      assert.equal(boot.rtmr2, verified.rtmr2, "TEE_PUBLIC_BOOT_MEASUREMENT_REJECTED");
+    }
 
     // Select the registry root through the authenticated release, not delivery
     // metadata or a mutable tag. Anonymous GHCR pull tokens authorize reads only.
@@ -135,10 +139,10 @@ export async function verifyPublicBuildArtifacts(options: {
     const codeCollateral = envelope.collateral.filter((item: any) => item.format === "https://tinfoil.sh/collateral/sigstore-code/v1");
     assert.equal(codeCollateral.length, 1, "TEE_CONTAINER_BUILD_REJECTED");
     assert(codeCollateral[0].id === "code" && codeCollateral[0].role === "reference-values", "TEE_CONTAINER_BUILD_REJECTED");
-    const releaseInput = { tag: verified.tag, deployment: artifact.toString("base64"), bundle: codeCollateral[0].data.sigstore_bundle };
+    const releaseInput = { repo, tag: verified.tag, deployment: artifact.toString("base64"), bundle: codeCollateral[0].data.sigstore_bundle };
     const runtime = await appraise(JSON.stringify(releaseInput), ["--runtime-config"]);
     assert(runtime.runtimeConstraintsVerified === true && runtime.authenticatedRelease === true && runtime.cpuVerified === false && runtime.gpuVerified === false && runtime.freshnessVerified === false && runtime.inferenceQualified === false &&
-      runtime.profile === "gemma-single-gpu-v1" && runtime.repo === repo && runtime.tag === verified.tag && runtime.releaseCommit === verified.commit && runtime.deploymentDigest === verified.digest &&
+      runtime.profile === "tinfoil-vllm-v1" && runtime.repo === repo && runtime.tag === verified.tag && runtime.releaseCommit === verified.commit && runtime.deploymentDigest === verified.digest &&
       runtime.configDigest === sha256(source) && runtime.cvmTag === cvmTag, "TEE_RUNTIME_CONFIG_REJECTED");
     assert(runtime.subjectPredicateMatched === true && runtime.codeStatementDigest === verified.codeStatementDigest, "TEE_RUNTIME_CONFIG_REJECTED");
     const selected = await appraise(JSON.stringify(releaseInput), ["--container-reference"]);
@@ -195,13 +199,13 @@ export async function verifyPublicBuildArtifacts(options: {
     assert(Array.isArray(sourceCommit.parents) && sourceCommit.parents.length === 1 && sourceCommit.parents[0].sha === container.sourceCommit, "TEE_PUBLIC_CONTAINER_SOURCE_REJECTED");
     assert.equal(sha256(dockerfile), container.dockerfileDigest, "TEE_PUBLIC_CONTAINER_SOURCE_REJECTED");
     return {
-      ...verified, host, publicArtifactDigestMatched: true, publicSourceConfigMatched: true,
+      ...verified, publicArtifactDigestMatched: true, publicSourceConfigMatched: true,
       sourceUrl: `https://github.com/${repo}/blob/${verified.commit}/tinfoil-config.yml`,
       releaseUrl: `https://github.com/${repo}/releases/tag/${verified.tag}`,
       cvmBuildVerified: true, cvmTag, cvmCommit: cvm.commit, cvmManifestDigest: cvm.manifestDigest,
       cvmSourceUrl: `https://github.com/tinfoilsh/cvmimage/tree/${cvm.commit}`,
       kernelDigestMatched: true, initrdDigestMatched: true, guestVerityRootAuthenticated: true,
-      rtmr1Recomputed: boot.rtmr1, rtmr2Recomputed: boot.rtmr2,
+      rtmr1Recomputed: boot?.rtmr1, rtmr2Recomputed: boot?.rtmr2,
       containerBuild: { ...container, publicSourceParentMatched: true, publicDockerfileBytesMatched: true },
       runtimeConfig: runtime,
       independentRebuild: false, inferenceQualified: false,

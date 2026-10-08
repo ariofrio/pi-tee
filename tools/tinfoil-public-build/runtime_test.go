@@ -22,13 +22,13 @@ func TestInspectRuntimeConstraints(t *testing.T) {
 	if json.Unmarshal(raw, &deployment) != nil {
 		t.Fatal("invalid public fixture")
 	}
-	input, _ := json.Marshal(map[string]any{"config": deployment.Config})
+	input, _ := json.Marshal(map[string]any{"repo": "tinfoilsh/confidential-gemma4-31b", "config": deployment.Config})
 	var out bytes.Buffer
 	if runRuntimeInspection(bytes.NewReader(input), &out) != 0 {
 		t.Fatalf("supported public configuration: %s", out.String())
 	}
 	var result map[string]any
-	if json.Unmarshal(out.Bytes(), &result) != nil || result["runtimeConstraintsVerified"] != true || result["authenticatedRelease"] != false || result["inferenceQualified"] != false || result["profile"] != "gemma-single-gpu-v1" {
+	if json.Unmarshal(out.Bytes(), &result) != nil || result["runtimeConstraintsVerified"] != true || result["authenticatedRelease"] != false || result["inferenceQualified"] != false || result["profile"] != "tinfoil-vllm-v1" {
 		t.Fatalf("incorrect inspection scope: %s", out.String())
 	}
 	packs := result["modelPacks"].([]any)
@@ -64,6 +64,15 @@ func TestInspectRuntimeRejectsUnsafeConfiguration(t *testing.T) {
 		"vault":                     base + "\nvault: {url: https://example.invalid}\n",
 		"remote code":               strings.Replace(base, `"--port", "8001"`, `"--trust-remote-code", "--port", "8001"`, 1),
 		"request logging":           strings.Replace(base, `"--port", "8001"`, `"--enable-log-requests", "--port", "8001"`, 1),
+		"inline request logging":    strings.Replace(base, `"--port", "8001"`, `"--enable-log-outputs=true", "--port", "8001"`, 1),
+		"runtime adapters":          strings.Replace(base, `"--port", "8001"`, `"--enable-lora", "--port", "8001"`, 1),
+		"served model rename":       strings.Replace(base, `"--served-model-name", "gemma4-31b"`, `"--served-model-name", "gpt-4"`, 1),
+		"partial tensor parallel":   strings.Replace(base, `"1", "--gpu-memory-utilization"`, `"2", "--gpu-memory-utilization"`, 1),
+		"draft model outside packs": strings.Replace(base, `\"model\":\"/tinfoil/mpk/mpk-2d92158d05e976de143bd05ff87977c73523ce6adeff1b559ebf32a2d230d634\"`, `\"model\":\"/root/draft\"`, 1),
+		"host chat template":        strings.Replace(base, `"examples/tool_chat_template_gemma4.jinja"`, `"/root/template.jinja"`, 1),
+		"media downloads":           strings.Replace(base, `"disabled.invalid"`, `"example.com"`, 1),
+		"executable pack":           strings.Replace(base, "_827ad0bf-94a4-5620-9569-8f3a34cc5154\"", "_827ad0bf-94a4-5620-9569-8f3a34cc5154\"\n    exec: true", 1),
+		"encrypted pack key":        strings.Replace(base, "_827ad0bf-94a4-5620-9569-8f3a34cc5154\"", "_827ad0bf-94a4-5620-9569-8f3a34cc5154\"\n    key-secret: MODEL_KEY", 1),
 		"mutable model source":      strings.Replace(base, "@842da3794eaa0b77d5f08bae87a17459d91ff475", "@main", 1),
 		"different model root":      strings.Replace(base, "cda2f261f72d80a847eb6fabea1f9949bf14ce5bb323808a8e2e4a9f09018357_", strings.Repeat("a", 64)+"_", 1),
 		"upstream mismatch":         strings.Replace(base, "upstream-port: 8001", "upstream-port: 8002", 1),
@@ -79,7 +88,7 @@ func TestInspectRuntimeRejectsUnsafeConfiguration(t *testing.T) {
 			if changed == base {
 				t.Fatal("mutation did not apply")
 			}
-			input, _ := json.Marshal(map[string]any{"config": base64.StdEncoding.EncodeToString([]byte(changed))})
+			input, _ := json.Marshal(map[string]any{"repo": "tinfoilsh/confidential-gemma4-31b", "config": base64.StdEncoding.EncodeToString([]byte(changed))})
 			var out bytes.Buffer
 			if runRuntimeInspection(bytes.NewReader(input), &out) != 1 {
 				t.Fatalf("unsafe configuration accepted: %s", out.String())
@@ -101,7 +110,7 @@ func TestRuntimeAuthenticatesRelease(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	input := map[string]any{"tag": "v0.0.25", "deployment": base64.StdEncoding.EncodeToString(deployment), "bundle": json.RawMessage(bundle)}
+	input := map[string]any{"repo": "tinfoilsh/confidential-gemma4-31b", "tag": "v0.0.25", "deployment": base64.StdEncoding.EncodeToString(deployment), "bundle": json.RawMessage(bundle)}
 	encoded, _ := json.Marshal(input)
 	var out bytes.Buffer
 	if runRuntimeRelease(bytes.NewReader(encoded), &out) != 0 {
@@ -171,7 +180,7 @@ func TestRuntimeConstraintsDoNotFreezeArtifactDigests(t *testing.T) {
 	} {
 		changed = strings.ReplaceAll(changed, old, next)
 	}
-	input, _ := json.Marshal(map[string]any{"config": base64.StdEncoding.EncodeToString([]byte(changed))})
+	input, _ := json.Marshal(map[string]any{"repo": "tinfoilsh/confidential-gemma4-31b", "config": base64.StdEncoding.EncodeToString([]byte(changed))})
 	var out bytes.Buffer
 	if runRuntimeInspection(bytes.NewReader(input), &out) != 0 {
 		t.Fatalf("dynamic inspection: %s", out.String())
@@ -179,5 +188,46 @@ func TestRuntimeConstraintsDoNotFreezeArtifactDigests(t *testing.T) {
 	var result map[string]any
 	if json.Unmarshal(out.Bytes(), &result) != nil || result["authenticatedRelease"] != false || result["runtimeConstraintsVerified"] != true || result["inferenceQualified"] != false || result["imageDigest"] != strings.Repeat("b", 64) || result["cvmTag"] != "v1.2.3" {
 		t.Fatalf("dynamic constraints scope: %s", out.String())
+	}
+}
+
+// Other publishers' real releases: admitted when their configuration satisfies
+// the profile, rejected for engine egress or remote code.
+func TestRuntimeProfileAcrossPublishers(t *testing.T) {
+	for _, item := range []struct {
+		fixture, repo string
+		accept        bool
+		gpus          float64
+	}{
+		{"deepseek-v0.0.3", "tinfoilsh/confidential-deepseek-v4-1-flash", true, 8},
+		{"glm53-v0.0.3", "tinfoilsh/confidential-glm5-3-nvfp4", true, 8},
+		{"gptoss-v0.0.28", "tinfoilsh/confidential-gpt-oss-120b", false, 0},
+		{"kimik3-v0.0.10", "tinfoilsh/confidential-kimi-k3", false, 0},
+		{"deepseek-v0.0.3", "tinfoilsh/confidential-gemma4-31b", false, 0},
+	} {
+		t.Run(item.fixture+" as "+item.repo, func(t *testing.T) {
+			raw, err := os.ReadFile("testdata/" + item.fixture + "-deployment.json")
+			if err != nil {
+				t.Fatal(err)
+			}
+			var deployment struct {
+				Config string `json:"config"`
+			}
+			if json.Unmarshal(raw, &deployment) != nil {
+				t.Fatal("invalid public fixture")
+			}
+			input, _ := json.Marshal(map[string]any{"repo": item.repo, "config": deployment.Config})
+			var out bytes.Buffer
+			code := runRuntimeInspection(bytes.NewReader(input), &out)
+			if (code == 0) != item.accept {
+				t.Fatalf("accept=%v: %s", item.accept, out.String())
+			}
+			if item.accept {
+				var result map[string]any
+				if json.Unmarshal(out.Bytes(), &result) != nil || result["gpus"] != item.gpus || result["profile"] != "tinfoil-vllm-v1" {
+					t.Fatalf("incorrect profile: %s", out.String())
+				}
+			}
+		})
 	}
 }

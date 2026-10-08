@@ -5,7 +5,6 @@ import { readBoundedBody } from "../packages/core/src/transport.js";
 import { discoverTinfoilWorkers } from "../packages/tinfoil/src/worker-discovery.js";
 import { gpuVersionsAllowed } from "../packages/tinfoil/src/gpu-policy.js";
 import { parseHopperGpuMode } from "../packages/tinfoil/src/gpu-mode.js";
-import { INTEL_CANDIDATE } from "../packages/tinfoil/src/intel-appraisal.js";
 import { runNvidiaVerifier } from "../packages/tinfoil/src/wasm-verifiers.js";
 import { collateralOracle } from "./research/nvidia-collateral.js";
 
@@ -22,7 +21,7 @@ function accepted(result: any, nonce: string, evidence: any): boolean {
     const c = result.claims[0];
     assert.equal(c.eat_nonce, nonce); assert.equal(c.hwmodel, "GH100 A01 GSP BROM");
     assert.equal(c.measres, "success"); assert.equal(c.dbgstat, "disabled"); assert.equal(c.secboot, true);
-    assert.equal(gpuVersionsAllowed(c["x-nvidia-gpu-driver-version"], c["x-nvidia-gpu-vbios-version"], "public-builds"), true);
+    assert.equal(gpuVersionsAllowed(c.hwmodel, c["x-nvidia-gpu-driver-version"], c["x-nvidia-gpu-vbios-version"]), true);
     for (const name of required) assert.equal(c[name], true);
     for (const name of ["x-nvidia-gpu-attestation-report-cert-chain", "x-nvidia-gpu-driver-rim-cert-chain", "x-nvidia-gpu-vbios-rim-cert-chain"]) {
       const chain = c[name];
@@ -37,7 +36,6 @@ async function fixture() {
   if (process.env.PI_TEE_NVIDIA_TEST_EVIDENCE) return JSON.parse(await readFile(process.env.PI_TEE_NVIDIA_TEST_EVIDENCE, "utf8"));
   const signal = AbortSignal.timeout(120000);
   const candidates = await discoverTinfoilWorkers({ model: "gemma4-31b", repository: "tinfoilsh/confidential-gemma4-31b", signal });
-  candidates.sort((a, b) => Number(b.host === INTEL_CANDIDATE.host) - Number(a.host === INTEL_CANDIDATE.host));
   // Test every candidate until one usable fresh Hopper report is obtained.
   // A complete lack of evidence fails this live check rather than skipping it.
   for (let offset = 0; offset < candidates.length; offset += 4) {
