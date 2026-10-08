@@ -1,0 +1,65 @@
+--- a/nv-attestation-sdk-cpp/src/rim.cpp
++++ b/nv-attestation-sdk-cpp/src/rim.cpp
+@@ -199,6 +199,33 @@
+     }
+ 
+     out_version = std::string(reinterpret_cast<const char*>(version_attr.get()));
++    return Error::Ok;
++}
++
++// pi-tee: returns the first X509Certificate exactly as get_cert_chain() uses it.
++static Error get_first_x509_certificate_pem(xmlDocPtr doc, const char* dsig_namespace, std::string& out_cert) {
++    auto x_path_ctx = nv_unique_ptr<xmlXPathContext>(xmlXPathNewContext(doc));
++    if (!x_path_ctx) {
++        LOG_ERROR("Failed to create XPath context");
++        return Error::InternalError;
++    }
++    if (xmlXPathRegisterNs(x_path_ctx.get(), BAD_CAST "ds", BAD_CAST dsig_namespace) != 0) {
++        LOG_ERROR("Failed to register namespace");
++        return Error::InternalError;
++    }
++    auto x_path_obj = nv_unique_ptr<xmlXPathObject>(xmlXPathEvalExpression(BAD_CAST "//ds:X509Certificate", x_path_ctx.get()));
++    if (!x_path_obj || x_path_obj->nodesetval == nullptr || x_path_obj->nodesetval->nodeNr == 0) {
++        LOG_ERROR("No X509Certificate found in RIM data");
++        return Error::RimInvalidSignature;
++    }
++    auto content = nv_unique_ptr<xmlChar>(xmlNodeGetContent(x_path_obj->nodesetval->nodeTab[0]));
++    if (!content) {
++        LOG_ERROR("Failed to read RIM leaf certificate");
++        return Error::RimInvalidSignature;
++    }
++    out_cert = "-----BEGIN CERTIFICATE-----\n"
++               + std::string(reinterpret_cast<const char*>(content.get())) +
++               "-----END CERTIFICATE-----";
+     return Error::Ok;
+ }
+ 
+@@ -236,9 +263,26 @@
+     // we verify cert chain in a different method, so set the appropriate flag here to disable that.
+     d_sig_ctx->keyInfoReadCtx.flags |= XMLSEC_KEYINFO_FLAGS_X509DATA_DONT_VERIFY_CERTS;
+ 
++    // pi-tee: verify with the public key of the same leaf certificate that
++    // get_cert_chain() appraises.
++    std::string leaf_cert;
++    Error leaf_error = get_first_x509_certificate_pem(m_doc.get(), RimDocument::XML_DSIG_NAMESPACE_URI, leaf_cert);
++    if (leaf_error != Error::Ok) {
++        return leaf_error;
++    }
++    d_sig_ctx->signKey = xmlSecCryptoAppKeyLoadMemory(reinterpret_cast<const xmlSecByte*>(leaf_cert.data()),
++        static_cast<xmlSecSize>(leaf_cert.size()), xmlSecKeyDataFormatCertPem, nullptr, nullptr, nullptr);
++    if (d_sig_ctx->signKey == nullptr) {
++        LOG_ERROR("Failed to load RIM leaf certificate key");
++        return Error::RimInvalidSignature;
++    }
++    // pi-tee: NVIDIA RIM signatures cover the whole enveloping document.
++    d_sig_ctx->enabledReferenceUris = xmlSecTransformUriTypeEmpty;
++
+     if (xmlSecDSigCtxVerify(d_sig_ctx.get(), node) < 0) {
+-        LOG_ERROR("Failed to verify signature");
+-        return Error::InternalError;
++        // pi-tee: report verification failures as signature rejections.
++        LOG_ERROR("Failed to verify signature with the RIM leaf certificate");
++        return Error::RimInvalidSignature;
+     }
+ 
+     if (d_sig_ctx->status != xmlSecDSigStatusSucceeded) {

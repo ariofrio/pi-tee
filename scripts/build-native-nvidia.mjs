@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { copyFile, mkdir, readFile, stat, writeFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { copyFile, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { dirname, resolve } from "node:path";
 
 // Maintainer candidate builder only. No production artifact or route is selected.
 const recipe = resolve("tools/nvidia-native");
@@ -49,6 +49,19 @@ async function source(name) {
   return path;
 }
 const sdk = await source("sdk"), regorus = await source("regorus"), vcpkg = await source("vcpkg");
+// Hash-locked verification patches are applied to copies outside the pinned checkout.
+const patched = resolve(root, "patched-source");
+await rm(patched, { recursive: true, force: true });
+for (const patch of lock.patches) {
+  const patchPath = resolve(recipe, patch.file);
+  assert.equal(createHash("sha256").update(await readFile(patchPath)).digest("hex"), patch.sha256);
+  const original = await readFile(resolve(sdk, patch.source));
+  assert.equal(createHash("sha256").update(original).digest("hex"), patch.sourceSha256);
+  await mkdir(dirname(resolve(patched, patch.source)), { recursive: true });
+  await writeFile(resolve(patched, patch.source), original);
+  run("git", ["apply", "--unidiff-zero", patchPath], patched, { ...buildEnv, GIT_CEILING_DIRECTORIES: root });
+  assert.equal(createHash("sha256").update(await readFile(resolve(patched, patch.source))).digest("hex"), patch.resultSha256);
+}
 const cargoLock = await readFile(resolve(recipe, "regorus.Cargo.lock"));
 assert.equal(createHash("sha256").update(cargoLock).digest("hex"), lock.regorusCargoLockSha256);
 await copyFile(resolve(recipe, "regorus.Cargo.lock"), resolve(regorus, "bindings/ffi/Cargo.lock"));
@@ -68,7 +81,7 @@ const build = resolve(root, "build");
 run("cmake", ["-S", recipe, "-B", build, "-DCMAKE_BUILD_TYPE=Release",
   ...(process.platform === "win32" ? ["-A", process.arch === "arm64" ? "ARM64" : "x64"] : []),
   `-DCMAKE_TOOLCHAIN_FILE=${resolve(vcpkg, "scripts/buildsystems/vcpkg.cmake")}`,
-  `-DVCPKG_TARGET_TRIPLET=${triplet}`, `-DNVIDIA_SOURCE=${sdk}`, `-DREGORUS_SOURCE=${regorus}`, `-DREGORUS_LIBRARY=${regorusLibrary}`], root, buildEnv);
+  `-DVCPKG_TARGET_TRIPLET=${triplet}`, `-DNVIDIA_SOURCE=${sdk}`, `-DPATCHED_SOURCE=${patched}`, `-DREGORUS_SOURCE=${regorus}`, `-DREGORUS_LIBRARY=${regorusLibrary}`], root, buildEnv);
 run("cmake", ["--build", build, "--config", "Release", "--parallel", "2"]);
 const output = resolve(root, "artifact");
 run("cmake", ["--install", build, "--config", "Release", "--prefix", output]);
