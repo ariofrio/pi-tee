@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Hash-pin the Emscripten toolchain archives (LLVM, Binaryen, Emscripten, Node, Python) for Linux and macOS build hosts; emsdk itself installs them unchecked. The WebAssembly verifier workflow now also runs for changes to the verifier hosts, bridge, WASI shim, checks and lockfile, and runs the NVIDIA collateral check under Bun as well as Node.
+- Hash-pin the Emscripten toolchain archives (LLVM, Binaryen, Emscripten, Node, Python) for Linux and macOS build hosts; emsdk itself installs them unchecked. The WebAssembly verifier workflow now also runs for changes to the verifier hosts, bridge, WASI shim, checks and lockfile, and runs the NVIDIA collateral check under Bun as well as Node. Provenance attestations now cover the committed archives, which CI checks decompress to its rebuilt modules, instead of CI's own recompressed copies.
 
 - Harden the WebAssembly verifier hosts: the WASI shim resolves only its own imports and returns `EFAULT` for buffers past the end of guest memory instead of truncating them, a cancellation that arrives while the NVIDIA verifier is loading now stops it before its worker starts, and the worker imports NVIDIA's JavaScript glue from the authenticated bytes instead of re-reading the file. Under Node, the NVIDIA worker no longer follows `NODE_USE_ENV_PROXY` proxy settings; Bun still applies `HTTP(S)_PROXY`, now documented.
 
