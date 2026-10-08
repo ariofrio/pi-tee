@@ -69,6 +69,10 @@ export async function runNvidiaVerifier(options: { evidence: unknown[]; nonce: s
           "--gpu-evidence-file", "/evidence.json", "--verifier", "local", "--nonce", options.nonce,
           ...(origin ? ["--rim-url", origin, "--ocsp-url", `${origin}/ocsp`] : [])],
       },
+      // With NODE_USE_ENV_PROXY or --use-env-proxy, Node workers take HTTP(S)_PROXY
+      // from their own environment; an empty one keeps the bridge direct. Bun
+      // ignores this option and applies HTTP(S)_PROXY to fetch.
+      env: {},
       resourceLimits: { maxOldGenerationSizeMb: 256 },
     });
     let settled = false;

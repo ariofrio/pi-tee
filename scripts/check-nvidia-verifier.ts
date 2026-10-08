@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { createServer } from "node:http";
 import { readBoundedBody } from "../packages/core/src/transport.js";
 import { discoverTinfoilWorkers } from "../packages/tinfoil/src/worker-discovery.js";
 import { gpuVersionsAllowed } from "../packages/tinfoil/src/gpu-policy.js";
@@ -86,6 +88,16 @@ function changedCertificate(evidence: any) {
   assert.equal(changed, true);
   return { ...evidence, certificate: Buffer.from(certificate).toString("base64") };
 }
+// A loopback HTTP proxy that refuses and counts every request routed to it.
+async function refusingProxy() {
+  let requests = 0;
+  const server = createServer((_request, response) => { requests++; response.writeHead(502); response.end(); });
+  server.on("connect", (_request, socket) => { requests++; socket.end("HTTP/1.1 502 Bad Gateway\r\n\r\n"); });
+  await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address();
+  assert.ok(address && typeof address === "object");
+  return { url: `http://127.0.0.1:${address.port}`, requests: () => requests, close: () => new Promise<void>(resolve => { server.closeAllConnections(); server.close(() => resolve()); }) };
+}
 let phase = "fixture";
 async function attest(evidence: unknown, nonce: string, collateralOrigin?: string) {
   const checked = await runNvidiaVerifier({ evidence: [evidence], nonce, signal: AbortSignal.timeout(120000), collateralOrigin });
@@ -131,6 +143,25 @@ try {
         }
         console.log(JSON.stringify({ case: phase, accepted: mode === "authentic", resultCode: result.result_code, ...observations, inferenceRequests: 0, cpuVerified: false, workloadQualified: false }));
       } finally { await oracle.close(); }
+    }
+    // Node must not route the bridge through proxy settings, which it reads at
+    // startup. Bun applies HTTP(S)_PROXY to fetch; its TLS still ends at NVIDIA.
+    phase = "collateral-proxy-environment";
+    if (process.versions.bun) console.log(JSON.stringify({ case: phase, skipped: "Bun applies proxy variables to fetch" }));
+    else {
+      const [oracle, proxy] = await Promise.all([collateralOracle("authentic"), refusingProxy()]);
+      try {
+        const child = spawn(process.execPath, [...process.execArgv, "scripts/research/nvidia-verifier-child.ts"], {
+          env: { ...process.env, NODE_USE_ENV_PROXY: "1", HTTP_PROXY: proxy.url, HTTPS_PROXY: proxy.url, NO_PROXY: "" }, stdio: ["pipe", "pipe", "ignore"],
+        });
+        child.stdin.end(JSON.stringify({ evidence, nonce, collateralOrigin: oracle.origin }));
+        let stdout = "";
+        for await (const chunk of child.stdout) stdout += chunk;
+        let result: any;
+        try { result = JSON.parse(stdout); } catch { result = {}; }
+        assert.equal(proxy.requests(), 0); assert.equal(accepted(result, nonce, evidence), true);
+        console.log(JSON.stringify({ case: phase, accepted: true, resultCode: result.result_code, proxyRequests: proxy.requests(), ...oracle.observations(), inferenceRequests: 0 }));
+      } finally { await Promise.all([oracle.close(), proxy.close()]); }
     }
   }
 } catch {
