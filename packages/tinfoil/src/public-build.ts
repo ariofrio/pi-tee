@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { readBoundedBody, TeeError } from "pi-tee-core";
 import assert from "node:assert/strict";
+import { setTimeout as delay } from "node:timers/promises";
 import { computeBootMeasurements } from "./boot-measurements.js";
 import { computeSnpLaunchDigest } from "./snp-measurement.js";
 import { PUBLIC_BUILD_HELPER_DIGEST, runPublicBuildHelper } from "./wasm-verifiers.js";
@@ -56,7 +57,14 @@ export async function verifyPublicBuildArtifacts(options: {
       if (expectedDigest) assert.equal(sha256(hit), expectedDigest);
       return hit;
     }
-    const response = await evidenceFetch(url, { signal, redirect, headers });
+    // Content checks authenticate every byte, so transient delivery failures
+    // can be retried without widening what is accepted.
+    let response = await evidenceFetch(url, { signal, redirect, headers });
+    for (let attempt = 0; attempt < 2 && [502, 503, 504].includes(response.status); attempt++) {
+      await response.body?.cancel();
+      await delay(500 * 2 ** attempt, undefined, { signal });
+      response = await evidenceFetch(url, { signal, redirect, headers });
+    }
     assert(response.ok && response.body, "TEE_PUBLIC_ARTIFACT_UNAVAILABLE");
     const bytes = Buffer.from(await readBoundedBody(response.body, maxBytes, signal));
     if (expectedDigest) assert.equal(sha256(bytes), expectedDigest);

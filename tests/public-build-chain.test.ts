@@ -37,7 +37,7 @@ test("the artifact chain rejects substituted delivery bytes using the WebAssembl
   for (const [kind, bytes] of [["manifests", index], ["manifests", image], ["manifests", attestation], ["blobs", imageConfig], ["blobs", provenance]] as const) {
     artifacts.set(`https://ghcr.io/v2/${repo}/${kind}/sha256:${hash(bytes)}`, bytes);
   }
-  const run = async (change?: { url: string; bytes: Buffer }, repeat = false) => {
+  const run = async (change?: { url: string; bytes: Buffer }, repeat = false, unavailable?: (url: string, attempt: number) => boolean) => {
     const requests: string[] = [];
     const options = { repo,
       raw: JSON.stringify(evidence.envelope), nonce: evidence.nonce, signal: AbortSignal.timeout(60000),
@@ -47,6 +47,7 @@ test("the artifact chain rejects substituted delivery bytes using the WebAssembl
         assert(!url.includes("chat/completions") && !url.includes("nvidia"));
         const bytes = change?.url === url ? change.bytes : artifacts.get(url);
         assert(bytes, `Unexpected delivery endpoint ${url}`);
+        if (unavailable?.(url, requests.filter(seen => seen === url).length)) return new Response("unavailable", { status: 503 });
         return new Response(new Uint8Array(bytes));
       }) as typeof globalThis.fetch,
     };
@@ -70,6 +71,13 @@ test("the artifact chain rejects substituted delivery bytes using the WebAssembl
   assert.equal(verified.inferenceQualified, false);
   assert.equal(verified.runtimeConfig.subjectPredicateMatched, true);
   assert.equal(verified.runtimeConfig.codeStatementDigest, verified.codeStatementDigest);
+  // Delivery outages are retried briefly; persistent ones fail closed.
+  const flaky = await run(undefined, false, (_url, attempt) => attempt === 1);
+  assert.equal((await flaky.result).codeStatementDigest, verified.codeStatementDigest);
+  const attestations = `https://api.github.com/repos/tinfoilsh/cvmimage/attestations/sha256:${hash(manifest)}?per_page=100`;
+  const down = await run(undefined, false, url => url === attestations);
+  await assert.rejects(down.result, /TEE_PUBLIC_BUILD_REJECTED/);
+  assert.equal(down.requests.filter(url => url === attestations).length, 3);
   for (const [url, bytes] of artifacts) {
     if (url.includes("ghcr.io/token")) continue;
     const altered = Buffer.from(bytes);
