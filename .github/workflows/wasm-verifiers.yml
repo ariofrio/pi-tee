@@ -9,16 +9,40 @@ on:
       - tools/nvidia-verifier/**
       - tools/tinfoil-public-build/**
       - scripts/build-wasm-verifiers.mjs
+      - scripts/check-nvidia-verifier.ts
+      - scripts/research/nvidia-*.ts
       - packages/tinfoil/wasm/**
       - packages/tinfoil/src/wasm-artifacts.ts
+      - packages/tinfoil/src/wasm-verifiers.ts
+      - packages/tinfoil/src/nvattest-*.ts
+      - packages/tinfoil/src/worker-appraisal.ts
+      - packages/tinfoil/src/gpu-*.ts
+      - packages/core/src/wasi*.ts
+      - packages/core/src/pinned-tls.ts
+      - packages/core/src/transport.ts
+      - tests/wasm-verifiers.test.ts
+      - tests/pinned-tls.test.ts
+      - package-lock.json
   pull_request:
     paths:
       - .github/workflows/wasm-verifiers.yml
       - tools/nvidia-verifier/**
       - tools/tinfoil-public-build/**
       - scripts/build-wasm-verifiers.mjs
+      - scripts/check-nvidia-verifier.ts
+      - scripts/research/nvidia-*.ts
       - packages/tinfoil/wasm/**
       - packages/tinfoil/src/wasm-artifacts.ts
+      - packages/tinfoil/src/wasm-verifiers.ts
+      - packages/tinfoil/src/nvattest-*.ts
+      - packages/tinfoil/src/worker-appraisal.ts
+      - packages/tinfoil/src/gpu-*.ts
+      - packages/core/src/wasi*.ts
+      - packages/core/src/pinned-tls.ts
+      - packages/core/src/transport.ts
+      - tests/wasm-verifiers.test.ts
+      - tests/pinned-tls.test.ts
+      - package-lock.json
 
 permissions:
   contents: read
@@ -99,3 +123,4 @@ jobs:
       - run: node --import tsx --test tests/wasm-verifiers.test.ts tests/pinned-tls.test.ts
       - run: bun test tests/wasm-verifiers.test.ts tests/pinned-tls.test.ts
       - run: node --import tsx scripts/check-nvidia-verifier.ts --collateral
+      - run: bun scripts/check-nvidia-verifier.ts --collateral
