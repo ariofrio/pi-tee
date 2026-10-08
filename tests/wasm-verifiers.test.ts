@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import { compileVerifiedWasm, runWasiCommand } from "pi-tee-core";
+import { nvidiaCollateralBridge } from "../packages/tinfoil/src/nvattest-bridge.js";
 import { runNvidiaVerifier, runPublicBuildHelper } from "../packages/tinfoil/src/wasm-verifiers.js";
 
 // Minimal hand-assembled WASI commands exercising the shim boundary. Imported
@@ -95,9 +96,78 @@ test("the NVIDIA verifier cannot be redirected to arbitrary collateral services"
   }
 });
 
+test("the NVIDIA verifier starts offline and rejects empty evidence", async () => {
+  const result = await runNvidiaVerifier({ evidence: [], nonce: "0".repeat(64), signal: AbortSignal.timeout(60000) });
+  assert.notEqual(result.code, 0);
+  assert.notEqual(JSON.parse(result.stdout).result_code, 0);
+});
+
 test("the NVIDIA verifier honors cancellation that arrives while it is starting", async () => {
   const controller = new AbortController();
   const pending = runNvidiaVerifier({ evidence: [], nonce: "0".repeat(64), signal: controller.signal });
   controller.abort(new Error("cancelled"));
   await assert.rejects(pending, /cancelled/);
+});
+
+// The bridge is the NVIDIA verifier's only network path. A stub fetch observes
+// exactly what would leave the worker.
+function stubFetch() {
+  const calls: { url: string; method?: string; headers: Record<string, string>; body?: unknown; redirect?: string; signal: boolean }[] = [];
+  const stub = {
+    calls,
+    reply: () => new Response(new Uint8Array(8)),
+    fetch: (async (input: string | URL, init: RequestInit = {}) => {
+      calls.push({ url: String(input), method: init.method, headers: { ...init.headers as Record<string, string> }, body: init.body, redirect: init.redirect, signal: init.signal instanceof AbortSignal });
+      return stub.reply();
+    }) as typeof fetch,
+  };
+  return stub;
+}
+
+test("the NVIDIA collateral bridge forwards only bounded requests to NVIDIA's two services", async () => {
+  const stub = stubFetch();
+  const request = nvidiaCollateralBridge({ fetch: stub.fetch });
+  const empty = new Uint8Array();
+  const headers = { Accept: "application/json", "Content-Type": "application/ocsp-request", "X-Request-Id": "r", Authorization: "Bearer key", "User-Agent": "nvattest", Cookie: "c", Count: 1 };
+  assert.deepEqual(await request("GET", "https://rim.attestation.nvidia.com/v1/rim/NV_GPU_DRIVER_GH100_595.71.05", headers, new Uint8Array([1])), { status: 200, body: new Uint8Array(8) });
+  assert.deepEqual(stub.calls[0], { url: "https://rim.attestation.nvidia.com/v1/rim/NV_GPU_DRIVER_GH100_595.71.05", method: "GET",
+    headers: { Accept: "application/json", "Content-Type": "application/ocsp-request", "X-Request-Id": "r" }, body: undefined, redirect: "error", signal: true });
+  const ocsp = new Uint8Array([0x30, 0]);
+  await request("POST", "https://ocsp.ndis.nvidia.com", {}, ocsp);
+  assert.deepEqual(stub.calls[1], { url: "https://ocsp.ndis.nvidia.com/", method: "POST", headers: {}, body: ocsp, redirect: "error", signal: true });
+  // NVIDIA's client handles non-2xx statuses itself.
+  stub.reply = () => new Response("missing", { status: 404 });
+  assert.equal((await request("GET", "https://rim.attestation.nvidia.com/v1/rim/X", {}, empty)).status, 404);
+
+  const forwarded = stub.calls.length;
+  for (const [method, url] of [
+    ["GET", "https://rim.attestation.nvidia.com/v1/rim/../../v2/X"], ["GET", "https://rim.attestation.nvidia.com/v1/rim/X?a=1"],
+    ["GET", "https://rim.attestation.nvidia.com/v1/rim/X#a"], ["GET", "https://user:pass@rim.attestation.nvidia.com/v1/rim/X"],
+    ["GET", "http://rim.attestation.nvidia.com/v1/rim/X"], ["GET", "https://rim.attestation.nvidia.com:8443/v1/rim/X"],
+    ["GET", "https://rim.attestation.nvidia.com.example/v1/rim/X"], ["GET", `https://rim.attestation.nvidia.com/v1/rim/${"A".repeat(161)}`],
+    ["POST", "https://rim.attestation.nvidia.com/v1/rim/X"], ["GET", "https://ocsp.ndis.nvidia.com/"], ["PUT", "https://ocsp.ndis.nvidia.com/"],
+    ["POST", "https://ocsp.ndis.nvidia.com/ocsp/x"], ["POST", "https://nras.attestation.nvidia.com/v4/attest/gpu"], ["GET", "http://127.0.0.1:8080/v1/rim/X"],
+  ]) await assert.rejects(request(method!, url!, {}, empty), `${method} ${url}`);
+  assert.equal(stub.calls.length, forwarded);
+
+  // Reference manifests are limited to 4 MiB and OCSP responses to 64 KiB.
+  stub.reply = () => new Response(new Uint8Array(4 * 1024 * 1024 + 1));
+  await assert.rejects(request("GET", "https://rim.attestation.nvidia.com/v1/rim/X", {}, empty));
+  stub.reply = () => new Response(new Uint8Array(65537));
+  await assert.rejects(request("POST", "https://ocsp.ndis.nvidia.com/", {}, empty));
+  stub.reply = () => new Response(new Uint8Array(65536));
+  assert.equal((await request("POST", "https://ocsp.ndis.nvidia.com/", {}, empty)).body.length, 65536);
+});
+
+test("the NVIDIA collateral bridge admits only its loopback test relay and at most 192 requests", async () => {
+  const stub = stubFetch();
+  const request = nvidiaCollateralBridge({ fetch: stub.fetch, collateralOrigin: "http://127.0.0.1:8080" });
+  const empty = new Uint8Array();
+  await request("GET", "http://127.0.0.1:8080/v1/rim/X", {}, empty);
+  await request("POST", "http://127.0.0.1:8080/ocsp", {}, empty);
+  await assert.rejects(request("GET", "http://127.0.0.1:8081/v1/rim/X", {}, empty));
+  for (let count = 3; count < 192; count++) await request("GET", "https://rim.attestation.nvidia.com/v1/rim/X", {}, empty);
+  assert.equal(stub.calls.length, 191);
+  await assert.rejects(request("GET", "https://rim.attestation.nvidia.com/v1/rim/X", {}, empty));
+  assert.equal(stub.calls.length, 191);
 });
