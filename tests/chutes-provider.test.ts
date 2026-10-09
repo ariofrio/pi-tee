@@ -79,7 +79,7 @@ async function fixture(fault?: string) {
 test("native Chutes dispatch seals prompt, tools and reasoning before the unattested API hop", async () => {
   const f = await fixture();
   try {
-    const integration = createChutesProvider({ policy: "trust-provider-and-host,host=current", catalogFetch: f.fetch, seams: { fetch: f.fetch, cpu: f.cpu } });
+    const integration = createChutesProvider({ policy: "trust-provider-and-host,host=current", catalogFetch: f.fetch, seams: { fetch: f.fetch, invoke: f.fetch, cpu: f.cpu } });
     await integration.initializeCatalog();
     const model = integration.provider.getModels()[0]!;
     const toolContext = normalizeContext({ messages: context.messages, tools: [{ name: "private-tool", description: "private-tool-description", parameters: Type.Object({ value: Type.String() }) }] });
@@ -105,7 +105,7 @@ test("native Chutes dispatch seals prompt, tools and reasoning before the unatte
 test("authenticated below-floor Chutes hosts can be admitted only by a policy allowing H2", async () => {
   const f = await fixture("floor");
   try {
-    const integration = createChutesProvider({ policy: "trust-provider-and-host,host=outdated-firmware", catalogFetch: f.fetch, seams: { fetch: f.fetch, cpu: f.cpu } });
+    const integration = createChutesProvider({ policy: "trust-provider-and-host,host=outdated-firmware", catalogFetch: f.fetch, seams: { fetch: f.fetch, invoke: f.fetch, cpu: f.cpu } });
     await integration.initializeCatalog();
     const result = await integration.provider.streamSimple(integration.provider.getModels()[0]!, context, { apiKey: "synthetic-key" }).result();
     assert.equal(result.stopReason, "stop");
@@ -118,7 +118,7 @@ test("expiry during Pi's payload hook cannot send content under stale evidence",
   const originalNow = Date.now;
   const now = Date.now.bind(Date);
   try {
-    const integration = createChutesProvider({ policy: "trust-provider-and-host,host=current", catalogFetch: f.fetch, seams: { fetch: f.fetch, cpu: f.cpu } });
+    const integration = createChutesProvider({ policy: "trust-provider-and-host,host=current", catalogFetch: f.fetch, seams: { fetch: f.fetch, invoke: f.fetch, cpu: f.cpu } });
     await integration.initializeCatalog();
     const result = await integration.provider.streamSimple(integration.provider.getModels()[0]!, context, { apiKey: "synthetic-key",
       onPayload: payload => { Date.now = () => now() + 60001; return payload; },
@@ -131,7 +131,7 @@ test("expiry during Pi's payload hook cannot send content under stale evidence",
 test("a Chutes invocation rejection cannot cause a resend or plaintext fallback", async () => {
   const f = await fixture("invoke");
   try {
-    const integration = createChutesProvider({ policy: "trust-provider-and-host,host=current", catalogFetch: f.fetch, seams: { fetch: f.fetch, cpu: f.cpu } });
+    const integration = createChutesProvider({ policy: "trust-provider-and-host,host=current", catalogFetch: f.fetch, seams: { fetch: f.fetch, invoke: f.fetch, cpu: f.cpu } });
     await integration.initializeCatalog();
     const result = await integration.provider.streamSimple(integration.provider.getModels()[0]!, context, { apiKey: "synthetic-key", maxRetries: 5 }).result();
     assert.equal(result.stopReason, "error");
@@ -143,7 +143,7 @@ test("cancellation after an authenticated text delta aborts Chutes response read
   const f = await fixture("stall");
   const controller = new AbortController();
   try {
-    const integration = createChutesProvider({ policy: "trust-provider-and-host,host=current", catalogFetch: f.fetch, seams: { fetch: f.fetch, cpu: f.cpu } });
+    const integration = createChutesProvider({ policy: "trust-provider-and-host,host=current", catalogFetch: f.fetch, seams: { fetch: f.fetch, invoke: f.fetch, cpu: f.cpu } });
     await integration.initializeCatalog();
     const stream = integration.provider.streamSimple(integration.provider.getModels()[0]!, context, { apiKey: "synthetic-key", signal: controller.signal });
     for await (const event of stream) if (event.type === "text_delta") controller.abort();
@@ -158,7 +158,7 @@ test("wrong nonce, swapped key, stale evidence, below-floor host and recipient o
   for (const fault of ["nonce", "key", "stale", "floor", "outside"]) {
     const f = await fixture(fault);
     try {
-      const integration = createChutesProvider({ policy: "trust-provider-and-host,host=current", catalogFetch: f.fetch, seams: { fetch: f.fetch, cpu: f.cpu } });
+      const integration = createChutesProvider({ policy: "trust-provider-and-host,host=current", catalogFetch: f.fetch, seams: { fetch: f.fetch, invoke: f.fetch, cpu: f.cpu } });
       await integration.initializeCatalog();
       const result = await integration.provider.streamSimple(integration.provider.getModels()[0]!, context, { apiKey: "synthetic-key" }).result();
       assert.equal(result.stopReason, "error", fault);
@@ -171,7 +171,7 @@ test("wrong nonce, swapped key, stale evidence, below-floor host and recipient o
 test("provider-excluding policies reject Chutes before discovery or inference", async () => {
   const f = await fixture();
   try {
-    const integration = createChutesProvider({ policy: "trust-provider", catalogFetch: f.fetch, seams: { fetch: f.fetch, cpu: f.cpu } });
+    const integration = createChutesProvider({ policy: "trust-provider", catalogFetch: f.fetch, seams: { fetch: f.fetch, invoke: f.fetch, cpu: f.cpu } });
     await integration.initializeCatalog();
     assert.deepEqual(integration.provider.getModels(), []);
     const result = await integration.provider.streamSimple({ id: modelId } as any, context, { apiKey: "synthetic-key" }).result();

@@ -1,11 +1,13 @@
 import { randomBytes } from "node:crypto";
-import { assessRoute, entries, MAX_REQUEST_BYTES, readBoundedBody, record, RouteRejection, TeeError, withAbort,
+import { assessRoute, entries, MAX_REQUEST_BYTES, readBoundedBody, record, RouteRejection, TeeError, webPkiTlsFetch, withAbort,
   type RouteSecurity, type SecurityPolicy, type SdkTransport } from "pi-tee-core";
 import { CHUTES_API_URL, CHUTES_BASE_URL, parseChutesCatalog, UUID } from "./catalog.js";
 import { createE2eeRequest, decryptE2eeStream } from "./crypto.js";
 import { base64, verifyChutesInstance, type CpuSeams } from "./evidence.js";
 
-export interface ChutesSeams { fetch?: typeof globalThis.fetch; cpu?: CpuSeams }
+export interface ChutesSeams { fetch?: typeof globalThis.fetch; invoke?: typeof globalThis.fetch; cpu?: CpuSeams }
+
+export function chutesInvocationFetch(endpoint: string, expiresAt: number): typeof globalThis.fetch { return webPkiTlsFetch(endpoint, expiresAt); }
 
 export async function openChutesTransport(apiKey: string, model: string, signal: AbortSignal, policy: SecurityPolicy, seams: ChutesSeams = {}): Promise<SdkTransport & { security: RouteSecurity }> {
   const controller = new AbortController();
@@ -61,6 +63,7 @@ export async function openChutesTransport(apiKey: string, model: string, signal:
     if (Date.now() >= expiresAt) throw new TeeError("TEE_PUBLIC_SESSION_REJECTED");
     if (!chosen) { if (rejected) throw new RouteRejection(rejected); throw new TeeError("TEE_ATTESTATION_REJECTED"); }
     const selected = chosen;
+    const invoke = seams.invoke ?? chutesInvocationFetch(`${CHUTES_API_URL}/e2e/invoke`, expiresAt);
     let used = false;
     let responseSecret: Uint8Array | undefined;
     // The preflight deadline ends at dispatch. A live response instead follows caller cancellation.
@@ -83,7 +86,7 @@ export async function openChutesTransport(apiKey: string, model: string, signal:
         callSignal.throwIfAborted();
         if (Date.now() >= expiresAt) throw new TeeError("TEE_PUBLIC_SESSION_REJECTED");
         try {
-          const response = await withAbort(network(`${CHUTES_API_URL}/e2e/invoke`, {
+          const response = await withAbort(invoke(`${CHUTES_API_URL}/e2e/invoke`, {
             method: "POST", body: new Uint8Array(sealed.body), signal: callSignal, redirect: "error",
             headers: { authorization: `Bearer ${apiKey}`, "content-type": "application/octet-stream",
               "X-Chute-Id": chute, "X-Instance-Id": selected.id, "X-E2E-Nonce": selected.token,
