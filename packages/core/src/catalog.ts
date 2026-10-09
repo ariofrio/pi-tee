@@ -36,6 +36,51 @@ export function thinkingSwitch() {
   return { thinking: enabled, enable_thinking: enabled };
 }
 
+const EFFORTS = ["minimal", "low", "medium", "high", "xhigh", "max"] as const;
+type Effort = typeof EFFORTS[number];
+type NativeEffort = { kwarg: "reasoning_effort" | "thinking_effort"; levels: readonly Effort[]; canDisable: boolean };
+
+/** Effort controls of open-weight chat templates, keyed by `templateFamily()`. Hosts
+ * expose no template metadata, so these are read from the published templates; a
+ * template that rejects or ignores other names cannot be probed safely. Models not
+ * listed keep only the on/off switch. `canDisable` is false where the template always
+ * thinks, so a switch would only stop the host from separating the reasoning. */
+const NATIVE_EFFORT: Record<string, NativeEffort> = {
+  "qwen3-8-27b": { kwarg: "reasoning_effort", levels: ["low", "medium", "xhigh"], canDisable: true },
+  "glm-5-2": { kwarg: "reasoning_effort", levels: ["high", "max"], canDisable: true },
+  "glm-5-3": { kwarg: "reasoning_effort", levels: ["low", "high", "max"], canDisable: false },
+  "glm-5-3-flash": { kwarg: "reasoning_effort", levels: ["low", "high", "max"], canDisable: false },
+  "kimi-k3": { kwarg: "thinking_effort", levels: ["low", "high", "max"], canDisable: true },
+};
+
+function templateFamily(id: string) {
+  return (id.split("/").pop() ?? "").toLowerCase().replace(/-tee$/, "").replaceAll(".", "-");
+}
+
+/** Maps each Pi level to the template's level of the same name, else the next stronger
+ * one, else its strongest. Pi offers xhigh and max only where the template names them. */
+export function nativeEffortLevels(levels: readonly string[], off?: string): NonNullable<Model<"openai-completions">["thinkingLevelMap"]> {
+  const map: NonNullable<Model<"openai-completions">["thinkingLevelMap"]> = off === undefined ? {} : { off };
+  EFFORTS.forEach((level, rank) => {
+    if (levels.includes(level)) map[level] = level;
+    else if (level !== "xhigh" && level !== "max") {
+      map[level] = levels.find(native => EFFORTS.indexOf(native as Effort) > rank) ?? levels.at(-1);
+    }
+  });
+  return map;
+}
+
+/** Chat-template thinking controls for a reasoning model: its native effort where the
+ * template is known, and an on/off switch where the template can disable thinking. */
+export function chatTemplateThinking(id: string, declaredSwitch?: Record<string, { $var: "thinking.enabled" }>) {
+  const native = Object.hasOwn(NATIVE_EFFORT, templateFamily(id)) ? NATIVE_EFFORT[templateFamily(id)] : undefined;
+  if (!native) return { chatTemplateKwargs: declaredSwitch ?? thinkingSwitch() };
+  return {
+    chatTemplateKwargs: { ...(native.canDisable ? declaredSwitch ?? thinkingSwitch() : {}), [native.kwarg]: { $var: "thinking.effort" } as const },
+    thinkingLevelMap: nativeEffortLevels(native.levels, native.canDisable ? undefined : native.levels[0]),
+  };
+}
+
 export function catalogModel(options: {
   provider: string; baseUrl: string; id: string; name: unknown; contextWindow: unknown;
   maxTokens: unknown; reasoning: boolean; image: boolean;

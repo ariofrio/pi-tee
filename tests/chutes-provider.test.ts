@@ -17,7 +17,7 @@ const instance = "d91710da-1c0e-450a-aaee-8b925783d233";
 const raw = { id: modelId, chute_id: chute, confidential_compute: true, context_length: 8192, max_output_length: 1024, supported_features: ["tools", "reasoning"] };
 const context = normalizeContext({ messages: [{ role: "user", content: "private-prompt-π", timestamp: 1 }] });
 
-async function fixture(fault?: string) {
+async function fixture(fault?: string, model = raw) {
   await mkdir(".scratch/work", { recursive: true });
   const dir = await mkdtemp(resolve(".scratch/work/chutes-"));
   assert.equal(spawnSync("openssl", ["req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1", "-subj", "/CN=chutes-synthetic", "-keyout", join(dir, "key.pem"), "-out", join(dir, "cert.pem")], { stdio: "ignore" }).status, 0);
@@ -32,7 +32,7 @@ async function fixture(fault?: string) {
     const request = new Request(input, init);
     hops.push(request.clone());
     const url = new URL(request.url);
-    if (url.pathname === "/v1/models") return Response.json({ data: [raw] });
+    if (url.pathname === "/v1/models") return Response.json({ data: [model] });
     if (url.pathname === `/e2e/instances/${chute}`) return Response.json({ nonce_expires_in: fault === "stale" ? 0 : 55,
       instances: [{ instance_id: instance, e2e_pubkey: publicKey, nonces: ["single-use-invocation-token"] }] });
     if (url.pathname === `/chutes/${chute}/evidence`) {
@@ -115,6 +115,22 @@ test("Pi's thinking level switches Chutes reasoning on and off through the seale
       assert.equal(result.stopReason, "stop");
       assert.deepEqual(f.opened().chat_template_kwargs, { thinking: enabled, enable_thinking: enabled });
       assert.equal(f.opened().reasoning_effort, undefined, "Chutes models refuse some effort values; the level only switches thinking.");
+    } finally { await f.remove(); }
+  }
+});
+
+test("a known Chutes template receives Pi's level as its own effort inside the sealed body", async () => {
+  for (const [reasoning, kwargs] of [["high", { thinking: true, enable_thinking: true, thinking_effort: "high" }], ["xhigh", { thinking: true, enable_thinking: true, thinking_effort: "max" }]] as const) {
+    const f = await fixture(undefined, { ...raw, id: "moonshotai/Kimi-K3-TEE" });
+    try {
+      const integration = createChutesProvider({ policy: "trust-provider-and-host,host=current", catalogFetch: f.fetch, seams: { fetch: f.fetch, invoke: f.fetch, cpu: f.cpu } });
+      await integration.initializeCatalog();
+      const result = await integration.provider.streamSimple(integration.provider.getModels()[0]!, context, { apiKey: "synthetic-key", reasoning }).result();
+      assert.equal(result.stopReason, "stop");
+      assert.deepEqual(f.opened().chat_template_kwargs, kwargs);
+      assert.equal(f.opened().reasoning_effort, undefined);
+      const sealed = Buffer.from(await f.hops.find(h => h.method === "POST")!.arrayBuffer());
+      assert.equal(sealed.includes(Buffer.from("thinking_effort")), false);
     } finally { await f.remove(); }
   }
 });

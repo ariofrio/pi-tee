@@ -1,4 +1,4 @@
-import { catalogModel, entries, price, record, strings, thinkingSwitch } from "pi-tee-core";
+import { catalogModel, chatTemplateThinking, entries, price, record, strings } from "pi-tee-core";
 
 export const NEAR_BASE_URL = "https://cloud-api.near.ai/v1";
 
@@ -19,10 +19,13 @@ export function parseNearCatalog(value: unknown) {
         cacheRead: price(pricing.input_cache_read) === undefined ? undefined : price(pricing.input_cache_read)! * 1_000_000,
       },
     });
-    // NEAR ignores the effort level, and some models refuse particular reasoning_effort
-    // values or treat them as off, so only the on/off switch is sent.
-    model.compat = { ...model.compat, maxTokensField: "max_completion_tokens",
-      ...(model.reasoning ? { thinkingFormat: "chat-template", chatTemplateKwargs: thinkingSwitch() } : {}) };
+    model.compat = { ...model.compat, maxTokensField: "max_completion_tokens" };
+    // Templates refuse effort names they do not define, so effort goes only to known ones.
+    if (model.reasoning) {
+      const { chatTemplateKwargs, thinkingLevelMap } = chatTemplateThinking(model.id);
+      model.compat = { ...model.compat, thinkingFormat: "chat-template", chatTemplateKwargs };
+      if (thinkingLevelMap) model.thinkingLevelMap = thinkingLevelMap;
+    }
     return model;
   });
 }

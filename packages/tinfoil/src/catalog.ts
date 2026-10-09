@@ -1,4 +1,4 @@
-import { catalogModel, entries, price, record, strings, thinkingSwitch } from "pi-tee-core";
+import { catalogModel, chatTemplateThinking, entries, nativeEffortLevels, price, record, strings } from "pi-tee-core";
 import type { Model, OpenAICompletionsCompat } from "@earendil-works/pi-ai/compat";
 
 export const TINFOIL_BASE_URL = "https://inference.tinfoil.sh/v1";
@@ -22,19 +22,36 @@ function applyThinking(model: Model<"openai-completions">, params: Record<string
   const enable = record(chat.enable);
   const kwargs = record(enable.chat_template_kwargs);
   const mapped: NonNullable<OpenAICompletionsCompat["chatTemplateKwargs"]> = {};
+  const declaredSwitch: Record<string, { $var: "thinking.enabled" }> = {};
   for (const [key, value] of Object.entries(kwargs)) {
     if (key === "reasoning_effort" && value === "$EFFORT") mapped[key] = { $var: "thinking.effort" };
-    else if ((key === "enable_thinking" || key === "thinking") && typeof value === "boolean") mapped[key] = { $var: "thinking.enabled" };
+    else if ((key === "enable_thinking" || key === "thinking") && typeof value === "boolean") declaredSwitch[key] = { $var: "thinking.enabled" };
     else if (key === "clear_thinking" && typeof value === "boolean") mapped[key] = value;
   }
   // Some chat-template models declare only an effort, or nothing, yet think by default;
-  // without a switch Pi's "off" would leave thinking on.
+  // without a switch Pi's "off" would leave thinking on. A known template's own effort
+  // names replace the declared effort map.
   const topLevel = record(enable.thinking).type === "enabled" || enable.reasoning_effort === "$EFFORT";
-  if (model.reasoning && !topLevel && !("thinking" in mapped) && !("enable_thinking" in mapped)) Object.assign(mapped, thinkingSwitch());
+  const native = model.reasoning && !topLevel ? chatTemplateThinking(model.id, Object.keys(declaredSwitch).length ? declaredSwitch : undefined) : undefined;
+  if (native?.thinkingLevelMap) delete mapped.reasoning_effort;
+  Object.assign(mapped, native?.chatTemplateKwargs ?? declaredSwitch);
   if (Object.keys(mapped).length) model.compat = { ...model.compat, thinkingFormat: "chat-template", chatTemplateKwargs: mapped };
   else if (record(enable.thinking).type === "enabled") model.compat = { ...model.compat, thinkingFormat: "deepseek", supportsReasoningEffort: enable.reasoning_effort === "$EFFORT" };
   else if (enable.reasoning_effort === "$EFFORT") model.compat = { ...model.compat, supportsReasoningEffort: true };
+  if (native?.thinkingLevelMap) {
+    model.thinkingLevelMap = native.thinkingLevelMap;
+    return;
+  }
+  // The effort map's values are the template's own names. Pi's levels map to the same
+  // name where it exists, as on other hosts, rather than to Tinfoil's stronger choices.
   const effortMap = record(params.effort_map);
+  const levels = ["minimal", "low", "medium", "high", "xhigh", "max"];
+  const declared = Object.values(effortMap);
+  const named = levels.filter(level => declared.includes(level));
+  if (declared.length && named.length === new Set(declared).size) {
+    model.thinkingLevelMap = nativeEffortLevels(named);
+    return;
+  }
   const thinkingLevelMap: NonNullable<Model<"openai-completions">["thinkingLevelMap"]> = {};
   for (const level of ["minimal", "low", "medium", "high", "xhigh"] as const) {
     const value = effortMap[level];
