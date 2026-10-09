@@ -14,6 +14,8 @@ Software and key custody are unverified to a fixed/public release, so A3 remains
 
 The complete guarded Chat Completions JSON body is gzip-compressed and encrypted to the freshly authenticated instance key, using ML-KEM-768, HKDF-SHA256 and ChaCha20-Poly1305. This includes messages, tool definitions and results, reasoning controls and the client's ephemeral response public key. The public API relays ciphertext. Response content is decrypted only after AEAD authentication. A new response key is generated for every request; replayed chunks and incomplete streams are rejected. [Transport](../../packages/chutes/src/transport.ts), [encryption](../../packages/chutes/src/crypto.ts), [official protocol](https://github.com/chutesai/e2ee-proxy/tree/e213a090cb82be3b4556ce0f2fbd912406001477).
 
+Chutes' licensed E2EE clients are written in Python and Lua, and its browser test client (Rust compiled to WebAssembly) carries no license, so pi-tee implements the protocol with Noble primitives. [`npm run check:chutes-peer`](../../scripts/check-chutes-peer.ts) holds it to that browser client, [chutesai/e2ee-test](https://github.com/chutesai/e2ee-test/tree/0e3543180543c0c22637efb47a243d169ff0ab24), fetched by commit and SHA-256: both clients' requests open to the same payload, and each decrypts streams sealed to the other's response key.
+
 The ordinary, hostname-verified WebPKI endpoints see these fields:
 
 | Endpoint | Credential and metadata |

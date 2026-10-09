@@ -20,6 +20,7 @@
     "smoke:pi": "node --import tsx scripts/live-pi.ts",
     "smoke:near-gpu": "node --import tsx scripts/live-near-gpu.ts",
     "check:nvidia": "node --import tsx scripts/check-nvidia-verifier.ts",
+    "check:chutes-peer": "node --import tsx scripts/check-chutes-peer.ts",
     "build:wasm": "node scripts/build-wasm-verifiers.mjs"
   },
   "engines": {

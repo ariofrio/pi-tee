@@ -35,6 +35,7 @@ jobs:
       - run: npm run check
       - run: npm run smoke
       - run: npm run smoke:packages
+      - run: npm run check:chutes-peer
 
   bun:
     runs-on: ubuntu-24.04
@@ -50,6 +51,7 @@ jobs:
       - run: npm ci --ignore-scripts
       - run: npm run build
       - run: bun test tests/pinned-tls.test.ts tests/wasm-verifiers.test.ts tests/worker-selection.test.ts tests/near-direct-channel.test.ts tests/near-gateway.test.ts tests/near-direct-discovery.test.ts tests/tinfoil-gateway.test.ts tests/route-security.test.ts tests/chutes.test.ts tests/chutes-evidence.test.ts tests/chutes-crypto.test.ts tests/chutes-provider.test.ts tests/chutes-invoke-channel.test.ts tests/cpu-floors.test.ts tests/privatemode.test.ts
+      - run: bun scripts/check-chutes-peer.ts
 
   go:
     runs-on: ubuntu-24.04
