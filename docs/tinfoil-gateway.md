@@ -27,7 +27,7 @@ Gateway and direct share [socket framing](../packages/core/src/pinned-tls.ts) an
 
 ## Validation
 
-On 2026-10-09, after rebasing onto the [approved platform-authority update](https://github.com/ariofrio/pi-tee/commit/45c122e6e7c480bf2f61dac5ff16a074382abb58), all 119 Node 24 checks passed with the private boot/artifact/relay fixtures supplied and no skips. Both package/load smokes and the Go helper's format/vet/test checks passed. All 29 Bun 1.3.13 transport/verifier/selection/crypto checks passed with relay evidence supplied. [Gateway CI](https://github.com/ariofrio/pi-tee/actions/runs/37925025357) covers Node 24, Node 26, Bun and Go; private evidence stays outside the repository.
+On 2026-10-09, after rebasing onto the [approved platform-authority update](https://github.com/ariofrio/pi-tee/commit/45c122e6e7c480bf2f61dac5ff16a074382abb58), all 119 Node 24 checks passed with the private boot/artifact/relay fixtures supplied and no skips. Both package/load smokes and the Go helper's format/vet/test checks passed. All 29 Bun 1.3.13 transport/verifier/selection/crypto checks passed with relay evidence supplied. [Gateway CI](https://github.com/ariofrio/pi-tee/actions/runs/37925191094) passed Node 24, Node 26, Bun and Go; private evidence stays outside the repository.
 
 The [live Pi harness](../scripts/live-pi.ts) passed the following matrix using `tinfoil <model> --public-builds --gateway` with local GPU appraisal. Each dispatch also asserted the actual gateway A1/H1/G1/X2 report and its credential disclosure. `PI_TEE_LIVE_PI_BINARY` selected the official [Pi 1.0.4 macOS ARM64 release](https://github.com/earendil-works/pi/releases/tag/v1.0.4); its archive matched GitHub's SHA256 `717dcd38a03849e919f9dec9daa96f5ca102e15ea33d804e5db57b1d47e513bc`.
 
