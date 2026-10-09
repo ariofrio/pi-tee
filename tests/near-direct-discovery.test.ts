@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { normalizeContext } from "@earendil-works/pi-ai/compat";
-import { formatProviderReport } from "pi-tee-core";
+import { formatProviderReport, TeeError } from "pi-tee-core";
 import { createNearProvider } from "../packages/nearai/src/index.js";
 
 const glm = "z-ai/glm-5.3-flash", qwen = "Qwen/Qwen3.6-35B-A3B-FP8";
@@ -147,4 +147,115 @@ test("a catalog provider label does not exclude a declared tool model with a dir
   } });
   await integration.initializeCatalog();
   assert.deepEqual(integration.provider.getModels().map(m => m.id), [qwen]);
+});
+
+test("direct availability does not authorize the gateway or survive offline snapshots", async () => {
+  const base = discovery([raw(qwen)]);
+  const catalogFetch: typeof fetch = async (input, init) => {
+    const response = await base(input, init);
+    if (!String(input).includes("/model/")) return response;
+    const value = await response.json();
+    if (value.models) for (const model of value.models) model.metadata.providerType = "chutes";
+    else value.metadata.providerType = "chutes";
+    return Response.json(value);
+  };
+  let gatewayOpened = 0;
+  const seam = await evidenceSeams(1);
+  const online = createNearProvider({ policy: "trust-provider-and-host", catalogFetch, ...seam,
+    openSdkTransport: async () => { gatewayOpened++; throw Error("unsupported gateway protocol"); },
+  });
+  await online.initializeCatalog();
+  const model = online.provider.getModels()[0]!;
+  assert.equal(online.getDiscoveredModels()[0]?.sdkTransportAvailable, false);
+  assert.equal(online.getDiscoveredModels()[0]?.selectable, true);
+  assert.doesNotMatch(model.name, /transport unavailable/);
+  await online.provider.streamSimple(model, context, { apiKey: "synthetic-key" }).result();
+  assert.equal(seam.sends.length, 1);
+  assert.equal(gatewayOpened, 0);
+  let stored: any;
+  await online.provider.refreshModels!({ allowNetwork: false, signal: new AbortController().signal,
+    publish: async publication => { if (publication.persist) stored = publication.persist; publication.update?.(); return true; },
+  });
+  assert.equal(stored.models[0].sdkTransportAvailable, false);
+  for (const route of [undefined, "direct", "gateway"] as const) {
+    const offline = createNearProvider({ route, policy: "trust-provider-and-host", catalogFetch: async () => { throw Error("offline"); } });
+    await offline.provider.refreshModels!({ allowNetwork: false, signal: new AbortController().signal, stored,
+      publish: async publication => { publication.update?.(); return true; },
+    });
+    assert.deepEqual(offline.provider.getModels(), []);
+    assert.equal(offline.getDiscoveredModels()[0]?.selectable, false);
+  }
+});
+
+test("concurrent direct requests retain only their own endpoint skips", async () => {
+  const dead = "dead.completions.near.ai", wait = "waiting.completions.near.ai", live = "glm-5-3-flash.completions.near.ai";
+  const seam = await evidenceSeams(1, dead);
+  let release!: () => void, entered!: () => void;
+  const gate = new Promise<void>(done => { release = done; });
+  const waiting = new Promise<void>(done => { entered = done; });
+  const real = seam.directSeams;
+  seam.directSeams = target => {
+    const boundary = real(target), request = boundary.channel.request;
+    boundary.channel.request = async input => {
+      if (target.hostname === wait) { entered(); await gate; }
+      return request(input);
+    };
+    return boundary;
+  };
+  const integration = createNearProvider({ route: "direct", policy: "trust-provider-and-host", ...seam,
+    catalogFetch: discovery([raw(qwen), raw(glm)], [{ domain: dead, models: [qwen] }, { domain: wait, models: [qwen] }, { domain: live, models: [glm] }]),
+  });
+  await integration.initializeCatalog();
+  const models = integration.provider.getModels();
+  const slow = integration.provider.streamSimple(models.find(m => m.id === qwen)!, context, { apiKey: "synthetic-key" }).result();
+  await waiting;
+  try {
+    await integration.provider.streamSimple(models.find(m => m.id === glm)!, context, { apiKey: "synthetic-key" }).result();
+    assert.doesNotMatch(formatProviderReport(integration.getReport()), /dead\.completions\.near\.ai/);
+  } finally { release(); }
+  await slow;
+  const report = integration.getReport();
+  assert.match(formatProviderReport(report), /dead\.completions\.near\.ai.*skipped/);
+  assert.doesNotMatch(report.assumptions.join(" "), /dead\.completions\.near\.ai/);
+  assert.match(report.routeDecisions?.[0]?.notes?.join(" ") ?? "", /dead\.completions\.near\.ai/);
+});
+
+test("a preflight-blocked request cannot retain an earlier direct endpoint failure", async () => {
+  const dead = "dead.completions.near.ai";
+  const seam = await evidenceSeams(1, dead);
+  const integration = createNearProvider({ route: "direct", policy: "trust-provider-and-host", ...seam,
+    catalogFetch: discovery([raw(qwen)], [{ domain: dead, models: [qwen] }]),
+  });
+  await integration.initializeCatalog();
+  const model = integration.provider.getModels()[0]!;
+  await integration.provider.streamSimple(model, context, { apiKey: "synthetic-key" }).result();
+  assert.match(formatProviderReport(integration.getReport()), /dead\.completions\.near\.ai.*skipped/);
+  const blocked = await integration.provider.streamSimple({ ...model, id: "absent/model" }, context, { apiKey: "synthetic-key" }).result();
+  assert.equal(blocked.errorMessage, "TEE_MODEL_UNAVAILABLE");
+  assert.doesNotMatch(formatProviderReport(integration.getReport()), /dead\.completions\.near\.ai/);
+  assert.equal(integration.getReport().routeDecisions, undefined);
+});
+
+test("status distinguishes wrapped TLS/WebPKI rejection from connection failure without exposing diagnostics", async () => {
+  const hostname = "rejected.completions.near.ai";
+  for (const code of ["TEE_TLS_KEY_REJECTED", "TEE_CONNECTION_FAILED"] as const) {
+    const integration = createNearProvider({ route: "direct", policy: "trust-provider-and-host",
+      catalogFetch: discovery([raw(qwen)], [{ domain: hostname, models: [qwen] }]),
+      directSeams: () => ({ channel: {
+        request: async () => { throw new TeeError(code, "sensitive diagnostic must not appear"); },
+        fetch: async () => { assert.fail("No inference after channel rejection"); },
+        approve() { assert.fail("No approval after channel rejection"); }, close() {},
+      } }),
+    });
+    await integration.initializeCatalog();
+    await integration.provider.streamSimple(integration.provider.getModels()[0]!, context, { apiKey: "synthetic-key" }).result();
+    const status = formatProviderReport(integration.getReport());
+    assert.match(status, new RegExp(code));
+    assert.doesNotMatch(status, /sensitive diagnostic/);
+    assert.equal(integration.getReport().routeDecisions?.[0]?.security, undefined);
+    if (code === "TEE_TLS_KEY_REJECTED") {
+      assert.match(status, /TLS\/WebPKI rejected/);
+      assert.doesNotMatch(status, /unreachable/);
+    } else assert.match(status, /unreachable/);
+  }
 });

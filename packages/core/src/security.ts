@@ -12,11 +12,20 @@ export interface RouteSecurity {
   review?: 1 | 2 | 3;
   observed: readonly string[];
 }
+/** Adapter-owned request diagnostics; no security levels are implied. */
+export class RouteFailure extends TeeError {
+  readonly notes: readonly string[];
+  constructor(readonly route: string, code: string, notes: readonly string[] = []) {
+    super(code);
+    this.notes = Object.freeze([...notes]);
+  }
+}
+
 /** Authenticated candidate levels retained when no worker meets policy. */
-export class RouteRejection extends TeeError {
+export class RouteRejection extends RouteFailure {
   readonly security: RouteSecurity;
-  constructor(security: RouteSecurity) {
-    super("TEE_POLICY_ROUTE_REJECTED");
+  constructor(security: RouteSecurity, notes: readonly string[] = []) {
+    super(security.route, "TEE_POLICY_ROUTE_REJECTED", notes);
     this.security = Object.freeze(structuredClone(security));
   }
 }
@@ -27,6 +36,7 @@ export interface RouteDecision {
   accepted: boolean;
   picked: boolean;
   reason: string;
+  notes?: readonly string[];
   trusts: readonly string[];
   gaps: readonly string[];
 }

@@ -1,5 +1,5 @@
 import {
-  assessRoute, compareRoutes, RouteRejection, createTeeProvider, resolveModelVisibility, resolvePolicy, TeeError,
+  assessRoute, compareRoutes, RouteFailure, RouteRejection, createTeeProvider, resolveModelVisibility, resolvePolicy, TeeError,
   type ModelVisibility, type PolicyMode, type ProviderDefinition, type RouteSecurity, type SecurityPolicy,
 } from "pi-tee-core";
 import { NEAR_BASE_URL } from "./catalog.js";
@@ -26,6 +26,25 @@ export function assertNearRuntime(route: "gateway" | "direct") {
   if ((route === "gateway" && process.versions.bun) || Number(process.versions.node.split(".")[0]) < 24) throw new TeeError("TEE_RUNTIME_UNSUPPORTED");
 }
 
+function directFailureReason(error: unknown, timedOut: boolean): string {
+  const seen = new Set<unknown>();
+  let transportFailed = false;
+  let evidenceCode: string | undefined;
+  while (error && typeof error === "object" && !seen.has(error)) {
+    seen.add(error);
+    if (error instanceof TeeError) {
+      if (error.code === "TEE_TLS_KEY_REJECTED") return "TLS/WebPKI rejected (TEE_TLS_KEY_REJECTED)";
+      if (error.code === "TEE_CONNECTION_FAILED") return "unreachable (TEE_CONNECTION_FAILED)";
+      if (/^TEE_[A-Z_]+$/.test(error.code)) evidenceCode = error.code;
+    }
+    const wrapped = error as { failure?: { code?: string }; cause?: unknown };
+    if (wrapped.failure?.code === "api.transport_failed") transportFailed = true;
+    error = wrapped.cause;
+  }
+  if (evidenceCode) return `evidence rejected (${evidenceCode})`;
+  return timedOut || transportFailed ? "unreachable (transport unavailable)" : "evidence rejected";
+}
+
 export function createNearProvider(options: {
   policy?: PolicyMode;
   route?: "gateway" | "direct";
@@ -44,7 +63,6 @@ export function createNearProvider(options: {
   const directModelIds: string[] = [];
   let directEndpoints = new Map<string, string[]>();
   let discoveryNotes: string[] = [];
-  let directNotes: string[] = [];
   const integration = createTeeProvider({
     id: "nearai", name: "NEAR AI", baseUrl: NEAR_BASE_URL, apiKeyEnv: "NEARAI_API_KEY", policy,
     modelVisibility: options.modelVisibility ?? resolveModelVisibility(process.env.PI_NEARAI_MODEL_VISIBILITY),
@@ -59,15 +77,14 @@ export function createNearProvider(options: {
         discoveryNotes = ["Direct discovery unavailable or incomplete; no direct candidates offered. Gateway eligibility is unchanged."];
       }
       directModelIds.splice(0, directModelIds.length, ...directEndpoints.keys());
-      for (const model of models) if (directEndpoints.has(model.id)) model.sdkTransportAvailable = true;
       return models;
     }, requireDeclaredTee: true, catalogFetch: options.catalogFetch, assumptions: NEAR_ASSUMPTIONS,
     openSdkTransport: options.openSdkTransport ?? (async () => { throw new TeeError("TEE_POLICY_ROUTE_REJECTED"); }),
     routes: [
-      ...(route === "gateway" ? [] : [{ id: "near-direct", potential: { ...potential, route: "near-direct" }, modelIds: directModelIds,
+      ...(route === "gateway" ? [] : [{ id: "near-direct", potential: { ...potential, route: "near-direct" }, modelIds: directModelIds, available: () => true,
         openSession: async ({ apiKey, signal, model, policy }: { apiKey: string; signal: AbortSignal; model: { id: string }; policy: SecurityPolicy }) => {
           assertNearRuntime("direct");
-          directNotes = [];
+          const directNotes: string[] = [];
           let picked: Awaited<ReturnType<typeof openDirectNearTransport>> | undefined;
           let rejected: RouteSecurity | undefined;
           try {
@@ -78,8 +95,7 @@ export function createNearProvider(options: {
               try { transport = await openDirectNearTransport(apiKey, bounded, target, options.directSeams?.(target)); }
               catch (error) {
                 signal.throwIfAborted();
-                const failure = (error as { failure?: { code?: string } })?.failure;
-                directNotes.push(`${hostname}: skipped (${failure?.code === "api.transport_failed" || bounded.aborted ? "unreachable or channel failed" : "evidence rejected"}); no levels established.`);
+                directNotes.push(`${hostname}: skipped (${directFailureReason(error, bounded.aborted)}); no levels established.`);
                 continue;
               }
               const assessed = assessRoute(policy, transport.security);
@@ -94,10 +110,10 @@ export function createNearProvider(options: {
             }
             signal.throwIfAborted();
             if (!picked) {
-              if (rejected) throw new RouteRejection(rejected);
-              throw new TeeError("TEE_ATTESTATION_REJECTED");
+              if (rejected) throw new RouteRejection(rejected, directNotes);
+              throw new RouteFailure("near-direct", "TEE_ATTESTATION_REJECTED", directNotes);
             }
-            return { security: picked.security, transport: picked };
+            return { security: picked.security, transport: picked, notes: directNotes };
           } catch (error) { picked?.dispose?.(); throw error; }
         },
       }]),
@@ -112,7 +128,7 @@ export function createNearProvider(options: {
   });
   return { ...integration, getReport: () => {
     const report = integration.getReport();
-    report.assumptions = [...report.assumptions, ...discoveryNotes, ...directNotes];
+    report.assumptions = [...report.assumptions, ...discoveryNotes];
     return report;
   } };
 }

@@ -4,7 +4,7 @@ import {
   type AssistantMessageEventStream, type Model, type Provider, type SimpleStreamOptions,
 } from "@earendil-works/pi-ai/compat";
 import { parsePolicy, resolveModelVisibility, resolvePolicy, TeeError, type SecurityPolicy, type ModelVisibility, type PolicyMode } from "./policy.js";
-import { assessRoute, compareRoutes, RouteRejection, ROUTE_AXES, type RouteSecurity, type RouteDecision } from "./security.js";
+import { assessRoute, compareRoutes, RouteFailure, RouteRejection, ROUTE_AXES, type RouteSecurity, type RouteDecision } from "./security.js";
 import { guardChatFetch, readBoundedBody } from "./transport.js";
 
 export interface SdkTransport {
@@ -92,8 +92,10 @@ export interface TeeRouteDefinition {
   /** Best possible levels, used only for catalog filtering and preflight eligibility. */
   potential: RouteSecurity;
   modelIds?: readonly string[];
+  /** Adapter-owned route availability; never persisted in catalog snapshots. */
+  available?: (model: TeeCatalogModel) => boolean;
   limitations?: readonly string[];
-  openSession(options: { apiKey: string; signal: AbortSignal; model: TeeCatalogModel; policy: SecurityPolicy }): Promise<{ security: RouteSecurity; transport: SdkTransport; admission?: PublicBuildAdmission }>;
+  openSession(options: { apiKey: string; signal: AbortSignal; model: TeeCatalogModel; policy: SecurityPolicy }): Promise<{ security: RouteSecurity; transport: SdkTransport; admission?: PublicBuildAdmission; notes?: readonly string[] }>;
 }
 
 const FOUR_HOURS = 4 * 60 * 60 * 1000;
@@ -206,13 +208,14 @@ export function createTeeProvider(definition: ProviderDefinition) {
     const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(timeout), ...(options?.signal ? [options.signal] : [])]);
     active.add(controller);
     const source = lazyStream(requested, async () => {
+      delete report.routeDecisions;
       signal.throwIfAborted();
       if (!definition.routes && requestMode === "public-builds" && publicProfiles.length === 0) throw new TeeError("TEE_PUBLIC_BUILD_DEPLOYMENT_UNAVAILABLE");
       if (!definition.routes && requestMode === "public-builds" && requestPolicy.egress === "none") throw new TeeError("TEE_POLICY_ROUTE_REJECTED");
       const canonical = catalog.find((entry) => entry.id === requested.id);
       if (!canonical || requested.provider !== definition.id || (definition.availableModelIds && !definition.availableModelIds.includes(canonical.id))) throw new TeeError("TEE_MODEL_UNAVAILABLE");
       if (definition.requireDeclaredTee && canonical.teeCapability !== "declared") throw new TeeError("TEE_MODEL_ATTESTATION_UNAVAILABLE");
-      if (requestMode === "trust-provider-and-host" && canonical.sdkTransportAvailable === false) throw new TeeError("TEE_MODEL_TRANSPORT_UNAVAILABLE");
+      if (requestMode === "trust-provider-and-host" && !transportAvailable(canonical)) throw new TeeError("TEE_MODEL_TRANSPORT_UNAVAILABLE");
       if (!options?.apiKey) throw new TeeError("TEE_API_KEY_REQUIRED");
       let captured: { baseUrl?: string; fetch: typeof globalThis.fetch };
       if (definition.routes) {
@@ -220,7 +223,7 @@ export function createTeeProvider(definition: ProviderDefinition) {
         const sessions: { security: RouteSecurity; transport: SdkTransport; admission?: PublicBuildAdmission }[] = [];
         try {
           for (const route of definition.routes) {
-            if (route.modelIds && !route.modelIds.includes(canonical.id)) continue;
+            if (!routeAvailable(route, canonical)) continue;
             if (route.fallbackFor && sessions.some(session => session.security.route === route.fallbackFor)) {
               decisions.push({ route: route.id, accepted: false, picked: false, reason: `Not appraised: ${route.fallbackFor} qualifies. ${route.preferenceReason ?? "Preferred route qualifies."}`, trusts: [], gaps: [] });
               continue;
@@ -234,13 +237,14 @@ export function createTeeProvider(definition: ProviderDefinition) {
               const session = await route.openSession({ apiKey: options.apiKey, signal, model: structuredClone(canonical), policy: requestPolicy });
               const evaluated = assessRoute(requestPolicy, session.security);
               if (session.security.route !== route.id) { evaluated.accepted = false; evaluated.reason = "Adapter returned a different route identity"; }
-              decisions.push({ ...evaluated, picked: false });
+              decisions.push({ ...evaluated, picked: false, notes: session.notes });
               if (session.security.route !== route.id || !evaluated.accepted) session.transport.dispose?.();
               else sessions.push(session);
             } catch (error) {
               signal.throwIfAborted();
               const rejected = error instanceof RouteRejection && error.security.route === route.id ? assessRoute(requestPolicy, error.security) : undefined;
-              decisions.push(rejected && !rejected.accepted ? { ...rejected, picked: false } : { route: route.id, accepted: false, picked: false, reason: [error instanceof TeeError ? error.code : "TEE_ATTESTATION_REJECTED", ...(route.limitations ?? [])].join("; "), trusts: [], gaps: [] });
+              const notes = error instanceof RouteFailure && error.route === route.id ? error.notes : undefined;
+              decisions.push(rejected && !rejected.accepted ? { ...rejected, picked: false, notes } : { route: route.id, accepted: false, picked: false, reason: [error instanceof TeeError ? error.code : "TEE_ATTESTATION_REJECTED", ...(route.limitations ?? [])].join("; "), notes, trusts: [], gaps: [] });
             }
           }
           sessions.sort((a, b) => compareRoutes(a.security, b.security));
@@ -345,8 +349,17 @@ export function createTeeProvider(definition: ProviderDefinition) {
     },
   };
 
+  function routeAvailable(route: TeeRouteDefinition, model: TeeCatalogModel) {
+    return (!route.modelIds || route.modelIds.includes(model.id)) && (route.available?.(model) ?? model.sdkTransportAvailable !== false);
+  }
+
+  function transportAvailable(model: TeeCatalogModel) {
+    return definition.routes ? definition.routes.some(route => routeAvailable(route, model)) : model.sdkTransportAvailable !== false;
+  }
+
   function selectableCatalog() {
-    if (definition.routes) return visibleCatalog().filter(entry => (visibility === "all" || entry.sdkTransportAvailable !== false) && definition.routes!.some(route => (!route.modelIds || route.modelIds.includes(entry.id)) && assessRoute(parsePolicy(mode), route.potential).accepted));
+    if (definition.routes) return visibleCatalog().filter(entry => definition.routes!.some(route =>
+      (!route.modelIds || route.modelIds.includes(entry.id)) && (visibility === "all" || routeAvailable(route, entry)) && assessRoute(parsePolicy(mode), route.potential).accepted));
     if (parsePolicy(mode).code !== "public-release") return visibleCatalog().filter(entry => visibility === "all" || entry.sdkTransportAvailable !== false);
     if (parsePolicy(mode).code === "public-release") return parsePolicy(mode).egress === "none" ? [] : visibleCatalog().filter(entry => profilesByModel.has(entry.id));
     return [];
@@ -355,7 +368,7 @@ export function createTeeProvider(definition: ProviderDefinition) {
   function visibleCatalog() {
     return catalog.filter((entry) => (!definition.availableModelIds || definition.availableModelIds.includes(entry.id)) &&
       (!definition.requireDeclaredTee || visibility === "all" || entry.teeCapability === "declared")).map((entry) => {
-      if (parsePolicy(mode).code !== "public-release" && entry.teeCapability === "declared" && entry.sdkTransportAvailable === false) {
+      if (parsePolicy(mode).code !== "public-release" && entry.teeCapability === "declared" && !transportAvailable(entry)) {
         return { ...entry, name: `${entry.name} [TEE declared; SDK transport unavailable]` };
       }
       if (!definition.requireDeclaredTee || entry.teeCapability === "declared") return entry;
@@ -417,7 +430,7 @@ export function createTeeProvider(definition: ProviderDefinition) {
       id: entry.id, name: entry.name,
       ...(definition.requireDeclaredTee ? { teeCapability: entry.teeCapability ?? "unknown" } : {}),
       ...(entry.sdkTransportAvailable !== undefined ? { sdkTransportAvailable: entry.sdkTransportAvailable } : {}),
-      selectable: (parsePolicy(mode).code === "public-release" || entry.sdkTransportAvailable !== false) && selectableCatalog().some(model => model.id === entry.id) && (!definition.requireDeclaredTee || entry.teeCapability === "declared"),
+      selectable: (parsePolicy(mode).code === "public-release" || transportAvailable(entry)) && selectableCatalog().some(model => model.id === entry.id) && (!definition.requireDeclaredTee || entry.teeCapability === "declared"),
     })),
   };
 }

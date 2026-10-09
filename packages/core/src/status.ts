@@ -17,7 +17,7 @@ export function formatProviderReport(report: ProviderReport): string {
   for (const decision of report.routeDecisions ?? []) {
     const levels = decision.security;
     lines.push("", `${decision.route}${levels ? `: A${levels.code} H${levels.host} G${levels.gpu} X${levels.egress}${levels.build ? ` B${levels.build}` : ""}${levels.review ? ` S${levels.review}` : ""}` : ": levels not established"}`,
-      `Choice: ${decision.reason}`, ...decision.trusts.map(trust => `Trusts: ${trust}`), ...decision.gaps.map(gap => `Gap / observation: ${gap}`));
+      `Choice: ${decision.reason}`, ...(decision.notes ?? []).map(note => `Candidate: ${note}`), ...decision.trusts.map(trust => `Trusts: ${trust}`), ...decision.gaps.map(gap => `Gap / observation: ${gap}`));
   }
   if (report.reason) lines.push(`Request result: ${report.reason}`);
   lines.push("", "Scope: prompt, tool arguments and completion dispatches through this provider; whole-session protection is not established.",
