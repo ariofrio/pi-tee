@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Corrected verifier documentation and source links; separated dated client/Tinfoil evidence and historical reviews from active guidance, with compatibility links and a local Markdown link check.
+
 - Add `pi-chutes`: native login, confidential tool-capable chat discovery and `/chutes status`; fresh per-request Intel/ML-KEM/host-SPKI appraisal, shared firmware floors, A3/H1-or-H2/G3/X3 admission and send-once whole-body encryption on an owned WebPKI TLS 1.3 socket that cannot replay HTTP 421. Disclose API-key/routing metadata at ordinary WebPKI endpoints and unverified runtime/recipient closure. Verify encrypted streaming, tools, reasoning and cancellation under Node and Bun; no NRAS or plaintext fallback. [Validation](docs/chutes-validation.md).
 
 - Share the existing TDX SVN and collateral-edition host-rating floors in core; NEAR and Tinfoil retain their thresholds and policy identities.
