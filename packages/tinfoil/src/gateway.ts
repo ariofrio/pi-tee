@@ -1,14 +1,19 @@
 import { createHash } from "node:crypto";
 import { readBoundedBody, record, TeeError, type SecurityPolicy } from "pi-tee-core";
-import { openEncryptedGatewayTransport, TINFOIL_GATEWAY_BASE_URL } from "./direct.js";
+import { GATEWAY_MODELS, openEncryptedGatewayTransport, TINFOIL_GATEWAY_BASE_URL } from "./direct.js";
 import { appraiseWorker, PUBLIC_MODELS, WORKER_HOST, type PublicModel } from "./worker-appraisal.js";
 import { selectPublicWorker } from "./public-session.js";
 import { PUBLIC_BUILD_AUTHORITY_POLICY_DIGEST, PUBLIC_BUILD_PROFILE_ID } from "./public-policy.js";
 
-export const GATEWAY_MODELS = Object.freeze(["deepseek-v4-1-flash", "glm-5-3"] as const);
+export const GATEWAY_LIMITATIONS = [
+  "Gateway EHBP authenticates individual frames, but has no authenticated end-of-stream marker: the gateway can truncate at a frame boundary. Pi's SSE finish_reason check detects an unfinished completion; trailing usage can still disappear.",
+  "Gateway EHBP has no anti-replay: the gateway can replay a sealed request to the same worker, causing duplicate inference and billing, and return an equally authentic duplicate response. Client send-once does not prevent gateway replay.",
+];
+
+export { GATEWAY_MODELS } from "./direct.js";
 const gatewayAuthorityDigest = createHash("sha256").update(JSON.stringify({
   workerAppraisal: PUBLIC_BUILD_AUTHORITY_POLICY_DIGEST, models: GATEWAY_MODELS,
-  transport: { endpoint: TINFOIL_GATEWAY_BASE_URL, tls: "TLS1.3-WebPKI", body: "worker-key-EHBP", sends: 1, rotation: "reject", seal: "X-Tinfoil-Seal: appraised worker", cache: "fresh-encrypted-cache_salt" },
+  transport: { endpoint: TINFOIL_GATEWAY_BASE_URL, tls: "TLS1.3-WebPKI", body: "worker-key-EHBP", sends: 1, rotation: "reject", seal: "X-Tinfoil-Seal: appraised worker", cache: "fresh-encrypted-cache_salt", responseCompleteness: "frames-only-SSE-finish_reason", replayProtection: "none" },
   metadataRecipient: "unattested inference-gateway.tinfoil.sh receives API key, model and headers",
 })).digest("hex");
 function gatewayModel(model: string): model is typeof GATEWAY_MODELS[number] {
@@ -35,7 +40,7 @@ export async function openRatedGatewayTransport(signal: AbortSignal, model: stri
   const { host, keys } = await selectPublicWorker(model, signal, {
     discover: (model, signal) => discoverGatewayWorkers(model, signal),
     reachable: async hosts => hosts,
-    appraise: (model: PublicModel, host, signal) => appraiseWorker({ model, host, signal, policy, attestationRelay: "inference-gateway.tinfoil.sh" }),
+    appraise: (model: PublicModel, host, signal) => appraiseWorker({ model, host, signal: AbortSignal.any([signal, AbortSignal.timeout(120000)]), policy, attestationRelay: "inference-gateway.tinfoil.sh" }),
   }, policy);
   const { platform: _platform, gpus: _gpus, ...admission } = keys.publicBuild;
   return {
@@ -43,6 +48,7 @@ export async function openRatedGatewayTransport(signal: AbortSignal, model: stri
       "TLS terminates at the unattested billing gateway, authenticated by WebPKI. It receives the API key, model and routing headers; bodies are sealed to the freshly appraised worker's own HPKE key.",
       "Gateway is a fallback when no direct worker qualifies: direct exposes the key and metadata to fewer parties.",
       "A 412 means the sealed worker is unavailable; this dispatch fails without a resend. A new request performs fresh selection and appraisal.",
+      ...GATEWAY_LIMITATIONS,
     ] },
     admission: { profile: `${PUBLIC_BUILD_PROFILE_ID}-gateway`, model, authorityPolicyDigest: gatewayAuthorityDigest, ...admission },
     transport: await openEncryptedGatewayTransport(signal, host, keys, model, keys.publicBuild.expiresAt),

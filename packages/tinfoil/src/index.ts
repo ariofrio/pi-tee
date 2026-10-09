@@ -4,7 +4,7 @@ import {
   TeeError, type PolicyMode, type ProviderDefinition,
 } from "pi-tee-core";
 import { openRatedPublicWorkerTransport } from "./public-session.js";
-import { GATEWAY_MODELS, openRatedGatewayTransport } from "./gateway.js";
+import { GATEWAY_LIMITATIONS, GATEWAY_MODELS, openRatedGatewayTransport } from "./gateway.js";
 import { PUBLIC_MODELS } from "./worker-appraisal.js";
 import { PUBLIC_BUILD_PROFILE_ENABLED } from "./public-policy.js";
 import { parseTinfoilCatalog, TINFOIL_BASE_URL } from "./catalog.js";
@@ -15,6 +15,7 @@ export const TINFOIL_ASSUMPTIONS = [
   "Intel, AMD and NVIDIA are trusted as manufacturers. Evidence and route-wide levels are established for each request, including hidden plaintext components.",
   "Admitted public publishers are trusted for release correctness; B3 uses GitHub hosted workflows and Sigstore, without independent reproduction or per-release review.",
   "Direct transport binds keys before credentials/body and sends once. Gateway uses WebPKI TLS to an unattested billing host that receives the API key, model and headers; bodies are sealed to the appraised worker. A 412 is terminal, with no resend. Router transport follows SDK rotation/retry behavior within its provider-and-host trust position.",
+  ...GATEWAY_LIMITATIONS,
   "API credentials and authorization metadata reach Tinfoil. Whole-Pi-session protection remains unestablished.",
 ];
 

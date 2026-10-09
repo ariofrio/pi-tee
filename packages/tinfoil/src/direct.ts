@@ -42,12 +42,13 @@ export async function openEncryptedWorkerTransport(signal: AbortSignal, host: st
   return openEncryptedTransport(signal, keys.hpke, endpoint, logicalBaseUrl ?? `https://${host}/v1`, cacheField, pinnedTlsFetch(endpoint, keys.tls, expiresAt), expiresAt);
 }
 
+export const GATEWAY_MODELS = Object.freeze(["deepseek-v4-1-flash", "glm-5-3"] as const);
 export const TINFOIL_GATEWAY_BASE_URL = "https://inference-gateway.tinfoil.sh/v1";
 
 /** One sealed dispatch; a 412 or any other error is terminal, with no resend. */
 export async function openEncryptedGatewayTransport(signal: AbortSignal, host: string, keys: { hpke: string }, model: string, expiresAt: number, wireFetch?: typeof globalThis.fetch): Promise<SdkTransport> {
   if (!/^[a-z0-9-]+-inf[0-9]+(?:-[0-9]+)?\.tinfoil\.containers\.tinfoil\.dev$/.test(host) ||
-      !["deepseek-v4-1-flash", "glm-5-3"].includes(model)) throw new TeeError("TEE_REQUEST_REJECTED");
+      !GATEWAY_MODELS.some(allowed => model === allowed)) throw new TeeError("TEE_REQUEST_REJECTED");
   const endpoint = `${TINFOIL_GATEWAY_BASE_URL}/chat/completions`;
   return openEncryptedTransport(signal, keys.hpke, endpoint, TINFOIL_GATEWAY_BASE_URL, "cache_salt", wireFetch ?? webPkiTlsFetch(endpoint, expiresAt), expiresAt, {
     "x-tinfoil-seal": host, "x-tinfoil-model": model, "x-tinfoil-enclave-url": `https://${host}`,
