@@ -93,3 +93,28 @@ export function checkGpuAppraisal(table: GpuPolicyTable, checked: { code: number
     requireCondition(parseHopperGpuMode(evidence[index]!.evidence as string) === mode, "TEE_GPU_MODE_REJECTED");
   });
 }
+
+/** Rates authenticated reports; incomplete serving coverage cannot establish G1 or G2. */
+export function rateGpuAppraisal(table: GpuPolicyTable, checked: { code: number; stdout: string }, evidence: { arch?: unknown; evidence?: unknown }[], nonce: string, count: number,
+  binding: { cpuFresh: boolean; completeCoverage: boolean; cpuHash: boolean }): { gpu: 1 | 2 | 3; observed: string[] } {
+  if (!binding.cpuFresh || !binding.completeCoverage) return { gpu: 3, observed: [!binding.cpuFresh ? "GPU reports lack a fresh CPU commitment." : "GPU evidence does not establish serving coverage."] };
+  const observed: string[] = binding.cpuHash ? [] : ["GPU association with the CPU is by shared nonce only."];
+  try {
+    checkGpuAppraisal(table, checked, evidence, nonce, count);
+    return { gpu: binding.cpuHash ? 1 : 2, observed };
+  } catch { /* Test the authenticated, fresh baseline without local firmware floors. */ }
+  const baseline = Object.fromEntries(Object.entries(table).map(([model, rule]) => [model, {
+    ...rule, driver: "0.0.0", vbios: "00.00.00.00.00", maxGpus: 8,
+    ...(rule.arch === "HOPPER" ? { multiGpuMode: "ppcie" as const } : {}),
+  }]));
+  try {
+    checkGpuAppraisal(baseline, checked, evidence, nonce, count);
+    const claims = JSON.parse(checked.stdout).claims;
+    if (claims.some((c: any) => !gpuVersionsAllowed(table, c.hwmodel, c["x-nvidia-gpu-driver-version"], c["x-nvidia-gpu-vbios-version"])))
+      observed.push("Authenticated GPU firmware is below pi-tee's local floors.");
+    if (count > 1 && baseline[claims[0].hwmodel]?.arch === "HOPPER") observed.push("Hopper PPCIe uses unattested NVSwitches.");
+    return { gpu: 2, observed };
+  } catch {
+    return { gpu: 3, observed: ["Complete authenticated, fresh confidential GPU evidence was not established."] };
+  }
+}

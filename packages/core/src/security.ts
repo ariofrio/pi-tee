@@ -41,6 +41,10 @@ export function assessRoute(policy: SecurityPolicy, route: RouteSecurity): Omit<
   }
   const gaps: string[] = [];
   const trusts: string[] = ["Intel, AMD and NVIDIA as manufacturers; your machine and Pi"];
+  if (policy.verifier === "nras" && route.gpu < 3) {
+    trusts.push("NVIDIA NRAS service keys, insiders and appraisal policy");
+    gaps.push("NRAS learns which GPUs are attested and when; admission depends on its availability.");
+  }
   if (route.code > 1) {
     trusts.push(`${route.provider}, which can read plaintext${route.code === 3 ? " and change serving code without the client noticing" : "; private code is pinned but its behavior is unknown"}`);
     gaps.push(route.code === 3 ? "A3: serving code is provider-controlled" : "A2: fixed private code cannot be inspected");
@@ -77,8 +81,8 @@ export function weakestRoute(route: string, provider: string, components: readon
     host: Math.max(3 * Number(components.length === 0), ...components.map(c => c.host)) as RouteSecurity["host"],
     gpu: Math.max(3 * Number(components.length === 0), ...components.map(c => c.gpu)) as RouteSecurity["gpu"],
     egress: Math.max(3 * Number(components.length === 0), ...components.map(c => c.egress)) as RouteSecurity["egress"],
-    build: Math.max(...components.map(c => c.build ?? 4)) as RouteSecurity["build"],
-    review: Math.max(...components.map(c => c.review ?? 3)) as RouteSecurity["review"],
+    build: Math.max(4 * Number(components.length === 0), ...components.map(c => c.build ?? 4)) as RouteSecurity["build"],
+    review: Math.max(3 * Number(components.length === 0), ...components.map(c => c.review ?? 3)) as RouteSecurity["review"],
     observed: [...new Set(components.flatMap(c => c.observed))],
   };
 }

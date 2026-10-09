@@ -10,6 +10,8 @@ import { guardChatFetch, readBoundedBody } from "./transport.js";
 export interface SdkTransport {
   /** An adapter-owned endpoint selected after canonical-model preflight. */
   baseUrl?: string;
+  /** Evidence expiry; dispatch must not trigger a new appraisal with different levels. */
+  expiresAt?: number;
   fetch: typeof globalThis.fetch;
   dispose?(): void;
 }
@@ -87,6 +89,7 @@ export interface TeeRouteDefinition {
   /** Best possible levels, used only for catalog filtering and preflight eligibility. */
   potential: RouteSecurity;
   modelIds?: readonly string[];
+  limitations?: readonly string[];
   openSession(options: { apiKey: string; signal: AbortSignal; model: TeeCatalogModel; policy: SecurityPolicy }): Promise<{ security: RouteSecurity; transport: SdkTransport; admission?: PublicBuildAdmission }>;
 }
 
@@ -223,12 +226,13 @@ export function createTeeProvider(definition: ProviderDefinition) {
             try {
               const session = await route.openSession({ apiKey: options.apiKey, signal, model: structuredClone(canonical), policy: requestPolicy });
               const evaluated = assessRoute(requestPolicy, session.security);
+              if (session.security.route !== route.id) { evaluated.accepted = false; evaluated.reason = "Adapter returned a different route identity"; }
               decisions.push({ ...evaluated, picked: false });
               if (session.security.route !== route.id || !evaluated.accepted) session.transport.dispose?.();
               else sessions.push(session);
             } catch (error) {
               signal.throwIfAborted();
-              decisions.push({ route: route.id, accepted: false, picked: false, reason: error instanceof TeeError ? error.code : "TEE_ATTESTATION_REJECTED", trusts: [], gaps: [] });
+              decisions.push({ route: route.id, accepted: false, picked: false, reason: [error instanceof TeeError ? error.code : "TEE_ATTESTATION_REJECTED", ...(route.limitations ?? [])].join("; "), trusts: [], gaps: [] });
             }
           }
           sessions.sort((a, b) => compareRoutes(a.security, b.security));
@@ -236,7 +240,15 @@ export function createTeeProvider(definition: ProviderDefinition) {
           report.routeDecisions = decisions;
           if (!picked) throw new TeeError("TEE_POLICY_ROUTE_REJECTED");
           transport = picked.transport;
-          admission = picked.admission;
+          admission = picked.admission && Object.freeze(structuredClone(picked.admission));
+          if (admission) {
+            const now = Date.now();
+            if (admission.model !== canonical.id || !admission.profile || !/^[a-f0-9]{64}$/.test(admission.authorityPolicyDigest) ||
+              ![admission.workloadDigest, admission.platformDigest, admission.cvmManifestDigest, admission.imageDigest, admission.configDigest].every(value => /^[a-f0-9]{64}$/.test(value)) ||
+              !Number.isSafeInteger(admission.checkedAt) || !Number.isSafeInteger(admission.expiresAt) || admission.checkedAt > now + 1000 ||
+              now - admission.checkedAt > 300000 || admission.expiresAt <= now || admission.expiresAt > admission.checkedAt + 300000)
+              throw new TeeError("TEE_PUBLIC_SESSION_REJECTED");
+          }
           captured = { baseUrl: transport.baseUrl, fetch: transport.fetch };
           for (const decision of decisions.filter(d => d.accepted)) {
             decision.picked = decision.route === picked.security.route;
@@ -275,7 +287,7 @@ export function createTeeProvider(definition: ProviderDefinition) {
       const fetch = guardChatFetch({
         fetch: async (input, init) => {
           signal.throwIfAborted();
-          if (requestEpoch !== policyEpoch || (admission && Date.now() >= admission.expiresAt)) {
+          if (requestEpoch !== policyEpoch || (admission && Date.now() >= admission.expiresAt) || (transport?.expiresAt !== undefined && (!Number.isSafeInteger(transport.expiresAt) || Date.now() >= transport.expiresAt))) {
             rejection = "TEE_PUBLIC_SESSION_REJECTED";
             throw new TeeError(rejection);
           }
@@ -326,7 +338,7 @@ export function createTeeProvider(definition: ProviderDefinition) {
   };
 
   function selectableCatalog() {
-    if (definition.routes) return visibleCatalog().filter(entry => definition.routes!.some(route => (!route.modelIds || route.modelIds.includes(entry.id)) && assessRoute(parsePolicy(mode), route.potential).accepted));
+    if (definition.routes) return visibleCatalog().filter(entry => (visibility === "all" || entry.sdkTransportAvailable !== false) && definition.routes!.some(route => (!route.modelIds || route.modelIds.includes(entry.id)) && assessRoute(parsePolicy(mode), route.potential).accepted));
     if (parsePolicy(mode).code !== "public-release") return visibleCatalog().filter(entry => visibility === "all" || entry.sdkTransportAvailable !== false);
     if (parsePolicy(mode).code === "public-release") return parsePolicy(mode).egress === "none" ? [] : visibleCatalog().filter(entry => profilesByModel.has(entry.id));
     return [];

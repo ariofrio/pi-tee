@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { checkGpuAppraisal } from "../packages/tinfoil/src/worker-appraisal.js";
+import { rateGpuAppraisal, GPU_POLICIES } from "../packages/core/src/gpu-appraisal.js";
 
 // Policy over NVIDIA's verdict. Signature, reference and revocation results
 // come from the real verifier in the live and collateral checks; these cases
@@ -37,6 +38,25 @@ const mptEvidence = Array.from({ length: 8 }, () => ({ arch: "BLACKWELL", eviden
 
 test("eight distinct Blackwell GPUs in MPT pass", () => {
   checkGpuAppraisal(verdict(eight), mptEvidence, nonce, 8);
+});
+
+test("GPU ratings distinguish complete protection, authenticated gaps and unknown coverage", () => {
+  const binding = { cpuFresh: true, completeCoverage: true, cpuHash: true };
+  const rate = (checked = verdict(eight), evidence = mptEvidence, count = 8, details = binding) =>
+    rateGpuAppraisal(GPU_POLICIES, checked, evidence, nonce, count, details);
+  assert.equal(rate().gpu, 1);
+  assert.equal(rate(verdict(eight.map(c => ({ ...c, "x-nvidia-gpu-driver-version": "595.58.03" })))).gpu, 2);
+  const hopper = [claim(0, "GH100 A01 GSP BROM", "96.00.D0.00.03"), claim(1, "GH100 A01 GSP BROM", "96.00.D0.00.03")];
+  const gaps = rate(verdict(hopper), hopper.map(() => ({ arch: "HOPPER", evidence: report(2) })), 2);
+  assert.equal(gaps.gpu, 2);
+  assert.match(gaps.observed.join(" "), /NVSwitch/);
+  assert.equal(rate(undefined, undefined, undefined, { ...binding, cpuHash: false }).gpu, 2);
+  assert.equal(rate(undefined, undefined, undefined, { ...binding, completeCoverage: false }).gpu, 3);
+  assert.equal(rate(undefined, undefined, undefined, { ...binding, cpuFresh: false }).gpu, 3);
+  assert.equal(rate(verdict(eight.slice(0, 7))).gpu, 3);
+  assert.equal(rate(verdict(eight.map(c => ({ ...c, ueid: "same" })))).gpu, 3);
+  assert.equal(rate(verdict([{ ...eight[0], secboot: false }, ...eight.slice(1)])).gpu, 3);
+  assert.equal(rate(verdict([{ ...eight[0], "x-nvidia-gpu-vbios-rim-cert-chain": { ...chain, "x-nvidia-cert-ocsp-status": "revoked" } }, ...eight.slice(1)])).gpu, 3);
 });
 
 test("multi-GPU appraisal rejects duplicated, mixed, missing, outdated and mis-moded devices", () => {

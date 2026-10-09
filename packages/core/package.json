@@ -34,5 +34,8 @@
   "homepage": "https://github.com/ariofrio/pi-tee/tree/main/packages/core#readme",
   "bugs": {
     "url": "https://github.com/ariofrio/pi-tee/issues"
+  },
+  "dependencies": {
+    "jose": "6.2.12"
   }
 }

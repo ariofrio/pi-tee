@@ -61,3 +61,17 @@ test("native dispatch appraises qualifying routes and sends the prompt only to t
   assert.deepEqual(closed.sort(), ["near-direct", "tinfoil-direct", "tinfoil-router"]);
   assert.match(integration.getReport().routeDecisions!.find(r => r.picked)?.reason ?? "", /code/);
 });
+
+test("an expired rated session cannot send a prompt", async () => {
+  let sent = false;
+  const model: Model<"openai-completions"> = { id: "m", provider: "test", name: "M", api: "openai-completions", baseUrl: "https://test.example/v1", reasoning: false, input: ["text"], contextWindow: 8192, maxTokens: 512, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } };
+  const integration = createTeeProvider({ id: "test", name: "Test", baseUrl: model.baseUrl, apiKeyEnv: "TEST_KEY", policy: "trust-provider-and-host",
+    parseCatalog: () => [model], catalogFetch: async () => Response.json({}), assumptions: [], openSdkTransport: async () => { throw Error(); },
+    routes: [{ id: near.route, potential: near, openSession: async () => ({ security: near, transport: { expiresAt: Date.now() - 1,
+      fetch: async () => { sent = true; throw Error(); } } }) }],
+  });
+  await integration.initializeCatalog();
+  const result = await integration.provider.streamSimple(model, normalizeContext({ messages: [{ role: "user", content: "synthetic", timestamp: 1 }] }), { apiKey: "synthetic-key" }).result();
+  assert.equal(sent, false);
+  assert.equal(result.errorMessage, "TEE_PUBLIC_SESSION_REJECTED");
+});
