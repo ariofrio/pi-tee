@@ -12,7 +12,9 @@ Tinfoil direct verifies its public guest/runtime/container/key chain, fresh CPU 
 
 NEAR direct and gateway remain A3/G3/X3. A native QVL wrapper authenticates Intel evidence and reads the TDX SVN and verified TCB/QE collateral editions the SDK discards; H1 requires local floors, otherwise fresh evidence is H2. The gateway takes the weakest CPU rating across itself and checked model workers. Optional GPU details run locally, never through NRAS, and cannot gate or promote G3. NEAR direct owns one TLS 1.3 socket for evidence, encrypted inference and signature lookup.
 
-GPU policy is shared: a fully authenticated complete setup is G1, documented authenticated gaps are G2, and incomplete coverage is G3. Opt-in NRAS authenticates all detached device tokens and their signed overall digests, then applies the same mode/count/firmware checks as local appraisal. B1/B2/B4 admission and S1/S2 are rejected as not yet supported. `/nearai status` and `/tinfoil status` report actual evidence, trust, gaps, commitments and route choices; potential levels used for discovery are never reported as verified.
+Privatemode authenticates a fresh Coordinator nonce, its exact locally admitted manifest/complete policy set, mesh CA and secret exchange through hash-checked SDK WASM. The deployment-key recipient closure remains A2/H3/G3/X3: code is fixed but worker/GPU freshness and handling are unverified. Hard-pin and explicit recorded CDN adoption are separate pluggable policies; the SDK cannot silently change them. [Privatemode request boundary, disclosures and evidence](privatemode.md).
+
+GPU policy is shared: a fully authenticated complete setup is G1, documented authenticated gaps are G2, and incomplete coverage is G3. Opt-in NRAS authenticates all detached device tokens and their signed overall digests, then applies the same mode/count/firmware checks as local appraisal. B1/B2/B4 admission and S1/S2 are rejected as not yet supported. `/nearai status`, `/tinfoil status` and `/privatemode status` report actual evidence, trust, gaps, commitments and route choices; potential levels used for discovery are never reported as verified.
 
 ## Client portability
 

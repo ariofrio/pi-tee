@@ -7,7 +7,7 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "npm run build -w pi-tee-core && npm run build -w pi-nearai && npm run build -w pi-tinfoil && npm run build -w pi-chutes",
+    "build": "npm run build -w pi-tee-core && npm run build -w pi-nearai && npm run build -w pi-tinfoil && npm run build -w pi-chutes && npm run build -w pi-privatemode",
     "typecheck": "npm run typecheck --workspaces --if-present && tsc --noEmit -p tsconfig.tests.json",
     "test": "node --import tsx --test tests/*.test.ts",
     "check": "npm run build && npm run typecheck && npm test",

@@ -12,6 +12,7 @@ try {
     cwd: join(scratch, "project"), agentDir: join(scratch, "agent"),
     resourceLoaderOptions: { additionalExtensionPaths: [
       resolve("packages/nearai/dist/extension.js"), resolve("packages/tinfoil/dist/extension.js"), resolve("packages/chutes/dist/extension.js"),
+      resolve("packages/privatemode/dist/extension.js"),
     ] },
   });
   const errors = services.diagnostics.filter((entry) => entry.type === "error");
@@ -19,9 +20,9 @@ try {
   assert.deepEqual(services.resourceLoader.getExtensions().errors, []);
   const loaded = services.resourceLoader.getExtensions();
   const runner = new ExtensionRunner(loaded.extensions, loaded.runtime, join(scratch, "project"), SessionManager.inMemory(join(scratch, "project")), new ModelRegistry(services.modelRuntime));
-  assert.deepEqual(runner.getRegisteredCommands().map(command => command.invocationName).sort(), ["chutes", "nearai", "tinfoil"]);
+  assert.deepEqual(runner.getRegisteredCommands().map(command => command.invocationName).sort(), ["chutes", "nearai", "privatemode", "tinfoil"]);
   assert.deepEqual(runner.getCommandDiagnostics(), []);
-  for (const id of ["chutes", "nearai", "tinfoil"]) {
+  for (const id of ["chutes", "nearai", "privatemode", "tinfoil"]) {
     const provider = services.modelRuntime.getProvider(id);
     assert.ok(provider, `${id} provider registered`);
     assert.equal(typeof provider.auth.apiKey?.login, "function", `${id} native API-key login available`);

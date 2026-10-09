@@ -10,6 +10,8 @@ NEAR and the Tinfoil router require a position that admits provider-controlled s
 
 Chutes encrypts every content byte to a per-request verified ML-KEM instance key. Fresh Intel evidence and shared TDX floors rate H1/H2; its unknown software/recipient closure, incomplete GPU coverage and unverified handling remain A3/G3/X3. Its ordinary WebPKI API receives credentials and routing metadata, with [exact disclosures](packages/chutes/README.md#content-and-metadata). No plaintext route or silent fallback is offered.
 
+Privatemode authenticates a fresh Coordinator nonce and mesh key under an exact manifest, but its serving-worker/key-recipient closure remains A2/H3/G3/X3. Only policies admitting those actual gaps can dispatch. Its gateway sees the credential and disclosed routing/session metadata over ordinary WebPKI TLS; every chat-body and response byte is encrypted to the authenticated key. Readable logs and raw OTLP forwarding remain X3 handling limits. [Manifest modes, evidence and disclosures](docs/privatemode.md).
+
 Every candidate is admitted against the same policy; failures never relax it. Selection compares code, host, GPU and egress. `sdk` and `approved`, and provider-specific policy/route environment variables, are removed with migration errors. Stronger build reproduction and pinned/window review are not yet supported.
 
 Successful public dispatches report `publicBuildVerification: profile-established` and `closedTrustSet: profile-declared`. These mean the named profile's checks passed under its declared trust contract. They do not certify an independently proven complete software inventory. `independentApproval` and `protectedSession` remain `not-established`.

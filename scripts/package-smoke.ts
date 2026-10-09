@@ -11,7 +11,7 @@ await mkdir("../work", { recursive: true });
 const scratch = await mkdtemp(resolve("../work/pi-tee-package-smoke-"));
 const packed = new Map<string, string>();
 try {
-  for (const name of ["core", "nearai", "tinfoil", "chutes"]) {
+  for (const name of ["core", "nearai", "tinfoil", "chutes", "privatemode"]) {
     const { stdout } = await execute("npm", ["pack", `./packages/${name}`, "--ignore-scripts", "--json", "--pack-destination", scratch], { cwd: root });
     const [result] = JSON.parse(stdout) as { filename: string; files: { path: string }[] }[];
     assert.ok(result);
@@ -19,15 +19,17 @@ try {
     for (const file of ["LICENSE", "README.md", "dist/index.js", "dist/index.d.ts", ...(name === "core" ? [] : ["dist/extension.js"])]) assert.ok(files.includes(file), `${name} includes ${file}`);
     if (name === "core") for (const file of ["wasm/nvattest.wasm.gz", "wasm/nvattest.mjs", "wasm/THIRD_PARTY_LICENSES.txt", "dist/nvattest-worker.js", "dist/nvattest-bridge.js"]) assert.ok(files.includes(file), `core includes ${file}`);
     if (name === "tinfoil") for (const file of ["wasm/tinfoil-public-build.wasm.gz", "wasm/THIRD_PARTY_LICENSES.txt"]) assert.ok(files.includes(file), `tinfoil includes ${file}`);
+    if (name === "privatemode") for (const file of ["manifests/v1.58.0.json", "dist/worker.js", "dist/sdk.js", "dist/evidence.js", "dist/manifest.js"]) assert.ok(files.includes(file), `privatemode includes ${file}`);
     packed.set(name, join(scratch, result.filename));
   }
-  for (const name of ["nearai", "tinfoil", "chutes"]) {
+  for (const name of ["nearai", "tinfoil", "chutes", "privatemode"]) {
     const directory = join(scratch, name);
     await mkdir(directory);
     await writeFile(join(directory, "package.json"), JSON.stringify({ name: `isolated-${name}-smoke`, private: true, type: "module" }));
     await execute("npm", ["install", "--prefer-offline", "--ignore-scripts", "--no-audit", "--no-fund", packed.get("core")!, packed.get(name)!], { cwd: directory, maxBuffer: 2 * 1024 * 1024 });
-    const otherSdk = name === "nearai" ? "tinfoil" : "@nearai/inference-sdk";
-    await assert.rejects(access(join(directory, "node_modules", otherSdk)), { code: "ENOENT" });
+    const sdkNames = { nearai: "@nearai/inference-sdk", tinfoil: "tinfoil", privatemode: "privatemode-ai" };
+    const otherSdks = Object.entries(sdkNames).filter(([provider]) => provider !== name).map(([, sdk]) => sdk);
+    for (const sdk of otherSdks) await assert.rejects(access(join(directory, "node_modules", sdk)), { code: "ENOENT" });
     const code = `
 import assert from 'node:assert/strict';
 import { resolve } from 'node:path';
@@ -35,10 +37,12 @@ import { fileURLToPath } from 'node:url';
 import { createAgentSessionServices } from '@earendil-works/pi-coding-agent';
 // A nested worktree can resolve an unrelated SDK in an ancestor checkout.
 // The tarball's installed dependency tree must still exclude it.
-try {
-  assert.ok(!fileURLToPath(import.meta.resolve('${otherSdk}')).startsWith(resolve('node_modules') + '/'));
-} catch (error) {
-  if (error.code !== 'ERR_MODULE_NOT_FOUND') throw error;
+for (const sdk of ${JSON.stringify(otherSdks)}) {
+  try {
+    assert.ok(!fileURLToPath(import.meta.resolve(sdk)).startsWith(resolve('node_modules') + '/'));
+  } catch (error) {
+    if (error.code !== 'ERR_MODULE_NOT_FOUND') throw error;
+  }
 }
 assert.ok(fileURLToPath(import.meta.resolve('@earendil-works/pi-coding-agent')).startsWith(resolve('node_modules') + '/'));
 assert.ok(fileURLToPath(import.meta.resolve('pi-tee-core')).startsWith(resolve('node_modules') + '/'));
