@@ -3,3 +3,5 @@ PASS: chutes Pi CLI completion, usage, and stored-key precedence.
 PASS: chutes Pi CLI Unicode tool call, execution, and result follow-up.
 PASS: chutes Pi CLI reasoning and final text.
 PASS: chutes Pi RPC cancellation at the response-consumption barrier.
+PASS: chutes compiled extension, native secret login, and catalog (Qwen/Qwen3.6-27B-TEE).
+PASS: chutes Pi RPC cancellation after a live text delta, without a consumption barrier.
