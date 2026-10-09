@@ -28,7 +28,7 @@ The Go helper's own source is in [`tools/tinfoil-public-build`](../tinfoil-publi
 Each verifier runs in a worker thread that is terminated on cancellation or after a timeout.
 
 - The CPU helper runs under the minimal [WASI shim](../../packages/core/src/wasi.ts): arguments, `TZ=UTC`, clocks, randomness and bounded stdin/stdout. It has no preopened directories or sockets.
-- The NVIDIA verifier's only network path is the [request bridge](../../packages/tinfoil/src/nvattest-bridge.ts). It admits `GET https://rim.attestation.nvidia.com/v1/rim/<id>` and `POST https://ocsp.ndis.nvidia.com`, with bounded bodies, no redirects or credentials, and at most 192 requests (eight GPUs need about 88). Under Node the worker ignores proxy settings; Bun's `fetch` applies `HTTP_PROXY` and `HTTPS_PROXY`, though TLS still ends at NVIDIA. Evidence is written to an in-memory file system. Emscripten's environment is isolated from the host's, so `OPENSSL_*` and NVIDIA service overrides cannot reach it.
+- The NVIDIA verifier's only network path is the [request bridge](../../packages/core/src/nvattest-bridge.ts). It admits `GET https://rim.attestation.nvidia.com/v1/rim/<id>` and `POST https://ocsp.ndis.nvidia.com`, with bounded bodies, no redirects or credentials, and at most 192 requests (eight GPUs need about 88). Under Node the worker ignores proxy settings; Bun's `fetch` applies `HTTP_PROXY` and `HTTPS_PROXY`, though TLS still ends at NVIDIA. Evidence is written to an in-memory file system. Emscripten's environment is isolated from the host's, so `OPENSSL_*` and NVIDIA service overrides cannot reach it.
 
 ## Reproducibility
 
