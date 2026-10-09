@@ -34,6 +34,9 @@ var publicRepos = map[string]string{
 	"tinfoilsh/confidential-glm5-3-nvfp4":        "glm-5-3",
 }
 
+// The model router is admitted only in router mode, never as a model publisher.
+const routerRepo = "tinfoilsh/confidential-model-router"
+
 var stableTag = regexp.MustCompile(`^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$`)
 
 type input struct {
@@ -70,7 +73,11 @@ type result struct {
 // The SDK accepts any tagged workflow in the code repository. Narrow it to the
 // one release workflow explicitly trusted here, without freezing its commits.
 func requireCodeWorkflow(raw []byte, repo, tag string) error {
-	if publicRepos[repo] == "" || !stableTag.MatchString(tag) {
+	return requireReleaseWorkflow(raw, repo, tag, false)
+}
+
+func requireReleaseWorkflow(raw []byte, repo, tag string, router bool) error {
+	if (router && repo != routerRepo) || (!router && publicRepos[repo] == "") || !stableTag.MatchString(tag) {
 		return errors.New("TEE_PUBLIC_BUILD_IDENTITY_REJECTED")
 	}
 	return requirePublicWorkflow(raw, repo, codeWorkflow, "refs/tags/"+tag)
@@ -100,11 +107,11 @@ func requirePublicWorkflow(raw []byte, repo, workflow, ref string) error {
 }
 
 func verify(raw, nonce []byte, now time.Time, allowOutdated ...bool) (*result, error) {
-	return verifyWithPlatform(raw, nonce, now, nil, allowOutdated...)
+	return verifyWithPlatform(raw, nonce, now, nil, false, allowOutdated...)
 }
 
 // Authenticate the envelope, CPU and each named release/freshness authority before returning quote-bound keys and boot expectations.
-func verifyWithPlatform(raw, nonce []byte, now time.Time, classic *platformCompanion, allowOutdated ...bool) (*result, error) {
+func verifyWithPlatform(raw, nonce []byte, now time.Time, classic *platformCompanion, router bool, allowOutdated ...bool) (*result, error) {
 	doc, reportData, err := envelope.Check(raw, nonce)
 	if err != nil {
 		return nil, errors.New("TEE_ENVELOPE_REJECTED")
@@ -126,11 +133,11 @@ func verifyWithPlatform(raw, nonce []byte, now time.Time, classic *platformCompa
 		return nil, errors.New("TEE_PUBLIC_BUILD_IDENTITY_REJECTED")
 	}
 	ref, err := doc.ReferenceValuesCollateral(envelope.CollateralSigstoreCodeV1Format)
-	if err != nil || publicRepos[ref.Repo] == "" {
+	if err != nil {
 		return nil, errors.New("TEE_PUBLIC_BUILD_IDENTITY_REJECTED")
 	}
 	codeRepo := ref.Repo
-	if err = requireCodeWorkflow(ref.SigstoreBundle, codeRepo, ref.Tag); err != nil {
+	if err = requireReleaseWorkflow(ref.SigstoreBundle, codeRepo, ref.Tag, router); err != nil {
 		return nil, err
 	}
 	code, err := provenance.AuthenticateCode(ref.SigstoreBundle, codeRepo, ref.Tag, ref.Digest)
@@ -215,6 +222,10 @@ func verifyWithPlatform(raw, nonce []byte, now time.Time, classic *platformCompa
 }
 
 func run(reader io.Reader, writer io.Writer, now time.Time) int {
+	return runMode(reader, writer, now, false)
+}
+
+func runMode(reader io.Reader, writer io.Writer, now time.Time, router bool) int {
 	raw, err := io.ReadAll(io.LimitReader(reader, maxInputBytes+1))
 	var i input
 	if err == nil && len(raw) <= maxInputBytes {
@@ -228,7 +239,7 @@ func run(reader io.Reader, writer io.Writer, now time.Time) int {
 	}
 	var checked *result
 	if err == nil {
-		checked, err = verifyWithPlatform(i.Envelope, nonce, now, i.PlatformClassic, i.AllowOutdated)
+		checked, err = verifyWithPlatform(i.Envelope, nonce, now, i.PlatformClassic, router, i.AllowOutdated)
 	}
 	if err != nil {
 		code := "TEE_EVIDENCE_INPUT_REJECTED"
@@ -262,6 +273,9 @@ func main() {
 	}
 	if len(os.Args) == 2 && os.Args[1] == "--cvm-build" {
 		os.Exit(runCVM(os.Stdin, os.Stdout))
+	}
+	if len(os.Args) == 2 && os.Args[1] == "--router" {
+		os.Exit(runMode(os.Stdin, os.Stdout, time.Now(), true))
 	}
 	if len(os.Args) != 1 {
 		os.Exit(2)

@@ -33,6 +33,7 @@ Read JSON from stdin; binary fields are base64 exact bytes. Invalid or incomplet
 | Mode | Input / successful scope | Source |
 | --- | --- | --- |
 | Default | `nonce` (64 lowercase hex characters), `envelope`; authenticated CPU/release/platform/freshness. CPU/public-build true, GPU/inference false | [verifyWithPlatform()](main.go) |
+| `--router` | Default input; the same CPU/platform checks, with the release authenticated only as `tinfoilsh/confidential-model-router` and never as a model publisher. CPU true, public-build/GPU/inference false | [requireReleaseWorkflow()](main.go) |
 | `--cvm-build` | `tag`, `manifest`, `bundle`; authenticated guest manifest/kernel/initrd/disk subject hashes. No CPU session or independent disk rebuild | [CVM verifier](cvm.go) |
 | `--container-reference` | `repo`, `tag`, `deployment`, `bundle`; release-authorized engine digest. Registry tags do not select it | [container reference](container.go) |
 | `--container-build` | Reference input plus `index`, `imageManifest`, `imageConfig`, `attestationManifest`, `provenance`; digest traversal and release-endorsed BuildKit metadata. Independent builder/CPU/GPU/freshness/inference false | [authenticateContainer()](container.go) |
