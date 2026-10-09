@@ -1,3 +1,5 @@
+import * as core from "pi-tee-core";
+
 // Version floors supplement manufacturer signatures, reference matching and
 // revocation; NVIDIA revokes references for vulnerable firmware through OCSP.
 // Each floor is the oldest version seen with signed, unrevoked references when
@@ -15,29 +17,7 @@ export const GPU_POLICIES = Object.freeze({
 });
 export type GpuModel = keyof typeof GPU_POLICIES;
 
-function atLeast(value: number[], floor: number[]): boolean {
-  for (let index = 0; index < floor.length; index++) {
-    if (value[index] !== floor[index]) return value[index]! > floor[index]!;
-  }
-  return true;
-}
-const driverParts = (value: string) => value.split(".").map(Number);
-const vbiosParts = (value: string) => value.split(".").map(part => Number.parseInt(part, 16));
-
-export function gpuPolicy(hwmodel: unknown) {
-  return typeof hwmodel === "string" && Object.hasOwn(GPU_POLICIES, hwmodel) ? GPU_POLICIES[hwmodel as GpuModel] : undefined;
-}
-
-export function gpuVersionsAllowed(hwmodel: unknown, driver: unknown, vbios: unknown): boolean {
-  const policy = gpuPolicy(hwmodel);
-  if (!policy || typeof driver !== "string" || typeof vbios !== "string" ||
-      !/^[1-9][0-9]{2,3}\.[0-9]{1,3}\.[0-9]{1,3}$/.test(driver) || !/^[a-fA-F0-9]{2}(\.[a-fA-F0-9]{2}){4}$/.test(vbios)) return false;
-  return atLeast(driverParts(driver), driverParts(policy.driver)) && atLeast(vbiosParts(vbios), vbiosParts(policy.vbios));
-}
-
+export const gpuPolicy = (hwmodel: unknown) => core.gpuPolicy(GPU_POLICIES, hwmodel);
+export const gpuVersionsAllowed = (hwmodel: unknown, driver: unknown, vbios: unknown) => core.gpuVersionsAllowed(GPU_POLICIES, hwmodel, driver, vbios);
 /** The authenticated protected mode each GPU must report for a CVM with `count` GPUs. */
-export function requiredGpuMode(hwmodel: unknown, count: number): "spt" | "mpt" | undefined {
-  const policy = gpuPolicy(hwmodel);
-  if (!policy || !Number.isSafeInteger(count) || count < 1 || count > policy.maxGpus) return undefined;
-  return count === 1 ? "spt" : "mpt";
-}
+export const requiredGpuMode = (hwmodel: unknown, count: number) => core.requiredGpuMode(GPU_POLICIES, hwmodel, count);

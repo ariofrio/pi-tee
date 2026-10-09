@@ -1,6 +1,6 @@
 # Portable local verification
 
-Local verification runs on every Pi platform with no setup. Both verifiers ship inside `pi-tinfoil` as WebAssembly, and the inference transport uses only `node:tls`. There is no Docker, compiler, platform binary or download step. [Build recipe and runtime boundary](../tools/nvidia-verifier/README.md).
+Local verification runs on every Pi platform with no setup. NVIDIA's verifier ships inside `pi-tee-core` and Tinfoil's CPU/release verifier inside `pi-tinfoil`, both as WebAssembly, and the inference transport uses only `node:tls`. There is no Docker, compiler, platform binary or download step. [Build recipe and runtime boundary](../tools/nvidia-verifier/README.md).
 
 ## Scope
 

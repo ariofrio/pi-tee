@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Move NVIDIA's verifier, its worker and request bridge, the Hopper mode parser and table-driven GPU appraisal from `pi-tinfoil` into `pi-tee-core`, so both providers share them without depending on each other. Tinfoil's policy and authority digest are unchanged, and the module bytes are unchanged.
+
 - Run NEAR's experimental direct route under Bun. Its channel subclassed `https.Agent`, which Bun cannot bind to one socket, and the route refused Bun outright, so the Bun-compiled Pi binary failed every request with `TEE_RUNTIME_UNSUPPORTED`. The channel now writes sequential HTTP/1.1 exchanges on one WebPKI-authenticated `node:tls` socket through the shared pinned-TLS reader, keeping evidence, inference and signature lookup on one connection that is never replaced. Unsolicited bytes between exchanges end the channel. The SDK gateway route still refuses Bun. Channel tests pass under Node and Bun; against NEAR's live endpoint, the Bun-compiled Pi 1.0.4 binary reached the credential check with a synthetic key. The credentialed Pi suite under Bun is pending.
 
 - Persist each GitHub metadata lookup once its own check passes and drop only a stored lookup whose check fails, so unrelated outages or rejected workers no longer clear the cache.

@@ -21,7 +21,7 @@ npm ci --ignore-scripts
 npm run check
 ```
 
-No further setup is needed on any Pi platform. The CPU/release and NVIDIA verifiers ship in `pi-tinfoil` as hash-checked WebAssembly and run under Node and Bun. [Portable verification](docs/portable-verification.md).
+No further setup is needed on any Pi platform. The NVIDIA verifier ships in `pi-tee-core` and Tinfoil's CPU/release verifier in `pi-tinfoil`, both as hash-checked WebAssembly that runs under Node and Bun. [Portable verification](docs/portable-verification.md).
 
 ```sh
 node_modules/.bin/pi \

@@ -11,11 +11,14 @@ on:
       - scripts/build-wasm-verifiers.mjs
       - scripts/check-nvidia-verifier.ts
       - scripts/research/nvidia-*.ts
+      - packages/core/wasm/**
       - packages/tinfoil/wasm/**
+      - packages/core/src/nvidia-*.ts
       - packages/tinfoil/src/wasm-artifacts.ts
       - packages/tinfoil/src/wasm-verifiers.ts
-      - packages/tinfoil/src/nvattest-*.ts
+      - packages/core/src/nvattest-*.ts
       - packages/tinfoil/src/worker-appraisal.ts
+      - packages/core/src/gpu-*.ts
       - packages/tinfoil/src/gpu-*.ts
       - packages/core/src/wasi*.ts
       - packages/core/src/pinned-tls.ts
@@ -33,11 +36,14 @@ on:
       - scripts/build-wasm-verifiers.mjs
       - scripts/check-nvidia-verifier.ts
       - scripts/research/nvidia-*.ts
+      - packages/core/wasm/**
       - packages/tinfoil/wasm/**
+      - packages/core/src/nvidia-*.ts
       - packages/tinfoil/src/wasm-artifacts.ts
       - packages/tinfoil/src/wasm-verifiers.ts
-      - packages/tinfoil/src/nvattest-*.ts
+      - packages/core/src/nvattest-*.ts
       - packages/tinfoil/src/worker-appraisal.ts
+      - packages/core/src/gpu-*.ts
       - packages/tinfoil/src/gpu-*.ts
       - packages/core/src/wasi*.ts
       - packages/core/src/pinned-tls.ts
@@ -75,24 +81,27 @@ jobs:
           cache: false
       - run: rustup toolchain install 1.90.0 --profile minimal --target wasm32-unknown-emscripten --no-self-update
       # The build overwrites the archives; keep the committed bytes for attestation.
-      - run: mkdir -p "$RUNNER_TEMP/committed" && cp packages/tinfoil/wasm/*.wasm.gz packages/tinfoil/wasm/nvattest.mjs "$RUNNER_TEMP/committed/"
+      - run: mkdir -p "$RUNNER_TEMP/committed" && cp packages/core/wasm/nvattest.wasm.gz packages/core/wasm/nvattest.mjs packages/tinfoil/wasm/tinfoil-public-build.wasm.gz "$RUNNER_TEMP/committed/"
       - run: node scripts/build-wasm-verifiers.mjs
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: wasm-verifiers
           path: |
+            packages/core/wasm/
             packages/tinfoil/wasm/
+            packages/core/src/nvidia-artifacts.ts
             packages/tinfoil/src/wasm-artifacts.ts
       # Pins cover uncompressed modules; gzip bytes may differ between zlib versions.
-      - run: git diff --stat --exit-code -- packages/tinfoil/src/wasm-artifacts.ts packages/tinfoil/wasm/nvattest.mjs packages/tinfoil/wasm/THIRD_PARTY_LICENSES.txt
+      - run: git diff --stat --exit-code -- packages/core/src/nvidia-artifacts.ts packages/tinfoil/src/wasm-artifacts.ts packages/core/wasm/nvattest.mjs packages/core/wasm/THIRD_PARTY_LICENSES.txt packages/tinfoil/wasm/THIRD_PARTY_LICENSES.txt
       # Attest the committed files users install, once they are shown to
       # decompress to the rebuilt modules, and the uncompressed modules.
       - run: |
           mkdir -p "$RUNNER_TEMP/modules"
-          for module in nvattest.wasm tinfoil-public-build.wasm; do
-            gunzip -c "packages/tinfoil/wasm/$module.gz" > "$RUNNER_TEMP/modules/$module"
-            gunzip -c "$RUNNER_TEMP/committed/$module.gz" | cmp - "$RUNNER_TEMP/modules/$module"
+          for module in core/wasm/nvattest.wasm tinfoil/wasm/tinfoil-public-build.wasm; do
+            name=$(basename "$module")
+            gunzip -c "packages/$module.gz" > "$RUNNER_TEMP/modules/$name"
+            gunzip -c "$RUNNER_TEMP/committed/$name.gz" | cmp - "$RUNNER_TEMP/modules/$name"
           done
       - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         if: github.event_name == 'push'

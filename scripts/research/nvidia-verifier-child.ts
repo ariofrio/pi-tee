@@ -1,4 +1,4 @@
-import { runNvidiaVerifier } from "../../packages/tinfoil/src/wasm-verifiers.js";
+import { runNvidiaVerifier } from "../../packages/core/src/nvidia-verifier.js";
 
 // Runs one NVIDIA appraisal in a fresh process, so a check controls settings
 // that Node reads only at startup. Input: { evidence, nonce, collateralOrigin }.

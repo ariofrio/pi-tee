@@ -3,8 +3,9 @@ import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import { compileVerifiedWasm, runWasiCommand } from "pi-tee-core";
-import { nvidiaCollateralBridge } from "../packages/tinfoil/src/nvattest-bridge.js";
-import { runNvidiaVerifier, runPublicBuildHelper } from "../packages/tinfoil/src/wasm-verifiers.js";
+import { nvidiaCollateralBridge } from "../packages/core/src/nvattest-bridge.js";
+import { runNvidiaVerifier } from "../packages/core/src/nvidia-verifier.js";
+import { runPublicBuildHelper } from "../packages/tinfoil/src/wasm-verifiers.js";
 
 // Minimal hand-assembled WASI commands exercising the shim boundary. Imported
 // function types: 0 (i32, i32) -> i32, 1 (i32) -> (), 3 (i32, i32, i32, i32) -> i32.

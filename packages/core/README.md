@@ -14,4 +14,6 @@ Adapters register one `publicBuildProfile` or a list of `publicBuildProfiles`. E
 
 The library guards its own provider requests, not all Pi dispatches. Whole-session protection and independent approval remain unestablished; the Tinfoil adapter supplies the first public profile, pending review; NEAR and independently approved workloads remain gated. Tested with Pi AI 1.0.4.
 
+`runNvidiaVerifier()` runs NVIDIA's local GPU verifier, shipped in `wasm/` as hash-checked WebAssembly, in a worker thread whose only network access is a bounded bridge to NVIDIA's reference-manifest and OCSP services. `checkGpuAppraisal()` applies a provider's GPU policy table to that verdict: one claim per device, a single supported hardware model, distinct devices, signed references with nonce-matched good OCSP, secure boot, debug disabled, version floors and the protected mode required for the GPU count. [`wasm/THIRD_PARTY_LICENSES.txt`](wasm/THIRD_PARTY_LICENSES.txt) lists the module's notices.
+
 `runWasiCommand()` runs an authenticated WASI verifier module in a worker thread with arguments, a fixed environment, clocks, randomness and bounded stdin/stdout only: no preopened directories or sockets. Cancellation and timeouts terminate the worker. [Shim](src/wasi.ts).

@@ -1,4 +1,4 @@
-import { TeeError } from "pi-tee-core";
+import { TeeError } from "./policy.js";
 
 // Field interpretation only. Callers must authenticate these exact bytes with
 // NVIDIA's verifier before using the result for admission. NVIDIA nvtrust maps

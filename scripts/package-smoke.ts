@@ -17,7 +17,8 @@ try {
     assert.ok(result);
     const files = result.files.map((file) => file.path);
     for (const file of ["LICENSE", "README.md", "dist/index.js", "dist/index.d.ts", ...(name === "core" ? [] : ["dist/extension.js"])]) assert.ok(files.includes(file), `${name} includes ${file}`);
-    if (name === "tinfoil") for (const file of ["wasm/nvattest.wasm.gz", "wasm/nvattest.mjs", "wasm/tinfoil-public-build.wasm.gz", "dist/nvattest-worker.js"]) assert.ok(files.includes(file), `tinfoil includes ${file}`);
+    if (name === "core") for (const file of ["wasm/nvattest.wasm.gz", "wasm/nvattest.mjs", "wasm/THIRD_PARTY_LICENSES.txt", "dist/nvattest-worker.js", "dist/nvattest-bridge.js"]) assert.ok(files.includes(file), `core includes ${file}`);
+    if (name === "tinfoil") for (const file of ["wasm/tinfoil-public-build.wasm.gz", "wasm/THIRD_PARTY_LICENSES.txt"]) assert.ok(files.includes(file), `tinfoil includes ${file}`);
     packed.set(name, join(scratch, result.filename));
   }
   for (const name of ["nearai", "tinfoil"]) {

@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { GPU_POLICIES } from "./gpu-policy.js";
 import { SNP_FIRMWARE } from "./snp-measurement.js";
+import { NVIDIA_ARTIFACTS } from "pi-tee-core";
 import { WASM_ARTIFACTS } from "./wasm-artifacts.js";
 import { CERTIFICATE_CHAINS, PUBLIC_MODELS, REQUIRED_CLAIMS, WORKER_HOST } from "./worker-appraisal.js";
 
@@ -42,7 +43,7 @@ const authorityPolicy = {
     referenceRoot: "12977b5115acb0381179279fffeb5a8c4d264971ebb32298023a465fa41df5d1",
     signedReferences: "certificate-chain leaf", nonceMatchingOcsp: true,
     requiredClaims: REQUIRED_CLAIMS, certificateChains: CERTIFICATE_CHAINS },
-  localArtifacts: WASM_ARTIFACTS,
+  localArtifacts: { ...NVIDIA_ARTIFACTS, ...WASM_ARTIFACTS },
   runtime: "tinfoil-vllm-v1",
   engineEntrypoints: ["vllm serve", "/opt/tinfoil/inference-sidecar vllm serve"],
   softwareContract: "public publishers preserve private per-boot keys, immutable runtime/model roots, closed engine egress and the NVIDIA protected channel/reset contract",
