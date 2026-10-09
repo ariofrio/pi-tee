@@ -11,7 +11,7 @@ try {
   const services = await createAgentSessionServices({
     cwd: join(scratch, "project"), agentDir: join(scratch, "agent"),
     resourceLoaderOptions: { additionalExtensionPaths: [
-      resolve("packages/nearai/dist/extension.js"), resolve("packages/tinfoil/dist/extension.js"),
+      resolve("packages/nearai/dist/extension.js"), resolve("packages/tinfoil/dist/extension.js"), resolve("packages/chutes/dist/extension.js"),
     ] },
   });
   const errors = services.diagnostics.filter((entry) => entry.type === "error");
@@ -19,9 +19,9 @@ try {
   assert.deepEqual(services.resourceLoader.getExtensions().errors, []);
   const loaded = services.resourceLoader.getExtensions();
   const runner = new ExtensionRunner(loaded.extensions, loaded.runtime, join(scratch, "project"), SessionManager.inMemory(join(scratch, "project")), new ModelRegistry(services.modelRuntime));
-  assert.deepEqual(runner.getRegisteredCommands().map(command => command.invocationName).sort(), ["nearai", "tinfoil"]);
+  assert.deepEqual(runner.getRegisteredCommands().map(command => command.invocationName).sort(), ["chutes", "nearai", "tinfoil"]);
   assert.deepEqual(runner.getCommandDiagnostics(), []);
-  for (const id of ["nearai", "tinfoil"]) {
+  for (const id of ["chutes", "nearai", "tinfoil"]) {
     const provider = services.modelRuntime.getProvider(id);
     assert.ok(provider, `${id} provider registered`);
     assert.equal(typeof provider.auth.apiKey?.login, "function", `${id} native API-key login available`);
@@ -32,7 +32,7 @@ try {
     });
     assert.equal(credential.type, "api_key");
   }
-  console.log("PASS: both compiled extension entries load through Pi's resource loader, with native login and refresh.");
+  console.log("PASS: all compiled extension entries load through Pi's resource loader, with native login and refresh.");
 } finally {
   if (oldOffline === undefined) delete process.env.PI_TEE_OFFLINE;
   else process.env.PI_TEE_OFFLINE = oldOffline;

@@ -1,16 +1,17 @@
 # pi-tee
 
-NEAR AI and Tinfoil providers for Pi, with native API-key login, live model discovery, tools, reasoning, usage accounting and encrypted inference.
+NEAR AI, Tinfoil and Chutes providers for Pi, with native API-key login, live model discovery, tools, reasoning, usage accounting and encrypted inference.
 
-**Work in progress; packages are unpublished.** The default `public-builds,egress=metadata` admits freshly verified Tinfoil public workers with current firmware and protected GPUs. NEAR and the Tinfoil router require a position that trusts both provider and host. Each request selects the strongest route meeting every policy threshold. [Security model](docs/security-model.md).
+**Work in progress; packages are unpublished.** The default `public-builds,egress=metadata` admits freshly verified Tinfoil public workers with current firmware and protected GPUs. NEAR, Chutes and the Tinfoil router require a position that trusts both provider and host. Each request selects the strongest route meeting every policy threshold. [Security model](docs/security-model.md).
 
 | Package | Purpose |
 | --- | --- |
 | [pi-nearai](packages/nearai/README.md) | NEAR provider with encryption and response-signature verification. |
 | [pi-tinfoil](packages/tinfoil/README.md) | Tinfoil provider with attestation and encrypted HTTP bodies. |
+| [pi-chutes](packages/chutes/README.md) | Chutes provider with per-request CPU/key verification and instance-key encryption. |
 | [pi-tee-core](packages/core/README.md) | Shared policy, discovery and transport guards; not a Pi extension. |
 
-The extensions can run together with separate credentials. Each loads only its own provider SDK.
+The extensions can run together with separate credentials. Each loads only its own provider dependencies.
 
 ## Build and run
 
@@ -26,7 +27,8 @@ No further setup is needed on any Pi platform. The NVIDIA verifier ships in `pi-
 ```sh
 node_modules/.bin/pi \
   -e packages/nearai/dist/extension.js \
-  -e packages/tinfoil/dist/extension.js
+  -e packages/tinfoil/dist/extension.js \
+  -e packages/chutes/dist/extension.js
 ```
 
 Log in through Pi's secret prompts:
@@ -34,13 +36,14 @@ Log in through Pi's secret prompts:
 ```text
 /login nearai
 /login tinfoil
+/login chutes
 ```
 
-Pi stores credentials and handles `/logout`. Stored keys take precedence over `NEARAI_API_KEY` and `TINFOIL_API_KEY`. Browser OAuth is not implemented.
+Pi stores credentials and handles `/logout`. Stored keys take precedence over `NEARAI_API_KEY`, `TINFOIL_API_KEY` and `CHUTES_API_KEY`. Browser OAuth is not implemented.
 
 ## Policy and routes
 
-Set `PI_TEE_POLICY=<position>[,axis=value…]` for both extensions. The four positions are `public-builds`, `public-builds-trust-host`, `trust-provider`, and `trust-provider-and-host`. Names disclose permitted trust; optional values set code, host, GPU, handling, build and review thresholds. The shipped default adds `egress=metadata` because no route supplies sealed handling.
+Set `PI_TEE_POLICY=<position>[,axis=value…]` for all extensions. The four positions are `public-builds`, `public-builds-trust-host`, `trust-provider`, and `trust-provider-and-host`. Names disclose permitted trust; optional values set code, host, GPU, handling, build and review thresholds. The shipped default adds `egress=metadata` because no route supplies sealed handling.
 
 Examples:
 
@@ -49,19 +52,19 @@ PI_TEE_POLICY=public-builds,egress=metadata pi -e ./packages/tinfoil/dist/extens
 PI_TEE_POLICY=trust-provider-and-host,host=current pi -e ./packages/nearai/dist/extension.js
 ```
 
-Tinfoil's qualified direct route supplies A1/H1/G1/X2/B3/S3. Its Genoa workers need H2 admission: `public-builds-trust-host,egress=metadata,host=outdated-firmware,gpu=verified`. Intel `OutOfDate` Tinfoil workers remain unavailable under every policy because the pinned verifier rejects them. The router is A3/H3/G3/X3. NEAR is A3/G3/X3, with H1 or H2 based on each instance's verified CPU evidence and local floors; only GLM-5.3 Flash has a direct adapter. Routes qualify independently, then code, host, GPU and egress break ties in that order.
+Tinfoil's qualified direct route supplies A1/H1/G1/X2/B3/S3. Its Genoa workers need H2 admission: `public-builds-trust-host,egress=metadata,host=outdated-firmware,gpu=verified`. Intel `OutOfDate` Tinfoil workers remain unavailable under every policy because the pinned verifier rejects them. The router is A3/H3/G3/X3. NEAR is A3/G3/X3, with H1 or H2 based on each instance's verified CPU evidence and local floors; only GLM-5.3 Flash has a direct adapter. Chutes is A3/G3/X3 with fresh per-instance H1 or H2, depending on the same local TDX floors. Its tightest H1 policy is `trust-provider-and-host,host=current`; it offers only encryption to the freshly verified instance ML-KEM key. [Chutes transport and exact metadata disclosure](packages/chutes/README.md#content-and-metadata). Routes qualify independently, then code, host, GPU and egress break ties in that order.
 
-`/nearai status` and `/tinfoil status` show actual levels, who you trust, gaps, observations and selection reasons. `/nearai policy <setting>` and `/tinfoil policy <setting>` use the same syntax, change only the named provider, abort its active requests, and do not persist changes. `verifier=local` is the default; opt-in `verifier=nras` applies the same G checks and adds NVIDIA service trust. NEAR GPU diagnostics remain local and never gate its G3 admission.
+`/nearai status`, `/tinfoil status` and `/chutes status` show actual levels, who you trust, gaps, observations and selection reasons. Provider-scoped `/nearai policy <setting>`, `/tinfoil policy <setting>` and `/chutes policy <setting>` use the same syntax, change only the named provider, abort its active requests, and do not persist changes. `verifier=local` is the default; opt-in `verifier=nras` applies the same G checks and adds NVIDIA service trust. NEAR GPU diagnostics remain local and never gate its G3 admission.
 
 Removed `sdk` migrates to `trust-provider-and-host`; `approved` points to the not-yet-supported `public-builds,review=pinned`. Replace `PI_NEARAI_POLICY`, `PI_TINFOIL_POLICY`, `PI_NEARAI_ROUTE` and `PI_TINFOIL_ROUTE` with `PI_TEE_POLICY`; old variables now return migration errors. Explicit bare `public-builds` requests `egress=none` and currently admits no route. [Defaults, forced combinations, route policies and limits](docs/security-model.md).
 
 ## Model discovery
 
-Both providers fetch chat/tool models from public catalogs, mapping prices, context limits, modalities and reasoning controls. Catalog entries are provider claims; each request still needs verification. `/nearai models` and `/tinfoil models` inspect discovery; append `refresh` to force a refresh. Pi stores snapshots and uses four-hour freshness checks. Failed refreshes retain cached models; `PI_TEE_OFFLINE=1` skips startup discovery.
+The providers fetch chat/tool models from public catalogs, mapping prices, context limits, modalities and reasoning controls. Catalog entries are provider claims; each request still needs verification. `/nearai models`, `/tinfoil models` and `/chutes models` inspect discovery; append `refresh` to force a refresh. Pi stores snapshots and uses four-hour freshness checks. Failed refreshes retain cached models; `PI_TEE_OFFLINE=1` skips startup discovery.
 
 NEAR defaults to **TEE-only discovery**: metadata must match the model and declare `providerType: "vllm"` and `attestationSupported: true`. Non-TEE, unknown and failed lookups are hidden. `/nearai models all` or `PI_NEARAI_MODEL_VISIBILITY=all` shows labeled entries whose inference remains blocked; `/nearai models tee` restores the filter. Session choices are not persisted.
 
-NEAR has no route qualifying for a public-build position. Tinfoil public builds show only the profile's models that the live catalog also lists. Missing prices are labeled, and NEAR pricing tiers beyond base costs are not modeled.
+Chutes discovery is restricted to declared confidential chat models with tools and an instance-discovery ID. It has no plaintext route. NEAR has no route qualifying for a public-build position. Tinfoil public builds show only the profile's models that the live catalog also lists. Missing prices are labeled, and NEAR pricing tiers beyond base costs are not modeled.
 
 ## Security scope
 
@@ -71,7 +74,7 @@ The final request guard fixes model, endpoint and authentication after Pi's payl
 
 For DeepSeek V4.1 Flash and GLM-5.3, the [Tinfoil billing gateway](docs/tinfoil-gateway.md) is tried when no direct worker qualifies, using the same worker appraisal and ratings. Its unattested WebPKI host receives the API key, model and headers; bodies remain sealed to the worker's key. `/tinfoil status` discloses this boundary and the selection reason. A 412 fails without resending.
 
-NEAR buffers bounded response bytes in memory until signature verification; Tinfoil streams authenticated encrypted responses. Ordinary logs exclude credentials, prompts, completions and quote bodies. [Security guarantees and limits](SECURITY.md).
+NEAR buffers bounded response bytes in memory until signature verification; Tinfoil and Chutes stream authenticated encrypted responses. Chutes sends the API key and disclosed routing/invocation metadata through ordinary WebPKI TLS at `api.chutes.ai`, encrypting all request content to the attested instance key. Its API TLS key is not attested. [Chutes trust and metadata](packages/chutes/README.md#content-and-metadata). Ordinary logs exclude credentials, prompts, completions and quote bodies. [Security guarantees and limits](SECURITY.md).
 
 **These extensions protect their own requests, not the entire Pi conversation.** Other providers, fallback, compaction, extensions and tools can access or transmit plaintext. Local code remains trusted. The [NEAR assessment](docs/nearai-status.md) explains why NEAR public builds need NEAR server changes.
 
@@ -100,6 +103,8 @@ PI_TEE_POLICY=public-builds,egress=metadata node --env-file=/path/to/private/tin
 PI_TEE_POLICY=trust-provider-and-host,host=current node --env-file=/path/to/private/nearai.env \
   --import tsx scripts/live-pi.ts nearai z-ai/glm-5.3-flash
 ```
+
+Chutes uses the same harness: `scripts/live-pi.ts chutes Qwen/Qwen3.8-27B-TEE` with `CHUTES_API_KEY` loaded for that command and `PI_TEE_POLICY=trust-provider-and-host,host=current`. `scripts/live-chutes-attestation.ts` checks catalog models with credentials but no inference. [Chutes validation](docs/chutes-validation.md).
 
 Live tests are opt-in and billable. Add `--cancel-stream` to test abort after a text delta; set `PI_TEE_LIVE_PI_BINARY` to an absolute Pi binary path to test a compiled Pi. Cancellation establishes local abort and acknowledgement, not remote generation-stop timing. The harness removes its temporary credential store and never prints keys or provider payloads.
 

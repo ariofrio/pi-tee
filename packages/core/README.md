@@ -1,6 +1,6 @@
 # pi-tee-core
 
-Shared policy, route admission, native Pi catalog publication, request guards and response authentication for the NEAR and Tinfoil extensions. This library is not an extension and imports neither provider SDK.
+Shared policy, route admission, native Pi catalog publication, request guards and response authentication for the provider extensions. This library is not an extension and imports neither provider SDK.
 
 `parsePolicy()` implements the four positions and forced/category rules of `PI_TEE_POLICY`. The default is `public-builds,egress=metadata`; removed names return migration guidance. `assessRoute()` checks every threshold against actual request evidence, `weakestRoute()` combines plaintext components, and `compareRoutes()` orders code, host, GPU and egress. Only B3 and S3 admission are implemented; all other build/review settings, including `build=signed`, are rejected as not yet supported. [Security model](../../docs/security-model.md).
 

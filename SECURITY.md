@@ -8,6 +8,8 @@ The default `public-builds,egress=metadata` requires Tinfoil public release, fre
 
 NEAR and the Tinfoil router require a position that admits provider-controlled software and host trust. NEAR's fresh CPU evidence receives H1 only after local firmware and collateral floors pass; its incomplete GPU coverage is G3 regardless of successful optional local diagnostics. No NEAR route contacts NRAS. The router is A3/H3/G3/X3, including hidden plaintext recipients. [Security positions, thresholds and migration](docs/security-model.md).
 
+Chutes encrypts every content byte to a per-request verified ML-KEM instance key. Fresh Intel evidence and shared TDX floors rate H1/H2; its unknown software/recipient closure, incomplete GPU coverage and unverified handling remain A3/G3/X3. Its ordinary WebPKI API receives credentials and routing metadata, with [exact disclosures](packages/chutes/README.md#content-and-metadata). No plaintext route or silent fallback is offered.
+
 Every candidate is admitted against the same policy; failures never relax it. Selection compares code, host, GPU and egress. `sdk` and `approved`, and provider-specific policy/route environment variables, are removed with migration errors. Stronger build reproduction and pinned/window review are not yet supported.
 
 Successful public dispatches report `publicBuildVerification: profile-established` and `closedTrustSet: profile-declared`. These mean the named profile's checks passed under its declared trust contract. They do not certify an independently proven complete software inventory. `independentApproval` and `protectedSession` remain `not-established`.
@@ -16,7 +18,7 @@ Successful public dispatches report `publicBuildVerification: profile-establishe
 
 The extensions protect their own dispatches. They do not prevent another Pi provider, fallback, compaction, extension or tool from receiving conversation plaintext. The user's OS, runtime, enabled local code and the shipped verifier modules remain trusted. Whole-session protection needs a [Pi dispatch guard](docs/design.md#pi-integration-and-request-lifecycle).
 
-Direct routes check the attested key on the actual TLS socket before sending credentials or ciphertext, then reject reconnect/resend. The SDK router retains its disclosed rotation retry. NEAR exposes completion and tool output only after response-signature verification; Tinfoil streams authenticated encrypted responses. Credentials are managed by Pi. Ordinary logs exclude credentials, prompts, completions and quote bodies; no background inference is added.
+Direct routes check the attested key on the actual TLS socket before sending credentials or ciphertext, then reject reconnect/resend. The SDK router retains its disclosed rotation retry. NEAR exposes completion and tool output only after response-signature verification; Tinfoil and Chutes stream authenticated encrypted responses. Credentials are managed by Pi. Ordinary logs exclude credentials, prompts, completions and quote bodies; no background inference is added.
 
 Catalog metadata, prices and TEE labels are provider claims, not verification. Output correctness, availability, truthful billing, traffic analysis, undocumented physical/side-channel protection and local-machine compromise are outside the guarantee.
 

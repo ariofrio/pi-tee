@@ -11,7 +11,7 @@ await mkdir("../work", { recursive: true });
 const scratch = await mkdtemp(resolve("../work/pi-tee-package-smoke-"));
 const packed = new Map<string, string>();
 try {
-  for (const name of ["core", "nearai", "tinfoil"]) {
+  for (const name of ["core", "nearai", "tinfoil", "chutes"]) {
     const { stdout } = await execute("npm", ["pack", `./packages/${name}`, "--ignore-scripts", "--json", "--pack-destination", scratch], { cwd: root });
     const [result] = JSON.parse(stdout) as { filename: string; files: { path: string }[] }[];
     assert.ok(result);
@@ -21,7 +21,7 @@ try {
     if (name === "tinfoil") for (const file of ["wasm/tinfoil-public-build.wasm.gz", "wasm/THIRD_PARTY_LICENSES.txt"]) assert.ok(files.includes(file), `tinfoil includes ${file}`);
     packed.set(name, join(scratch, result.filename));
   }
-  for (const name of ["nearai", "tinfoil"]) {
+  for (const name of ["nearai", "tinfoil", "chutes"]) {
     const directory = join(scratch, name);
     await mkdir(directory);
     await writeFile(join(directory, "package.json"), JSON.stringify({ name: `isolated-${name}-smoke`, private: true, type: "module" }));

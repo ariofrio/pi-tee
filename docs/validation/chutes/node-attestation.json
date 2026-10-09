@@ -1,0 +1,186 @@
+[
+  {
+    "model": "Qwen/Qwen3.5-397B-A17B-TEE",
+    "time": "2026-10-09T12:39:21.503Z",
+    "levels": {
+      "A": 3,
+      "H": 1,
+      "G": 3,
+      "X": 3
+    },
+    "observed": [
+      "Intel UpToDate",
+      "Authenticated TDX TCB SVN: 0d010400000000000000000000000000; collateral editions: 20, 20.",
+      "Selected instance 5cf439e5-62ad-4eb7-a361-cb65c099ab8c; fresh nonce, ML-KEM-768 key and host TLS SPKI authenticated locally.",
+      "Reported GPUs do not establish the full serving set; GPU reports are not appraised and NRAS is not used."
+    ],
+    "inference": false
+  },
+  {
+    "model": "google/gemma-4-31B-turbo-TEE",
+    "time": "2026-10-09T12:39:33.469Z",
+    "levels": {
+      "A": 3,
+      "H": 1,
+      "G": 3,
+      "X": 3
+    },
+    "observed": [
+      "Intel UpToDate",
+      "Authenticated TDX TCB SVN: 0e010400000000000000000000000000; collateral editions: 20, 20.",
+      "Selected instance 4f3fc0ee-feb2-4998-b1c5-ff8e2a2fc4cb; fresh nonce, ML-KEM-768 key and host TLS SPKI authenticated locally.",
+      "Reported GPUs do not establish the full serving set; GPU reports are not appraised and NRAS is not used."
+    ],
+    "inference": false
+  },
+  {
+    "model": "deepseek-ai/DeepSeek-V3.2-TEE",
+    "time": "2026-10-09T12:39:41.738Z",
+    "levels": {
+      "A": 3,
+      "H": 1,
+      "G": 3,
+      "X": 3
+    },
+    "observed": [
+      "Intel UpToDate",
+      "Authenticated TDX TCB SVN: 0e010400000000000000000000000000; collateral editions: 20, 20.",
+      "Selected instance d069daab-0b10-4994-bad5-737831896249; fresh nonce, ML-KEM-768 key and host TLS SPKI authenticated locally.",
+      "Reported GPUs do not establish the full serving set; GPU reports are not appraised and NRAS is not used."
+    ],
+    "inference": false
+  },
+  {
+    "model": "Qwen/Qwen3.8-27B-TEE",
+    "time": "2026-10-09T12:39:56.475Z",
+    "admitted": false,
+    "reason": "TEE_ATTESTATION_REJECTED",
+    "inference": false
+  },
+  {
+    "model": "Qwen/Qwen3.6-27B-TEE",
+    "time": "2026-10-09T12:40:07.964Z",
+    "levels": {
+      "A": 3,
+      "H": 1,
+      "G": 3,
+      "X": 3
+    },
+    "observed": [
+      "Intel UpToDate",
+      "Authenticated TDX TCB SVN: 0e010400000000000000000000000000; collateral editions: 20, 20.",
+      "Selected instance b8b44e3a-1763-4b92-85c8-51fec3da07ff; fresh nonce, ML-KEM-768 key and host TLS SPKI authenticated locally.",
+      "Reported GPUs do not establish the full serving set; GPU reports are not appraised and NRAS is not used."
+    ],
+    "inference": false
+  },
+  {
+    "model": "zai-org/GLM-5.1-TEE",
+    "time": "2026-10-09T12:40:15.651Z",
+    "levels": {
+      "A": 3,
+      "H": 1,
+      "G": 3,
+      "X": 3
+    },
+    "observed": [
+      "Intel UpToDate",
+      "Authenticated TDX TCB SVN: 0c010400000000000000000000000000; collateral editions: 20, 20.",
+      "Selected instance 13aaa7ef-212e-4780-940e-f44a43950482; fresh nonce, ML-KEM-768 key and host TLS SPKI authenticated locally.",
+      "Reported GPUs do not establish the full serving set; GPU reports are not appraised and NRAS is not used."
+    ],
+    "inference": false
+  },
+  {
+    "model": "moonshotai/Kimi-K2.6-TEE",
+    "time": "2026-10-09T12:40:28.448Z",
+    "levels": {
+      "A": 3,
+      "H": 1,
+      "G": 3,
+      "X": 3
+    },
+    "observed": [
+      "Intel UpToDate",
+      "Authenticated TDX TCB SVN: 0e010400000000000000000000000000; collateral editions: 20, 20.",
+      "Selected instance fec58fb9-fb80-4ecb-9882-94478c60296a; fresh nonce, ML-KEM-768 key and host TLS SPKI authenticated locally.",
+      "Reported GPUs do not establish the full serving set; GPU reports are not appraised and NRAS is not used."
+    ],
+    "inference": false
+  },
+  {
+    "model": "deepseek-ai/DeepSeek-V4-Flash-0731-TEE",
+    "time": "2026-10-09T12:40:35.197Z",
+    "levels": {
+      "A": 3,
+      "H": 1,
+      "G": 3,
+      "X": 3
+    },
+    "observed": [
+      "Intel UpToDate",
+      "Authenticated TDX TCB SVN: 0c010400000000000000000000000000; collateral editions: 20, 20.",
+      "Selected instance 73267cfd-7429-4626-8895-7e14a4c5a8bc; fresh nonce, ML-KEM-768 key and host TLS SPKI authenticated locally.",
+      "Reported GPUs do not establish the full serving set; GPU reports are not appraised and NRAS is not used."
+    ],
+    "inference": false
+  },
+  {
+    "model": "zai-org/GLM-5.2-TEE",
+    "time": "2026-10-09T12:40:41.565Z",
+    "levels": {
+      "A": 3,
+      "H": 1,
+      "G": 3,
+      "X": 3
+    },
+    "observed": [
+      "Intel UpToDate",
+      "Authenticated TDX TCB SVN: 07030600000000000000000000000000; collateral editions: 20, 20.",
+      "Selected instance af41bed8-7147-4984-8a98-e6f46cd110c4; fresh nonce, ML-KEM-768 key and host TLS SPKI authenticated locally.",
+      "Reported GPUs do not establish the full serving set; GPU reports are not appraised and NRAS is not used."
+    ],
+    "inference": false
+  },
+  {
+    "model": "moonshotai/Kimi-K3-TEE",
+    "time": "2026-10-09T12:40:48.575Z",
+    "levels": {
+      "A": 3,
+      "H": 1,
+      "G": 3,
+      "X": 3
+    },
+    "observed": [
+      "Intel UpToDate",
+      "Authenticated TDX TCB SVN: 07030600000000000000000000000000; collateral editions: 20, 20.",
+      "Selected instance 248f0bb2-3c5a-4391-9ca7-31fbc136fc34; fresh nonce, ML-KEM-768 key and host TLS SPKI authenticated locally.",
+      "Reported GPUs do not establish the full serving set; GPU reports are not appraised and NRAS is not used."
+    ],
+    "inference": false
+  },
+  {
+    "model": "Qwen/Qwen3-32B-TEE",
+    "time": "2026-10-09T12:40:51.946Z",
+    "levels": {
+      "A": 3,
+      "H": 1,
+      "G": 3,
+      "X": 3
+    },
+    "observed": [
+      "Intel UpToDate",
+      "Authenticated TDX TCB SVN: 0d010600000000000000000000000000; collateral editions: 20, 20.",
+      "Selected instance 912aec3d-1231-421d-97d7-f5c81fc7988a; fresh nonce, ML-KEM-768 key and host TLS SPKI authenticated locally.",
+      "Reported GPUs do not establish the full serving set; GPU reports are not appraised and NRAS is not used."
+    ],
+    "inference": false
+  },
+  {
+    "model": "Qwen/Qwen3-235B-A22B-Thinking-2507-TEE",
+    "time": "2026-10-09T12:40:52.520Z",
+    "admitted": false,
+    "reason": "TEE_ATTESTATION_REJECTED",
+    "inference": false
+  }
+]

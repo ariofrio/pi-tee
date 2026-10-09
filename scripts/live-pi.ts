@@ -16,8 +16,8 @@ assert.ok(!publicProduction || (provider === "tinfoil" && !publicCandidate), "Se
 const testPolicy = process.env.PI_TEE_POLICY ?? (publicCandidate || publicProduction ? "public-builds,egress=metadata" : "trust-provider-and-host");
 const cancelStreaming = process.argv.includes("--cancel-stream");
 const cancelOnly = process.argv.includes("--cancel-only") || cancelStreaming;
-assert.ok(provider === "nearai" || provider === "tinfoil", "Pass nearai or tinfoil, optionally followed by a model ID.");
-const keyName = provider === "nearai" ? "NEARAI_API_KEY" : "TINFOIL_API_KEY";
+assert.ok(provider === "nearai" || provider === "tinfoil" || provider === "chutes", "Pass nearai, tinfoil or chutes, optionally followed by a model ID.");
+const keyName = provider === "nearai" ? "NEARAI_API_KEY" : provider === "chutes" ? "CHUTES_API_KEY" : "TINFOIL_API_KEY";
 const key = process.env[keyName];
 assert.ok(key, `Set ${keyName} without placing it in command arguments.`);
 const policyName = "PI_TEE_POLICY";
@@ -100,6 +100,7 @@ async function runCli(model: string, prompt: string, options: { tool?: boolean; 
   const env: NodeJS.ProcessEnv = { ...process.env, PI_CODING_AGENT_DIR: agentDir, [policyName]: testPolicy, PI_NEARAI_MODEL_VISIBILITY: "tee", PI_TEE_LIVE_THINKING: options.thinking && options.thinking !== "off" ? "1" : "0", PI_TEE_LIVE_CANCEL: options.cancel && !cancelStreaming ? "1" : "0" };
   delete env.NEARAI_API_KEY;
   delete env.TINFOIL_API_KEY;
+  delete env.CHUTES_API_KEY;
   // The real key is in Pi's isolated store: a successful call also checks stored-key precedence.
   env[keyName] = "synthetic-invalid-environment-key";
   const args = [...(piBinary ? [] : [resolve(root, "node_modules/@earendil-works/pi-coding-agent/dist/cli.js")]),

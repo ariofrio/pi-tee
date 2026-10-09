@@ -1,4 +1,4 @@
-# NEAR AI and Tinfoil providers for Pi
+# Confidential providers for Pi
 
 Design updated 2026-10-09. The [security model](security-model.md) defines positions, verified route levels, threshold admission and migration. Earlier independent-approval reviews cover the original design; the owner coordinates independent review of this implementation before merge.
 
@@ -89,16 +89,26 @@ A router can be admitted later only if its measured code enforces the chosen pub
 
 NEAR's SDK routes are implemented; its public-build profile cannot qualify. A root-equivalent compose-manager deploys each worker's serving software at operator-chosen Git refs, with no release signature. That software can use the instance's TLS key and the app-wide KMS signing keys. A client can authenticate past deployments but cannot bound the next one. Chutes-backed models pass through NEAR's plaintext gateway. [NEAR assessment](nearai-status.md). Direct and gateway routes use local GPU appraisal only for observed details. Incomplete serving coverage leaves G3, so those reports do not gate admission. Fresh CPU evidence can be H1 or H2 under the local floors. [Direct route](direct-access.md#near-direct-route-and-evidence).
 
+## Chutes instance-key route
+
+The [Chutes adapter](../packages/chutes/README.md) uses the official E2EE wire format at the [pinned proxy source](https://github.com/chutesai/e2ee-proxy/tree/e213a090cb82be3b4556ce0f2fbd912406001477). Each request resolves the model to a chute ID, fetches instance keys and single-use invocation tokens, and sends a new random nonce to the evidence endpoint. Local DCAP appraisal authenticates Intel signatures and revocation. The quote must bind both the chosen ML-KEM-768 key and the certificate SPKI used to authenticate the evidence envelope. No API TLS pin is inferred from that host certificate.
+
+The adapter rates A3/G3/X3 and computes H1/H2 using core's shared TDX floors. It calls `assessRoute()` on each authenticated candidate before encryption; rejected candidates cannot authorize a prompt or raise another instance's rating. H1 can qualify only under a provider-and-host trust position. Discovery, source inspection and GPU list contents do not raise levels. The provider-controlled runtime's plaintext recipient and key-custody closure remains unverified; those limits are disclosed rather than inferred from the first CPU quote. The adapter offers TDX v4 only and rejects unsupported evidence.
+
+The shared final-payload guard runs before ML-KEM/HKDF/ChaCha20-Poly1305 encryption of the entire JSON body. Only the API key, fixed routing/invocation headers and traffic metadata cross the ordinary WebPKI hop outside encryption. [Exact fields and recipients](../packages/chutes/README.md#content-and-metadata). The ephemeral response public key is inside the sealed request. Content streams through per-chunk AEAD authentication; numeric billing usage may arrive outside encryption and is disclosed as provider metadata. Replayed chunks, duplicate key exchange, corrupt tags, plaintext content and incomplete streams fail closed. Stream ordering and billing are not enclave-authenticated.
+
+The chosen key and invocation token are immutable for one dispatch. The minimum of token expiry and a 60-second challenge lifetime bounds preflight; expiry is checked again after Pi hooks and encryption. No resend, redirect or weaker route is available. Caller cancellation disposes the network request and response keys. [Verification](../packages/chutes/src/evidence.ts), [transport](../packages/chutes/src/transport.ts), [validation](chutes-validation.md).
+
 ## Pi integration and request lifecycle
 
-Keep two separately installable provider extensions and one shared library. Native API-key `/login`, stored credentials, live catalogs, four-hour refresh, tools, reasoning, usage and cancellation already work. NEAR's TEE-only visibility filter is independent of security policy; showing a catalog entry never authorizes inference. [Provider interface](https://github.com/earendil-works/pi/blob/eb326d265ae0b88489a6d10319307780df827cdf/packages/coding-agent/docs/custom-provider.md), [shared provider](../packages/core/src/provider.ts).
+Keep separately installable provider extensions and one shared library. Native API-key `/login`, stored credentials, live catalogs, four-hour refresh, tools, reasoning, usage and cancellation already work. NEAR's TEE-only visibility filter is independent of security policy; showing a catalog entry never authorizes inference. [Provider interface](https://github.com/earendil-works/pi/blob/eb326d265ae0b88489a6d10319307780df827cdf/packages/coding-agent/docs/custom-provider.md), [shared provider](../packages/core/src/provider.ts).
 
 Admission returns an owned session containing the model, stable authority-policy digest, authenticated release digests and freshness bounds, plus a transport constructed from the same appraisal’s quote-bound endpoint keys. The public admission record omits those keys. The session cannot be changed by catalog metadata, caller URLs/headers/fetch, payload hooks or routing aliases.
 
-1. Select the canonical model and policy; obtain evidence without sending prompts or credentials.
-2. Authenticate releases and hardware; establish the complete serving chain before releasing inference keys.
+1. Select the canonical model and policy; obtain evidence without sending content. Chutes discovery may send credentials to its disclosed WebPKI endpoint.
+2. Authenticate hardware and key binding; establish releases and serving closure to the extent required by the chosen position.
 3. Validate Pi's final serialized payload after hooks; reject unclassified fields, hosted tools, remote media and unauthorized outer headers.
-4. Bind the actual TLS socket and encrypt supported fields. Send once; a rotation/error does not automatically replay a possibly executed request.
+4. Bind the actual TLS socket or encrypt the entire body to a freshly attested key. Send once; a rotation/error does not automatically replay a possibly executed request.
 5. Authenticate responses before exposing text or executable tool calls. NEAR buffers bounded response bytes in memory until signature verification. Tinfoil can stream authenticated encrypted chunks.
 6. On cancellation, policy change, timeout or integrity failure, close/dispose transport and emit a sanitized terminal error that Pi's retry classifiers do not replay.
 

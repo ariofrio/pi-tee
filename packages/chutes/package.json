@@ -1,0 +1,49 @@
+{
+  "name": "pi-chutes",
+  "version": "0.1.0",
+  "description": "Chutes provider for Pi with per-request attestation and instance-key encryption",
+  "type": "module",
+  "license": "MIT",
+  "pi": {
+    "extensions": [
+      "./dist/extension.js"
+    ]
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "dependencies": {
+    "@phala/dcap-qvl": "0.6.3",
+    "@noble/post-quantum": "0.7.1",
+    "pi-tee-core": "0.1.0",
+    "@noble/ciphers": "2.4.0"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-ai": "1.0.4",
+    "@earendil-works/pi-coding-agent": "1.0.4"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ariofrio/pi-tee.git",
+    "directory": "packages/chutes"
+  },
+  "homepage": "https://github.com/ariofrio/pi-tee/tree/main/packages/chutes#readme",
+  "bugs": {
+    "url": "https://github.com/ariofrio/pi-tee/issues"
+  }
+}

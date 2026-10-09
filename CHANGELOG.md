@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add `pi-chutes`: native login, confidential tool-capable chat discovery and `/chutes status`; fresh per-request Intel/ML-KEM/host-SPKI appraisal, shared firmware floors, A3/H1-or-H2/G3/X3 admission and send-once whole-body encryption. Disclose API-key/routing metadata at ordinary WebPKI endpoints and unverified runtime/recipient closure. Verify encrypted streaming, tools, reasoning and cancellation under Node and Bun; no NRAS or plaintext fallback. [Validation](docs/chutes-validation.md).
+
 - Share the existing TDX SVN and collateral-edition host-rating floors in core; NEAR and Tinfoil retain their thresholds and policy identities.
 
 - Retire Tinfoil’s `platform-endorsements/.github/workflows/build.yml` platform authority. Only `cvmimage/.github/workflows/platform-release.yml@refs/tags/platform-vMAJOR.MINOR.PATCH` is accepted, with exact tag and GitHub-hosted runner checks. Authenticated v1 classic statements remain accepted directly; strict v2 predicates require their independently authenticated same-release classic companion. Malformed companion schemas and ABI versions return explicit errors. Every CPU/GPU floor and machine restriction remains unchanged. Authentic old-authority rejection and new-authority acceptance are covered by offline signature tests.
