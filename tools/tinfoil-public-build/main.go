@@ -38,9 +38,10 @@ var publicRepos = map[string]string{
 var stableTag = regexp.MustCompile(`^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$`)
 
 type input struct {
-	AllowOutdated bool            `json:"allowOutdated,omitempty"`
-	Nonce         string          `json:"nonce"`
-	Envelope      json.RawMessage `json:"envelope"`
+	AllowOutdated   bool               `json:"allowOutdated,omitempty"`
+	Nonce           string             `json:"nonce"`
+	Envelope        json.RawMessage    `json:"envelope"`
+	PlatformClassic *platformCompanion `json:"platformClassic,omitempty"`
 }
 
 type result struct {
@@ -100,6 +101,10 @@ func requirePublicWorkflow(raw []byte, repo, workflow, ref string) error {
 }
 
 func verify(raw, nonce []byte, now time.Time, allowOutdated ...bool) (*result, error) {
+	return verifyWithPlatform(raw, nonce, now, nil, allowOutdated...)
+}
+
+func verifyWithPlatform(raw, nonce []byte, now time.Time, classic *platformCompanion, allowOutdated ...bool) (*result, error) {
 	doc, reportData, err := envelope.Check(raw, nonce)
 	if err != nil {
 		return nil, errors.New("TEE_ENVELOPE_REJECTED")
@@ -145,11 +150,14 @@ func verify(raw, nonce []byte, now time.Time, allowOutdated ...bool) (*result, e
 		return nil, errors.New("TEE_PUBLIC_BUILD_FRESHNESS_REJECTED")
 	}
 	platformRef, err := doc.ReferenceValuesCollateral(envelope.CollateralSigstorePlatformV1Format)
-	if err != nil || platformRef.Repo != platformRepo || !stableTag.MatchString(platformRef.Tag) || requirePublicWorkflow(platformRef.SigstoreBundle, platformRepo, "build.yml", "refs/tags/"+platformRef.Tag) != nil {
+	if err != nil {
 		return nil, errors.New("TEE_PLATFORM_REFERENCE_REJECTED")
 	}
-	platform, err := provenance.AuthenticatePlatformEndorsements(platformRef.SigstoreBundle, platformRepo, platformRef.Tag, platformRef.Digest)
+	platform, err := authenticatePlatform(platformRef.SigstoreBundle, platformRef.Repo, platformRef.Tag, platformRef.Digest, classic)
 	if err != nil {
+		if err.Error() == "TEE_PLATFORM_CLASSIC_REQUIRED" {
+			return nil, err
+		}
 		return nil, errors.New("TEE_PLATFORM_REFERENCE_REJECTED")
 	}
 	platformFresh, err := doc.FreshnessCollateral(envelope.FreshnessCollateralIDPlatform)
@@ -220,7 +228,7 @@ func run(reader io.Reader, writer io.Writer, now time.Time) int {
 	}
 	var checked *result
 	if err == nil {
-		checked, err = verify(i.Envelope, nonce, now, i.AllowOutdated)
+		checked, err = verifyWithPlatform(i.Envelope, nonce, now, i.PlatformClassic, i.AllowOutdated)
 	}
 	if err != nil {
 		code := "TEE_EVIDENCE_INPUT_REJECTED"

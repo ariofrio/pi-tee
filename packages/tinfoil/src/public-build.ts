@@ -130,7 +130,7 @@ export async function verifyPublicBuildArtifacts(options: {
     if (path) pendingWrites.set(url, bytes);
     return bytes;
   }
-  const input = `{"nonce":${JSON.stringify(nonce)},"allowOutdated":${options.allowOutdated ?? false},"envelope":${raw}}`;
+  let input = `{"nonce":${JSON.stringify(nonce)},"allowOutdated":${options.allowOutdated ?? false},"envelope":${raw}}`;
   async function appraise(input: string, args: string[] = []): Promise<any> {
     signal.throwIfAborted();
     const key = args.length === 1 && ["--cvm-build", "--runtime-config", "--container-reference", "--container-build"].includes(args[0]!) ? `helper:${args[0]}:${sha256(Buffer.from(input))}` : undefined;
@@ -145,7 +145,31 @@ export async function verifyPublicBuildArtifacts(options: {
   try {
     signal.throwIfAborted();
     cache = cacheFor(evidenceFetch, PUBLIC_BUILD_HELPER_DIGEST);
-    const verified = await appraise(input);
+    let verified;
+    const first = await runPublicBuildHelper(input, [], signal);
+    if (first.code === 0) verified = parseJson(first.stdout);
+    else if (parseJson(first.stdout).failure === "TEE_PLATFORM_CLASSIC_REQUIRED") {
+      // The helper authenticated the exact v2 release identity. Delivery of its
+      // classic companion is untrusted; each candidate still passes the helper.
+      const references = parseJson(raw).collateral.filter((item: any) => item.format === "https://tinfoil.sh/collateral/sigstore-platform/v1");
+      assert(references.length === 1);
+      const reference = references[0].data;
+      assert(reference.repo === "tinfoilsh/cvmimage" && /^platform-v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/.test(reference.tag));
+      const classic = await get(`https://github.com/tinfoilsh/cvmimage/releases/download/${reference.tag}/platform-endorsements-classic.json`, "follow");
+      const digest = sha256(classic);
+      const url = `https://api.github.com/repos/tinfoilsh/cvmimage/attestations/sha256:${digest}?per_page=100`;
+      const candidates = parseJson(await get(url, "error"));
+      assert(Array.isArray(candidates.attestations) && candidates.attestations.length <= 100);
+      for (const candidate of candidates.attestations) {
+        const candidateInput = JSON.stringify({ nonce, allowOutdated: options.allowOutdated ?? false, envelope: parseJson(raw), platformClassic: { digest, bundle: candidate.bundle } });
+        const result = await runPublicBuildHelper(candidateInput, [], signal);
+        if (result.code !== 0) continue;
+        input = candidateInput;
+        verified = parseJson(result.stdout);
+        break;
+      }
+      assert(verified, "TEE_PLATFORM_REFERENCE_REJECTED");
+    } else throw new TeeError("TEE_PUBLIC_BUILD_REJECTED");
     assert(verified.cpuVerified === true && verified.publicBuildVerified === true && verified.inferenceQualified === false, "TEE_PUBLIC_BUILD_REJECTED");
     assert.equal(verified.repo, repo);
     assert(/^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/.test(verified.tag));
