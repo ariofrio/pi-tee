@@ -20,8 +20,10 @@ on:
       - packages/core/src/wasi*.ts
       - packages/core/src/pinned-tls.ts
       - packages/core/src/transport.ts
+      - packages/nearai/src/direct-channel.ts
       - tests/wasm-verifiers.test.ts
       - tests/pinned-tls.test.ts
+      - tests/near-direct-channel.test.ts
       - package-lock.json
   pull_request:
     paths:
@@ -40,8 +42,10 @@ on:
       - packages/core/src/wasi*.ts
       - packages/core/src/pinned-tls.ts
       - packages/core/src/transport.ts
+      - packages/nearai/src/direct-channel.ts
       - tests/wasm-verifiers.test.ts
       - tests/pinned-tls.test.ts
+      - tests/near-direct-channel.test.ts
       - package-lock.json
 
 permissions:
@@ -132,7 +136,7 @@ jobs:
           bun-version: 1.3.13
       - run: npm ci --ignore-scripts
       - run: npm run build
-      - run: node --import tsx --test tests/wasm-verifiers.test.ts tests/pinned-tls.test.ts
-      - run: bun test tests/wasm-verifiers.test.ts tests/pinned-tls.test.ts
+      - run: node --import tsx --test tests/wasm-verifiers.test.ts tests/pinned-tls.test.ts tests/near-direct-channel.test.ts
+      - run: bun test tests/wasm-verifiers.test.ts tests/pinned-tls.test.ts tests/near-direct-channel.test.ts
       - run: node --import tsx scripts/check-nvidia-verifier.ts --collateral
       - run: bun scripts/check-nvidia-verifier.ts --collateral

@@ -16,8 +16,9 @@ export const NEAR_ASSUMPTIONS = [
   "Model assets, runtime downloads, mutation controls and deployment provenance have no independent approval in this mode.",
 ];
 
-export function assertNearRuntime() {
-  if (process.versions.bun || Number(process.versions.node.split(".")[0]) < 24) throw new TeeError("TEE_RUNTIME_UNSUPPORTED");
+// The SDK gateway route relies on node:https socket pinning; the direct route owns its node:tls socket.
+export function assertNearRuntime(route: "gateway" | "direct") {
+  if ((route === "gateway" && process.versions.bun) || Number(process.versions.node.split(".")[0]) < 24) throw new TeeError("TEE_RUNTIME_UNSUPPORTED");
 }
 
 export function createNearProvider(options: {
@@ -43,10 +44,10 @@ export function createNearProvider(options: {
     parseCatalog: loadNearCatalog, requireDeclaredTee: true, catalogFetch: options.catalogFetch, assumptions,
     availableModelIds: route === "direct" ? [NEAR_DIRECT_PROFILE.model] : undefined,
     openSdkTransport: options.openSdkTransport ?? (route === "direct" ? async ({ apiKey, signal }) => {
-      assertNearRuntime();
+      assertNearRuntime("direct");
       return openDirectNearTransport(apiKey, signal);
     } : async ({ apiKey, signal }) => {
-      assertNearRuntime();
+      assertNearRuntime("gateway");
       const { TLSSocket } = await import("node:tls");
       if (typeof TLSSocket.prototype.getPeerCertificate !== "function" || typeof TLSSocket.prototype.getPeerX509Certificate !== "function") {
         throw new TeeError("TEE_RUNTIME_UNSUPPORTED");
