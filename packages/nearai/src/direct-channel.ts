@@ -8,7 +8,7 @@ import { limitResponseBody, MAX_ENCRYPTED_RESPONSE_BYTES, readBoundedBody, readH
  * Requests take turns as HTTP/1.1 exchanges on that socket, written directly with `node:tls`
  * because Bun's https.Agent cannot be bound to one socket. The connection is never replaced.
  * The gateway scope admits the NEAR gateway's model metadata and model evidence for one model;
- * the gateway requires the API key for its evidence, so only inference waits for approval there.
+ * the gateway requires the API key for its evidence, so signatures and inference wait for approval there.
  */
 export class NearDirectChannel {
   private socket?: TLSSocket;
@@ -53,11 +53,17 @@ export class NearDirectChannel {
       params.get("model") === model && params.get("provider") === "near" && /^[a-f0-9]{64}$/.test(params.get("nonce") ?? "") &&
       params.get("include_tls_fingerprint") === "false" && params.get("signing_algo") === "ed25519" && [...params].length === 5;
     if (url.origin !== this.origin || url.username || url.password || url.hash || !(evidence || signature || inference || metadata || modelEvidence)) throw new TeeError("TEE_REQUEST_REJECTED");
-    if ((request.method !== "GET" || (model === undefined && request.headers.has("authorization"))) && !this.approved) throw new TeeError("TEE_REQUEST_REJECTED");
-    if (inference && this.sent) throw new TeeError("TEE_REQUEST_REJECTED");
+    // The gateway needs its key for evidence and metadata; nothing else, and no other headers, go before approval.
+    const early = model === undefined ? request.method === "GET" && !request.headers.has("authorization") :
+      (evidence || metadata || modelEvidence) && [...request.headers.keys()].every(name => name === "authorization" || name === "x-no-aliasing");
+    if (!early && !this.approved) throw new TeeError("TEE_REQUEST_REJECTED");
+    // Reserved before the first await, so concurrent dispatches cannot both pass.
+    if (request.method === "POST") {
+      if (this.sent) throw new TeeError("TEE_REQUEST_REJECTED");
+      this.sent = true;
+    }
     const payload = request.body ? await readBoundedBody(request.body, 16 * 1024 * 1024, signal) : undefined;
     signal.throwIfAborted();
-    if (request.method === "POST") this.sent = true;
     // The next request is written only after the previous response has been read to its end.
     const previous = this.turn;
     let done!: () => void;

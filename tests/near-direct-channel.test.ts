@@ -145,8 +145,14 @@ test("the NEAR gateway channel admits only its exchanges for one model, and infe
       await assert.rejects(channel.fetch(outside, auth), /TEE_REQUEST_REJECTED/, outside);
     }
     await assert.rejects(chat(), /TEE_REQUEST_REJECTED/);
+    // Before approval the key reaches only evidence and metadata, with no other headers.
+    await assert.rejects(channel.fetch(`${origin}/v1/signature/synthetic?signing_algo=ed25519`, auth), /TEE_REQUEST_REJECTED/);
+    await assert.rejects(channel.fetch(metadata, { headers: { ...auth.headers, "x-synthetic-prompt": "private" } }), /TEE_REQUEST_REJECTED/);
     channel.approve(evidence.peerSpkiFingerprint);
-    assert.equal(await (await chat()).text(), "synthetic");
+    // Concurrent dispatches reserve the one send before either body is read.
+    const sends = await Promise.allSettled([chat(), chat()]);
+    assert.deepEqual(sends.map(result => result.status).sort(), ["fulfilled", "rejected"]);
+    assert.equal(await (sends.find(result => result.status === "fulfilled") as PromiseFulfilledResult<Response>).value.text(), "synthetic");
     await assert.rejects(chat(), /TEE_REQUEST_REJECTED/);
     await (await channel.fetch(`${origin}/v1/signature/synthetic?signing_algo=ed25519`, auth)).text();
     assert.deepEqual(paths.map(path => path.split("?")[0]), ["GET /v1/attestation/report", "GET /v1/model/z-ai%2Fglm-5.3-flash", "GET /v1/attestation/report", "POST /ohttp", "GET /v1/signature/synthetic"]);
