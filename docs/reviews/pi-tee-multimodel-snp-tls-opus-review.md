@@ -273,4 +273,85 @@ This section reviews the proposed enablement commit `94b43a7` ("Enable the Tinfo
 - My hostile-peer probes still fail closed on Node and Bun: invalid name, bare LF, NUL, space before colon, close-delimited body and truncated chunk. A well-formed response passes.
 - Against a Node peer capped at TLS 1.2, Node fails the handshake and Bun is rejected by the protocol check (`TEE_TLS_KEY_REJECTED`). TLS 1.3 passes on both.
 
+## Delta review: `d0bd843` and the rebased enablement commit
+
+This section covers [`d0bd843`](https://github.com/ariofrio/pi-tee/commit/d0bd8430c9c3159c3031eafcbbb5bc87554ff0cc) on main ("Keep verified GitHub metadata across Pi processes") and the rebased enablement commit on local `ariofrio/enable-public-builds`.
+
+**Which commit is the branch tip.** The branch tip is now `e6cb1b7`, not the `dbbec6f` named in the request.
+- `dbbec6f`'s enablement patch is identical to `94b43a7` apart from rebase context lines. It does **not** contain the report copy.
+- `e6cb1b7` is `dbbec6f` plus `docs/reviews/pi-tee-multimodel-snp-tls-opus-review.md`, which is byte-identical to this report through the Enablement review.
+- Merge `e6cb1b7`.
+
+### Verdict: enable
+
+Nothing in `d0bd843` widens what is accepted. The conditions from the Enablement review still apply: review A's sign-off on the post-`ad71a91` NVIDIA verifier commits, and the production live suite on the merged commit.
+
+### `d0bd843`
+
+| Change | Assessment |
+| --- | --- |
+| Persistent cache for two GitHub API lookups (`persistable` = `api.github.com`, `immutable` only), in `$XDG_CACHE_HOME`, falling back to `~/.cache`, under `pi-tee/github-metadata`; key = SHA-256 of the URL | **Does not widen acceptance.** The cached lookups are the cvmimage attestation list and the release commit's parents. Both URLs are content-addressed: by manifest digest and by commit SHA. Every attestation bundle is still Sigstore-verified by `--cvm-build` against the cvmimage release workflow and the manifest digest, so stale or planted bundles can only cause rejection. The parents lookup feeds only the public-source linkage check (`publicSourceParentMatched`), which has no authority of its own: the image is authorized by the signed release. Nothing from CPU, GPU, freshness, keys or helper verdicts is persisted. |
+| Write only after the whole artifact chain verifies; write a temp file (`0600`), then rename into a `0700` directory | **Correct.** Rename is atomic, failures are best effort, and only fetched bytes are written, never bytes already read from disk. |
+| Any failing chain that read a persisted entry deletes the whole directory, and the in-memory cache is cleared | **Correct.** The test poisons both entries, sees `TEE_PUBLIC_BUILD_REJECTED`, sees the directory emptied, and then recovers with two fresh GitHub requests. `rm` targets only `<cache>/pi-tee/github-metadata`. |
+| Delivery failures (fetch errors, non-2xx other than the attestation 404, 403 rate limit) → `TEE_PUBLIC_ARTIFACT_UNAVAILABLE`; attestation 404 → `TEE_CVM_BUILD_REJECTED`; the new code is terminal and reported after a verification rejection | **Correct and fail-closed.** Only that one code passes through the outer `catch`; every other error still maps to `TEE_PUBLIC_BUILD_REJECTED`. Selection prefers a real rejection to unavailability. A terminal code only stops Pi's own retries. |
+| `live-pi.ts` asks for medium reasoning effort | Harness only; no security effect. |
+
+**Low (hardening, not blocking).** The disk path trusts the directory's contents and permissions without checking them:
+- `mkdir(..., { mode: 0o700 })` does not tighten a directory that already exists.
+- `readFile` does not check the owner or mode.
+- The temp name `<path>.<pid>.tmp` is predictable, and `writeFile` follows symlinks.
+
+This matters only if the cache directory is writable by someone else, for example `XDG_CACHE_HOME` pointed at a shared location. In that case a co-tenant could:
+- make the source-linkage audit check pass for a release where it would not, or
+- force rejections, or
+- have the extension overwrite a file through a symlink.
+
+It could not get unverified attestation content accepted. The local machine is inside the declared trust boundary, so this is hardening. Suggested fix:
+- `lstat` the directory and ignore the cache unless it is owned by the current uid with mode `0700`;
+- create temp files with `flag: "wx"`;
+- ignore a relative `XDG_CACHE_HOME`, as the XDG spec requires.
+
+**Info.** The new test leaves its `.scratch/work/github-metadata-*` directory behind.
+
+### Checks at `dbbec6f` (code identical to `e6cb1b7`)
+
+- Build and typecheck are clean.
+- `npm test`: 87 pass, 0 fail, 3 skipped.
+- `public-build-chain.test.ts` passes with the private TDX evidence, including the persistence, poisoning-wipe, 404 and outage cases.
+- Persisted files were `0600` in a `0700` directory.
+
+## Post-merge delta: `7b8ee9f` and `5fbe387`
+
+This section reviews [`5fbe387`](https://github.com/ariofrio/pi-tee/commit/5fbe38721c9b1f70cda382bb5d5fdbb86feb2071) ("Persist each GitHub metadata lookup after its own check"), which is on `origin/main` after the merged enablement [`37e3b5e`](https://github.com/ariofrio/pi-tee/commit/37e3b5e0cb9fb0696eafc512e431730c364644eb). It also covers [`7b8ee9f`](https://github.com/ariofrio/pi-tee/commit/7b8ee9f) ("Trust the GitHub metadata cache only in a private directory"), which landed between the review of `e6cb1b7` and the merge.
+
+### Verdict: OK
+
+Neither commit widens what is accepted.
+
+### `7b8ee9f` resolves the Low hardening item from the delta review
+
+- **Directory check.** `privateDirectory` calls `lstat` on the cache directory itself, so a symlinked directory fails `isDirectory()`. It requires `mode & 0o077 === 0` and the current uid. It runs before every read and again after `mkdir` before every write.
+- **Temp files.** Temp names are random (`randomBytes(8)`), created with `flag: "wx"` and mode `0600`, then renamed into place.
+- **`XDG_CACHE_HOME`.** A relative value is ignored.
+- **Residual (Info).** Ancestor directories are not checked. That leaves a check-then-use window only if an ancestor of the cache directory is writable by another user.
+
+### `5fbe387`: per-entry persistence
+
+| Behavior | Assessment |
+| --- | --- |
+| The attestation list is persisted only after `--cvm-build` verifies a bundle from it for this manifest digest and tag. The commit lookup is persisted only after its single parent equals the signed provenance's `sourceCommit`. | **Correct.** The trigger is the check that consumes each lookup. Both URLs are content-addressed (manifest digest; release commit), so a passed check stays valid for that key regardless of later, unrelated failures. |
+| A stored entry is removed only when its own check fails. Entries fetched fresh that fail are never written. | **Correct.** Removal is limited to entries actually read from disk (`persistedReads.has(url)`). A poisoned list or parents entry is rejected and dropped, and a refetch recovers. |
+| Unrelated failures (registry outage, later chain or GPU rejection) keep verified entries | **Intended, and harmless.** Every later use re-runs the same checks: bundles are Sigstore-verified each time, and helper results are cached in memory only. |
+| Side effect | Info: an abort or helper failure inside a check also removes an otherwise valid stored entry. That costs only a refetch. |
+| Nothing else changed | Error mapping, the 404 rejection, and the CPU/GPU/freshness/key paths are untouched. No new persisted data types. |
+
+### Checks at `5fbe387`
+
+- Build and typecheck are clean.
+- `npm test`: 87 pass, 0 fail, 3 skipped.
+- `public-build-chain.test.ts` passes with the private TDX evidence, including:
+  - an unrelated GHCR outage keeps both entries;
+  - each poisoned entry alone is rejected and only that entry is dropped;
+  - recovery refetches exactly the dropped URL.
+
 Written by Claude
