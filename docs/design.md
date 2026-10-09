@@ -14,7 +14,7 @@ NEAR direct and gateway remain A3/G3/X3. A native QVL wrapper authenticates Inte
 
 Privatemode authenticates a fresh Coordinator nonce, its exact locally admitted manifest/complete policy set, mesh CA and secret exchange through hash-checked SDK WASM. The deployment-key recipient closure remains A2/H3/G3/X3: code is fixed but worker/GPU freshness and handling are unverified. Hard-pin and explicit recorded CDN adoption are separate pluggable policies; the SDK cannot silently change them. [Privatemode request boundary, disclosures and evidence](privatemode.md).
 
-GPU policy is shared: a fully authenticated complete setup is G1, documented authenticated gaps are G2, and incomplete coverage is G3. Opt-in NRAS authenticates all detached device tokens and their signed overall digests, then applies the same mode/count/firmware checks as local appraisal. B1/B2/B4 admission and S1/S2 are rejected as not yet supported. `/nearai status`, `/tinfoil status` and `/privatemode status` report actual evidence, trust, gaps, commitments and route choices; potential levels used for discovery are never reported as verified.
+GPU policy is shared: a fully authenticated complete setup is G1, documented authenticated gaps are G2, and incomplete coverage is G3. Opt-in NRAS authenticates all detached device tokens and their signed overall digests, then applies the same mode/count/firmware checks as local appraisal. B1/B2/B4 admission and S1/S2 are rejected as not yet supported. `/nearai status`, `/tinfoil status`, `/chutes status` and `/privatemode status` report actual evidence, trust, gaps, commitments and route choices; potential levels used for discovery are never reported as verified.
 
 ## Client portability
 

@@ -18,8 +18,8 @@ assert.ok(!publicProduction || (provider === "tinfoil" && !publicCandidate), "Se
 const testPolicy = process.env.PI_TEE_POLICY ?? (publicCandidate || publicProduction ? "public-builds,egress=metadata" : "trust-provider-and-host");
 const cancelStreaming = process.argv.includes("--cancel-stream");
 const cancelOnly = process.argv.includes("--cancel-only") || cancelStreaming;
-assert.ok(provider === "nearai" || provider === "tinfoil" || provider === "chutes" || provider === "privatemode", "Pass nearai, tinfoil or chutes, optionally followed by a model ID.");
-const keyName = provider === "nearai" ? "NEARAI_API_KEY" : provider === "chutes" || provider === "privatemode" ? "CHUTES_API_KEY" : "TINFOIL_API_KEY";
+assert.ok(provider === "nearai" || provider === "tinfoil" || provider === "chutes" || provider === "privatemode", "Pass nearai, tinfoil, chutes or privatemode, optionally followed by a model ID.");
+const keyName = provider === "nearai" ? "NEARAI_API_KEY" : provider === "chutes" ? "CHUTES_API_KEY" : provider === "privatemode" ? "PRIVATEMODE_API_KEY" : "TINFOIL_API_KEY";
 const key = process.env[keyName];
 assert.ok(key, `Set ${keyName} without placing it in command arguments.`);
 const policyName = "PI_TEE_POLICY";
