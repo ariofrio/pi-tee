@@ -70,8 +70,11 @@ export async function verifyPublicBuildArtifacts(options: {
   /** Defaults to the user cache directory for production delivery; off for injected fetches unless given. */
   persistentCacheDir?: string;
   allowOutdated?: boolean;
+  /** Authenticates the model router's release and CPU only; it serves no model. */
+  role?: "router";
 }) {
   const { raw, nonce, signal, repo } = options;
+  const mode = options.role === "router" ? ["--router"] : [];
   const evidenceFetch = options.evidenceFetch ?? globalThis.fetch;
   const persistentDir = options.persistentCacheDir ?? (options.evidenceFetch ? undefined : defaultPersistentCacheDir());
   // Per lookup URL: bytes read from disk, or fetched and awaiting their check.
@@ -146,7 +149,7 @@ export async function verifyPublicBuildArtifacts(options: {
     signal.throwIfAborted();
     cache = cacheFor(evidenceFetch, PUBLIC_BUILD_HELPER_DIGEST);
     let verified;
-    const first = await runPublicBuildHelper(input, [], signal);
+    const first = await runPublicBuildHelper(input, mode, signal);
     if (first.code === 0) verified = parseJson(first.stdout);
     else if (parseJson(first.stdout).failure === "TEE_PLATFORM_CLASSIC_REQUIRED") {
       // The helper authenticated the exact v2 release identity. Delivery of its
@@ -162,7 +165,7 @@ export async function verifyPublicBuildArtifacts(options: {
       assert(Array.isArray(candidates.attestations) && candidates.attestations.length <= 100);
       for (const candidate of candidates.attestations) {
         const candidateInput = JSON.stringify({ nonce, allowOutdated: options.allowOutdated ?? false, envelope: parseJson(raw), platformClassic: { digest, bundle: candidate.bundle } });
-        const result = await runPublicBuildHelper(candidateInput, [], signal);
+        const result = await runPublicBuildHelper(candidateInput, mode, signal);
         if (result.code !== 0) continue;
         input = candidateInput;
         verified = parseJson(result.stdout);
@@ -176,6 +179,7 @@ export async function verifyPublicBuildArtifacts(options: {
     assert(/^[a-f0-9]{40}$/.test(verified.commit));
     assert(/^[a-f0-9]{64}$/.test(verified.digest));
     assert(/^[a-f0-9]{64}$/.test(verified.codeStatementDigest));
+    if (options.role === "router") return verified;
 
     // GitHub's public asset redirects carry no credentials. The authenticated
     // subject digest, rather than HTTPS or the release filename, authenticates bytes.

@@ -25,15 +25,15 @@ test("malformed public CPU evidence cannot reach artifact discovery, GPU apprais
   assert.equal(metadataRequests, 1);
 });
 
-test("default public admission lists only profile models and stale selections cannot fall back to SDK", async () => {
+test("default public admission lists only profile models and stale selections cannot fall back to the router", async () => {
   const oldRoute = process.env.PI_TINFOIL_ROUTE;
   const oldPolicy = process.env.PI_TINFOIL_POLICY;
   try {
     delete process.env.PI_TINFOIL_ROUTE;
     delete process.env.PI_TINFOIL_POLICY;
     for (const route of [undefined, "direct-public"] as const) {
-      let sdkOpened = 0;
-      const integration = createTinfoilProvider({ route, openSdkTransport: async () => { sdkOpened++; throw Error("must not open SDK"); },
+      let routerOpened = 0;
+      const integration = createTinfoilProvider({ route, router: { evidenceFetch: async () => { routerOpened++; throw Error("must not open the router"); } },
         catalogFetch: async () => Response.json({ data: ["gemma4-31b", "gpt-oss-120b"].map(id => ({
           id, type: "chat", tool_calling: true, endpoints: ["/v1/chat/completions"], context_window: 131072,
           pricing: { inputTokenPricePer1M: 1, outputTokenPricePer1M: 2 },
@@ -44,7 +44,7 @@ test("default public admission lists only profile models and stale selections ca
       assert.deepEqual(integration.provider.getModels().map(m => m.id), ["gemma4-31b"], "Only catalog models in the public profile are selectable.");
       assert.match(integration.getReport().assumptions.join(" "), /Intel OutOfDate/);
       if (route === undefined) {
-        // A non-profile model selected under SDK policy cannot reach the SDK
+        // A non-profile model selected under provider-trust policy cannot reach the router
         // after switching back; it fails before any network request.
         integration.setPolicy("trust-provider-and-host");
         const stale = integration.provider.getModels().find(m => m.id === "gpt-oss-120b");
@@ -52,7 +52,7 @@ test("default public admission lists only profile models and stale selections ca
         assert.ok(stale);
         const result = await integration.provider.streamSimple(stale, normalizeContext({ messages: [{ role: "user", content: "synthetic prompt", timestamp: 1 }] }), { apiKey: "synthetic-key", maxRetries: 10 }).result();
         assert.equal(result.errorMessage, "TEE_POLICY_ROUTE_REJECTED");
-        assert.equal(sdkOpened, 0);
+        assert.equal(routerOpened, 0);
         assert.equal(integration.getReport().publicBuildVerification, "not-established");
       }
       integration.setPolicy("public-builds");
@@ -113,7 +113,7 @@ test("a direct encrypted worker error cannot resend credentials or ciphertext", 
 });
 
 
-test("auto preserves SDK discovery while explicit router cannot admit public workloads", async () => {
+test("auto preserves router discovery while explicit router cannot admit public workloads", async () => {
   const catalogFetch: typeof fetch = async () => Response.json({ data: ["gemma4-31b", "gpt-oss-120b"].map(id => ({
     id, type: "chat", tool_calling: true, endpoints: ["/v1/chat/completions"], context_window: 131072,
     pricing: { inputTokenPricePer1M: 1, outputTokenPricePer1M: 2 },
@@ -121,9 +121,9 @@ test("auto preserves SDK discovery while explicit router cannot admit public wor
   const auto = createTinfoilProvider({ route: "auto", policy: "trust-provider-and-host", catalogFetch });
   await auto.initializeCatalog();
   assert.deepEqual(auto.provider.getModels().map(m => m.id), ["gemma4-31b", "gpt-oss-120b"]);
-  let sdkOpened = 0;
+  let routerOpened = 0;
   const router = createTinfoilProvider({ route: "router", policy: "trust-provider-and-host", catalogFetch,
-    openSdkTransport: async () => { sdkOpened++; throw Error("must not open"); },
+    router: { evidenceFetch: async () => { routerOpened++; throw Error("must not open the router"); } },
   });
   await router.initializeCatalog();
   const model = router.provider.getModels()[0];
@@ -132,5 +132,5 @@ test("auto preserves SDK discovery while explicit router cannot admit public wor
   assert.equal(router.provider.getModels().length, 0);
   const result = await router.provider.streamSimple(model, normalizeContext({ messages: [{ role: "user", content: "synthetic prompt", timestamp: 1 }] }), { apiKey: "synthetic-key" }).result();
   assert.equal(result.errorMessage, "TEE_POLICY_ROUTE_REJECTED");
-  assert.equal(sdkOpened, 0);
+  assert.equal(routerOpened, 0);
 });

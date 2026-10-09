@@ -28,7 +28,8 @@ try {
     await writeFile(join(directory, "package.json"), JSON.stringify({ name: `isolated-${name}-smoke`, private: true, type: "module" }));
     await execute("npm", ["install", "--prefer-offline", "--ignore-scripts", "--no-audit", "--no-fund", packed.get("core")!, packed.get(name)!], { cwd: directory, maxBuffer: 2 * 1024 * 1024 });
     const sdkNames = { nearai: "@nearai/inference-sdk", tinfoil: "tinfoil", privatemode: "privatemode-ai" };
-    const otherSdks = Object.entries(sdkNames).filter(([provider]) => provider !== name).map(([, sdk]) => sdk);
+    // pi-tinfoil appraises Tinfoil's router itself, so it installs no vendor SDK.
+    const otherSdks = Object.entries(sdkNames).filter(([provider]) => provider !== name || name === "tinfoil").map(([, sdk]) => sdk);
     for (const sdk of otherSdks) await assert.rejects(access(join(directory, "node_modules", sdk)), { code: "ENOENT" });
     const code = `
 import assert from 'node:assert/strict';

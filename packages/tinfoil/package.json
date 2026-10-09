@@ -31,8 +31,7 @@
   },
   "dependencies": {
     "ehbp": "0.3.3",
-    "pi-tee-core": "0.1.0",
-    "tinfoil": "1.2.2"
+    "pi-tee-core": "0.1.0"
   },
   "peerDependencies": {
     "@earendil-works/pi-ai": "1.0.4",

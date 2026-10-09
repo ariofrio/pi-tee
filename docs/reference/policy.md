@@ -23,7 +23,7 @@ Public-build positions also default to `build=publisher-workflow,review=none`. A
 | review | `pinned`, `window`, `none` |
 | verifier | `local`, `nras` |
 
-Only `build=publisher-workflow` and `review=none` are implemented. Other build/review values fail clearly as not yet supported, including `build=signed`. The router's B4 component evidence does not implement B4 route-wide public admission. No current route is X1; bare `public-builds` therefore admits none.
+Only `build=publisher-workflow` and `review=none` are implemented. Other build/review values fail clearly as not yet supported, including `build=signed`. The Tinfoil router's authenticated release does not cover its hidden workers, so it gives no route-wide public admission. No current route is X1; bare `public-builds` therefore admits none.
 
 ## Forced values and categories
 
@@ -44,7 +44,7 @@ trust-provider-and-host,code=fixed-private
 
 ## Migration
 
-The former default `public-builds` maps to `public-builds,egress=metadata`. Explicit bare `public-builds` now requests X1. Removed `sdk` returns a migration error directing users to `trust-provider-and-host`; adding `host=current` preserves outdated-instance rejection and excludes the stale Tinfoil router. Removed `approved` maps conceptually to `public-builds,review=pinned`, which is unsupported, not an accepted alias.
+The former default `public-builds` maps to `public-builds,egress=metadata`. Explicit bare `public-builds` now requests X1. Removed `sdk` returns a migration error directing users to `trust-provider-and-host`; adding `host=current` preserves outdated-instance rejection and excludes the Tinfoil router, whose hidden workers keep it at H3. Removed `approved` maps conceptually to `public-builds,review=pinned`, which is unsupported, not an accepted alias.
 
 `PI_NEARAI_POLICY`, `PI_TINFOIL_POLICY`, `PI_NEARAI_ROUTE` and `PI_TINFOIL_ROUTE` return migration errors. Use `PI_TEE_POLICY` and automatic route selection. Policy changes abort active requests, affect only the named provider when issued as a command, and are not persisted.
 

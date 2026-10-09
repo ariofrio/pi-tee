@@ -19,6 +19,7 @@ These are dated observations and source investigations. A passing run qualifies 
 | [Public-profile validation metadata](tinfoil/public-profile-validation.json) | 2026-10-07; original Gemma production-enablement/setup scope | Retains native-helper/container facts and verdicts; it does not describe present WASM setup or independently qualify later policy changes. |
 | [GPU investigation](tinfoil/gpu-runtime.md) | 2026-10-07 sample and subsequent tests; Hopper SPT, Blackwell MPT, signed-field negatives and driver source | Source traces and manufacturer contracts; no physical-reset experiment, complete CUDA trace or live signed PPCIe/devtools negative. |
 | [Billing-gateway validation](tinfoil/gateway-validation.md#validation) | 2026-10-09; Node and Bun Pi suites for DeepSeek/GLM, relay appraisal and terminal 412 | Cancellation proves local acknowledgement; frame-boundary truncation and sealed-request replay remain disclosed limits. The active contract is in the provider guide; this record preserves the run. |
+| [Router appraisal](tinfoil/router-appraisal.md) | 2026-10-09; fresh-nonce `inference.tinfoil.sh` appraisal, router release identity and one Node router inference | Router component only: hidden workers keep the route at A3/H3/G3/X3. No Bun-compiled Pi router suite. |
 | [Helper source and verification narrative](tinfoil/helper-investigation.md) | Preserved from main fa5e154; original run dates retained | CPU/guest/OCI/runtime stages, bounds and cache investigations; standalone success is not live serving qualification. |
 
 ## Other providers

@@ -1,9 +1,5 @@
-import assert from "node:assert/strict";
-import { randomBytes } from "node:crypto";
-import { SecureClient } from "tinfoil";
-import { withAbort } from "../packages/core/src/transport.js";
+import { appraiseRouter, ROUTER_HOST } from "../packages/tinfoil/src/router.js";
+import { parsePolicy } from "../packages/core/src/index.js";
 
-const client = new SecureClient({ userCacheSecret: randomBytes(32).toString("hex"), transport: "ehbp" });
-await withAbort(client.ready(), AbortSignal.timeout(30_000));
-assert.equal(client.getVerificationDocument().securityVerified, true);
-console.log("PASS: current Tinfoil router evidence passes SDK acceptance. No inference, credentials, or independent approval involved.");
+const router = await appraiseRouter({ signal: AbortSignal.timeout(120_000), policy: parsePolicy("trust-provider-and-host") });
+console.log(`PASS: ${ROUTER_HOST} passes pi-tee's fresh-nonce router appraisal (${router.security.observed[0]}). No inference or credentials involved.`);

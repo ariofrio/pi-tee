@@ -13,12 +13,13 @@
 - `PI_TEE_POLICY` uses four named trust positions and explicit thresholds. The default is `public-builds,egress=metadata`; route admission checks every axis and compares code, host, GPU and handling. Build reproduction/pinned review remain unsupported. [Policy and migration](docs/reference/policy.md).
 - NEAR direct discovers matching tool-chat catalog/registry endpoints. NEAR/Chutes establish fresh H1/H2 locally while remaining A3/G3/X3; optional NEAR GPU diagnostics never gate admission or contact NRAS, and GPU evidence that reaches the SDK is rejected locally instead of using its NRAS default. Privatemode remains A2/H3/G3/X3 under exact hard-pin or explicit logged-CDN manifest admission.
 - Tinfoil platform authority is the exact `cvmimage` platform-release workflow; strict v2 references require an authenticated same-release classic companion. Genoa H2 retains publisher minima/production checks; Intel OutOfDate public workers remain unavailable. NRAS authenticates device/overall tokens under the same GPU gates.
+- The Tinfoil router no longer uses Tinfoil's SDK. pi-tee appraises it under a fresh nonce with revocation, firmware floors and its public release workflow, then sends once over its attested keys. It remains A3/H3/G3/X3. [Router](docs/providers/tinfoil.md#router).
 - User guides, policy/hardware reference and maintainer procedures now have separate homes. Dated investigations/reviews keep their scopes, verdicts and compatibility links; verifier rationale lives beside code. The comment-only Go update includes a rebuilt CI artifact/pin, without changing verifier logic.
 
 ### Fixed
 
 - Preserve native credential selection across all four extensions; reject ambiguous Privatemode attestation-field aliases and manifest/policy mismatches before inference.
-- Guard final post-hook payload/model/endpoint/authentication; bind actual sockets/recipient keys, bound memory/time and reject forged output, reconnects and unwanted resends. Chutes' owned invocation socket cannot replay HTTP 421. The Tinfoil SDK router's single disclosed key-mismatch recovery remains the exception.
+- Guard final post-hook payload/model/endpoint/authentication; bind actual sockets/recipient keys, bound memory/time and reject forged output, reconnects and unwanted resends. Chutes' owned invocation socket cannot replay HTTP 421.
 - Correct documentation facts/links and reconcile anonymous versus credentialed provider evidence. Document Privatemode runtime-added gateway headers and the cost of Tinfoil per-request cache salts. Local Markdown links are checked in CI.
 
 ### Security and limits

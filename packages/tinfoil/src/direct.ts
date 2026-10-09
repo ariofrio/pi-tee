@@ -6,9 +6,9 @@ import {
 
 // `logicalBaseUrl` lets a profile with discovered workers keep one canonical
 // endpoint: callers address it, and only this transport's attested host is dialed.
-export async function openEncryptedWorkerTransport(signal: AbortSignal, host: string, keys: { tls: string; hpke: string }, expiresAt?: number, logicalBaseUrl?: string): Promise<SdkTransport> {
+export async function openEncryptedWorkerTransport(signal: AbortSignal, host: string, keys: { tls: string; hpke: string }, expiresAt?: number, logicalBaseUrl?: string, wireFetch?: typeof globalThis.fetch): Promise<SdkTransport> {
   const endpoint = `https://${host}/v1/chat/completions`;
-  return openEncryptedTransport(signal, keys.hpke, endpoint, logicalBaseUrl ?? `https://${host}/v1`, pinnedTlsFetch(endpoint, keys.tls, expiresAt), expiresAt);
+  return openEncryptedTransport(signal, keys.hpke, endpoint, logicalBaseUrl ?? `https://${host}/v1`, wireFetch ?? pinnedTlsFetch(endpoint, keys.tls, expiresAt), expiresAt);
 }
 
 export const GATEWAY_MODELS = Object.freeze(["deepseek-v4-1-flash", "glm-5-3"] as const);

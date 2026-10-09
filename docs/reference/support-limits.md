@@ -8,7 +8,7 @@ Use the locked Node 24 workspace and Pi 1.0.4. Local NVIDIA and Tinfoil CPU/rele
 | Tinfoil public direct and billing gateway | Node and Bun live Pi suites are recorded for the stated models/revisions in [evidence](../evidence/README.md#tinfoil) |
 | NEAR direct, Chutes, Privatemode | Node/Bun adapter checks and sampled live suites are in [provider evidence](../evidence/README.md#other-providers) |
 | NEAR SDK gateway | Node path; direct is the portable Node/Bun path |
-| Tinfoil SDK router | Recorded Bun-compiled Pi 1.0.4 Sigstore dynamic-import failure; standalone Bun/loading success does not establish compiled-Pi router support |
+| Tinfoil router | Uses the public-direct WASM verifier and owned transport; Node live appraisal and inference recorded in the [router appraisal record](../evidence/tinfoil/router-appraisal.md). No Bun-compiled Pi router suite has been run since the SDK was removed |
 | Android/Termux | Client target; emulator credential-free appraisal recorded in [portability evidence](../evidence/client/portable-verification.md). No Android live Pi suite was established |
 
 ## Payload and lifetime bounds
@@ -29,6 +29,6 @@ Unsupported request fields, hosted tools, transport overrides and remote media a
 
 ## Errors, retries and cancellation
 
-Direct owned transports send once and reject redirects, reconnects and resends. Chutes invocation owns its WebPKI socket so HTTP 421 cannot trigger a runtime resend. The Tinfoil SDK router retains one disclosed EHBP key-configuration mismatch recovery: re-attest and resend the same guarded request once. A second mismatch or other error fails. Pi provider retries are disabled; fixed terminal error codes also suppress Pi 1.0.4 turn/summarization retry paths. [safeFailure()](../../packages/core/src/provider.ts).
+Direct owned transports send once and reject redirects, reconnects and resends. Chutes invocation owns its WebPKI socket so HTTP 421 cannot trigger a runtime resend. The Tinfoil router also sends once: a key rotation ends the dispatch. Pi provider retries are disabled; fixed terminal error codes also suppress Pi 1.0.4 turn/summarization retry paths. [safeFailure()](../../packages/core/src/provider.ts).
 
 Cancellation aborts local work/readers and disposes sessions, keys and verifier workers. A local acknowledgement or live-delta abort does not measure remote generation-stop timing. Availability, truthful billing, traffic analysis, output correctness and local compromise remain outside the [security boundary](../../SECURITY.md).
