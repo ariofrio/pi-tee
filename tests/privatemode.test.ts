@@ -266,7 +266,7 @@ test("actual SDK encrypts every prompt/tool/reasoning content field and rejects 
   assert.equal(messages.at(-1).kind, "rejected");
 });
 
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import { resolve } from "node:path";
 import {
   manifestRecorder,
@@ -311,6 +311,7 @@ test("explicit CDN admission records every adopted change before returning and f
   );
 });
 test("manifest policy transitions are recorded before adoption and contain only authority metadata", async () => {
+  await mkdir(resolve(".scratch/work"), { recursive: true });
   const dir = await mkdtemp(resolve(".scratch/work/manifest-record-"));
   try {
     const path = resolve(dir, "adoptions.jsonl");
