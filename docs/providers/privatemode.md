@@ -34,6 +34,6 @@ The gateway uses hostname-verified WebPKI HTTPS with the platform's TLS 1.2+ def
 
 The shipped tool-chat snapshot contains `glm-5.3`, `glm-5.3-flash` and `gpt-oss-120b`. Credentialed `/privatemode models refresh` admits only those IDs with generation/tool support; aliases and specialized endpoints are excluded. GLM context is one million tokens, GPT 131,072; prices are unavailable. These are catalog claims.
 
-Reasoning-off/minimal selects low effort because these effort-only APIs do not disable reasoning. GLM low maps to low, medium/high to high, xhigh to max. GPT supports low/medium/high. See the source links in the [validation record](../evidence/providers/privatemode-validation.md#source-evidence).
+Reasoning-off/minimal selects low effort because these effort-only APIs do not disable reasoning. GLM low maps to low, medium/high to high and max to max; Pi offers no xhigh. GPT supports low/medium/high. See the source links in the [validation record](../evidence/providers/privatemode-validation.md#source-evidence).
 
 Use the [shared commands](../reference/commands-settings.md) and [payload/lifetime limits](../reference/support-limits.md). Cancellation terminates workers and readers; it does not prove remote generation stopped. Retention/training/audit commitments have not been appraised and do not gate admission. [Live procedure](../procedures/live-validation.md).

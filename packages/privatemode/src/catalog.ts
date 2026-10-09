@@ -1,4 +1,4 @@
-import { catalogModel, entries, strings } from "pi-tee-core";
+import { catalogModel, entries, nativeEffortLevels, strings } from "pi-tee-core";
 import { PRIVATEMODE_BASE_URL } from "./wire.js";
 // Versioned catalog claims. The authenticated /v1/models endpoint needs a key;
 // catalog startup must not bootstrap with an unstored credential.
@@ -45,24 +45,11 @@ export function privatemodeCatalog(value: unknown) {
         maxTokensField: "max_completion_tokens",
         supportsReasoningEffort: true,
       };
-      model.thinkingLevelMap =
-        id === "gpt-oss-120b"
-          ? {
-              off: "low",
-              minimal: "low",
-              low: "low",
-              medium: "medium",
-              high: "high",
-              xhigh: "high",
-            }
-          : {
-              off: "low",
-              minimal: "low",
-              low: "low",
-              medium: "high",
-              high: "high",
-              xhigh: "max",
-            };
+      // These effort-only APIs cannot disable reasoning, so off selects the weakest effort.
+      model.thinkingLevelMap = nativeEffortLevels(
+        id === "gpt-oss-120b" ? ["low", "medium", "high"] : ["low", "high", "max"],
+        "low",
+      );
       return model;
     });
 }

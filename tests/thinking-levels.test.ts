@@ -4,6 +4,7 @@ import { getSupportedThinkingLevels, normalizeContext, openAICompletionsApi, typ
 import { parseChutesCatalog } from "../packages/chutes/src/catalog.js";
 import { parseNearCatalog } from "../packages/nearai/src/catalog.js";
 import { parseTinfoilCatalog } from "../packages/tinfoil/src/catalog.js";
+import { privatemodeCatalog, SHIPPED_CATALOG } from "../packages/privatemode/src/catalog.js";
 
 type Level = "off" | "low" | "medium" | "high" | "xhigh" | "max";
 
@@ -78,4 +79,10 @@ test("Tinfoil's effort map names the template's efforts; Pi's levels select them
     xhigh: { kwargs: { reasoning_effort: "xhigh", thinking: true }, effort: undefined },
   });
   assert.deepEqual(await sent(ds, "off"), { kwargs: { thinking: false }, effort: undefined });
+});
+
+test("Privatemode GLM effort follows the template's own names; off selects its weakest effort", async () => {
+  const glm = privatemodeCatalog(SHIPPED_CATALOG).find(m => m.id === "glm-5.3")!;
+  const efforts = Object.fromEntries(await Promise.all((["off", "low", "medium", "high", "max"] as const).map(async l => [l, (await sent(glm, l)).effort])));
+  assert.deepEqual(efforts, { off: "low", low: "low", medium: "high", high: "high", max: "max" });
 });
