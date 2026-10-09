@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { GPU_POLICIES } from "./gpu-policy.js";
 import { SNP_FIRMWARE } from "./snp-measurement.js";
-import { NVIDIA_ARTIFACTS } from "pi-tee-core";
+import { TDX_SVN_FLOOR, TDX_COLLATERAL_FLOOR, NVIDIA_ARTIFACTS } from "pi-tee-core";
 import { WASM_ARTIFACTS } from "./wasm-artifacts.js";
 import { CERTIFICATE_CHAINS, PUBLIC_MODELS, REQUIRED_CLAIMS, WORKER_HOST } from "./worker-appraisal.js";
 
@@ -15,7 +15,7 @@ const authorityPolicy = {
   workerHosts: WORKER_HOST.source,
   cpu: {
     tdx: { root: "267a851c8d10982685b5f219d9ac2600ba71463569a6541827c2dc9fe9d6d699",
-      status: "UpToDate", attributes: "0000001000000000", svnFloor: "03010200000000000000000000000000", collateralFloor: 20 },
+      status: "UpToDate", attributes: "0000001000000000", svnFloor: TDX_SVN_FLOOR, collateralFloor: TDX_COLLATERAL_FLOOR },
     sevSnp: { arks: { genoa: "4c6598d19c18719c5dfd4a7d335f674e5bfe1d8f800cea2cf270c10d103db2f1", turin: "1f084161a44bb6d93778a904877d4819cafa5d05ef4193b2ded9dd9c73dd3f6a" },
       revocation: "AMD CRL", tcbFloors: "platform publisher, raised to local per-CPU floors",
       // AMD-SB-3019/3020/3027, keyed on the report's CPUID family/model/stepping.

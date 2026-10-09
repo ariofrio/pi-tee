@@ -12,6 +12,7 @@ export * from "./nvidia-verifier.js";
 export { NVIDIA_ARTIFACTS } from "./nvidia-artifacts.js";
 
 export * from "./security.js";
+export * from "./tdx-host.js";
 
 export * from "./nras.js";
 
