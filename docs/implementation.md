@@ -4,24 +4,21 @@ Current policy and route behavior is defined by the [security model](security-mo
 
 ## Security-model validation
 
-Validated 2026-10-09 with the locked Node 24 workspace, Bun 1.3.13 and the official Bun-compiled Pi 1.0.4 macOS ARM64 binary. The new parser/route tests were run red before implementation. `npm run check` passes all 113 tests with private CPU/boot/artifact fixtures enabled, with no skips. Compiled loading/native login and isolated tarball smokes pass. Go vet/tests and the local NVIDIA authentic-evidence/collateral negative checks pass.
+Validated 2026-10-09 with the locked Node 24 workspace, standalone Bun 1.3.13 and the official Bun-compiled Pi 1.0.4 macOS ARM64 binary (embedded Bun 1.3.14). Policy and routing changes were tested red before implementation. `npm run check` passes 126 tests with private CPU/boot/artifact fixtures enabled, with no skips. Compiled loading/native login and isolated tarball smokes pass. Native command resolution contains only `nearai` and `tinfoil`, with no collisions. Go vet/tests and Bun's 25 transport/verifier/selection tests pass.
 
-[Core/provider CI](https://github.com/ariofrio/pi-tee/actions/runs/37919888867) passed Node 24, Node 26, Bun and Go. [Independent verifier rebuild and six desktop Node/Bun runtime jobs](https://github.com/ariofrio/pi-tee/actions/runs/37919021632) passed. The committed CPU archive was downloaded from that build; its uncompressed module and pin match the local build.
+[CI for the initially reviewed implementation](https://github.com/ariofrio/pi-tee/actions/runs/37921356590) passed Node 24, Node 26, Bun and Go. The platform migration at [45c122e](https://github.com/ariofrio/pi-tee/commit/45c122e6e7c480bf2f61dac5ff16a074382abb58) passed the [independent verifier rebuild and six desktop Node/Bun jobs](https://github.com/ariofrio/pi-tee/actions/runs/37924263574). The committed CPU archive was downloaded from that build; its uncompressed module and pin match the local build. Subsequent core/provider fixes and tests are recorded in the [branch CI history](https://github.com/ariofrio/pi-tee/actions/workflows/ci.yml?query=branch%3Aariofrio%2Fsecurity-model-policies).
 
 | Live route / runtime | Result |
 | --- | --- |
-| NEAR GLM direct, Node | Full suite passed: native secret login, stored-key precedence, completion/usage, Unicode tools/follow-up, reasoning and RPC cancellation. Policy `trust-provider-and-host,host=current`. |
-| NEAR GLM direct, Bun-compiled Pi | Same full suite passed under the same policy. |
-| Tinfoil Gemma direct, Node | Full suite passed under `public-builds-trust-host,egress=metadata,host=outdated-firmware,gpu=verified`. This permits H2; it does not prove every selected worker was H2. |
-| Tinfoil direct, default policy, Node and Bun-compiled Pi | Repeated preflight rejections; one Bun attempt completed basic inference before a later tool-stage appraisal rejected. No full default-policy run completed. |
-| Tinfoil direct, H2 policy, Bun-compiled Pi | Preflight rejected; no full run completed. |
-| Tinfoil router, Node | Basic completion/usage and Unicode tools/follow-up passed; reasoning request failed with sanitized `TEE_REQUEST_FAILED`. |
-| Tinfoil router, Bun-compiled Pi | Preflight rejected with `TEE_POLICY_ROUTE_REJECTED`. |
-| NEAR Qwen gateway, Node | Basic completion/usage and Unicode tools/follow-up passed with H2 allowed. Reasoning returned a completion without the expected arithmetic answer, so the harness failed before cancellation. |
+| NEAR GLM direct, Node and Bun-compiled Pi | Full suites passed: native secret login, stored-key precedence, completion/usage, Unicode tools/follow-up, reasoning and RPC cancellation. Policy `trust-provider-and-host,host=current`. |
+| Tinfoil Gemma, DeepSeek and GLM direct, Node and Bun-compiled Pi | All six full suites passed under the shipped default `public-builds,egress=metadata` after authenticating the migrated platform publisher. |
+| Tinfoil router, Node | Full suite passed under `trust-provider-and-host`. |
+| Tinfoil router, Bun-compiled Pi | Full runs rejected at preflight. On identical fresh ATC bundles, both main's SDK route and the branch fail to dynamically load `@freedomofpress/sigstore-browser` inside compiled Pi; standalone Node and Bun load and attest both successfully. The same SDK still permits one re-attestation/resend only for an EHBP key-configuration mismatch. Native provider tests cover success after one mismatch, failure after two, and no recovery on other errors. |
+| NEAR Qwen gateway, Node | Full suite passed with H2 allowed. The earlier reasoning failure was a model output truncated at the harness's 1024-token cap, not a transport error. The cap is now 2048 for synthetic reasoning checks only; other checks remain at 1024. |
 
-These are observations, not claims that all live availability failures share one cause. A fresh DeepSeek worker sample returned `TEE_PLATFORM_REFERENCE_REJECTED` from both the main-branch and changed CPU helpers on identical evidence. Those authority checks were not relaxed. Candidate selection now appraises all eight reachable workers within the existing probe bound, rather than stopping after four rejects.
+Fresh non-inference appraisals used the same candidates and signed evidence on main and the branch. Before the platform migration, both trees rejected all 14 responding sampled workers at the old platform-reference authority. After the approved authority update, eight Gemma inf8 workers, DeepSeek inf16 and GLM inf17/18 passed A1/H1/G1/X2 on the branch; main continued to reject the same evidence. Gemma inf6-3 retained its CPU-floor rejection (SNP 23/ucode 84 below local SNP 27/ucode 86). GLM inf20/21 retained their rejection because their Turin identities are absent from the authenticated machine map. No CPU/GPU floor or machine restriction was relaxed. Candidate selection tries at most eight reachable workers and stops once the best achievable rating is found.
 
-NRAS is covered by signed overall/per-device token fixtures and the common GPU policy tests. An optional live NRAS evidence-export probe was rejected by automatic approval review and was not run. No inference credentials or payloads are retained in this validation record. Cancellation proves local abort/acknowledgement, not remote generation-stop timing.
+NRAS is covered by signed overall/per-device token fixtures passed through the common GPU rating gates; no live NRAS probes were run. No inference credentials or payloads are retained in this validation record. Cancellation proves local abort/acknowledgement, not remote generation-stop timing.
 
 ## Earlier implementation and validation
 

@@ -48,7 +48,7 @@ jobs:
           bun-version: 1.3.13
       - run: npm ci --ignore-scripts
       - run: npm run build
-      - run: bun test tests/pinned-tls.test.ts tests/wasm-verifiers.test.ts tests/worker-selection.test.ts
+      - run: bun test tests/pinned-tls.test.ts tests/wasm-verifiers.test.ts tests/worker-selection.test.ts tests/near-direct-channel.test.ts
 
   go:
     runs-on: ubuntu-24.04

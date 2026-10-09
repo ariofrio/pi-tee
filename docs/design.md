@@ -12,7 +12,7 @@ Tinfoil direct verifies its public guest/runtime/container/key chain, fresh CPU 
 
 NEAR direct and gateway remain A3/G3/X3. A native QVL wrapper authenticates Intel evidence and reads the TDX SVN and verified TCB/QE collateral editions the SDK discards; H1 requires local floors, otherwise fresh evidence is H2. The gateway takes the weakest CPU rating across itself and checked model workers. Optional GPU details run locally, never through NRAS, and cannot gate or promote G3. NEAR direct owns one TLS 1.3 socket for evidence, encrypted inference and signature lookup.
 
-GPU policy is shared: a fully authenticated complete setup is G1, documented authenticated gaps are G2, and incomplete coverage is G3. Opt-in NRAS authenticates all detached device tokens and their signed overall digests, then applies the same mode/count/firmware checks as local appraisal. B1/B2 and S1/S2 are rejected as not yet supported. `/status` reports actual evidence, trust, gaps, commitments and route choices; potential levels used for discovery are never reported as verified.
+GPU policy is shared: a fully authenticated complete setup is G1, documented authenticated gaps are G2, and incomplete coverage is G3. Opt-in NRAS authenticates all detached device tokens and their signed overall digests, then applies the same mode/count/firmware checks as local appraisal. B1/B2/B4 admission and S1/S2 are rejected as not yet supported. `/nearai status` and `/tinfoil status` report actual evidence, trust, gaps, commitments and route choices; potential levels used for discovery are never reported as verified.
 
 ## Client portability
 
@@ -39,6 +39,8 @@ For the implemented Tinfoil CPU/public-release verifier, the finite remote set i
 - `tinfoilsh/cvmimage/.github/workflows/release.yml@refs/tags/vMAJOR.MINOR.PATCH` for guest build artifacts and their public source commit.
 - `tinfoilsh/platform-endorsements/.github/workflows/build.yml@refs/tags/vMAJOR.MINOR.PATCH` for platform references and machine policy.
 - `tinfoilsh/freshness-witness/.github/workflows/freshness.yml@refs/heads/main` for continued acceptance of both artifacts.
+
+The platform publisher also accepts `https://github.com/tinfoilsh/cvmimage/.github/workflows/platform-release.yml@refs/tags/platform-vMAJOR.MINOR.PATCH`, with the exact tag form `^platform-v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$`, public source and a GitHub-hosted runner. The old `platform-endorsements` authority remains accepted. Both are Tinfoil publisher authorities. The authenticated v2 schema rejects unknown fields and versions. For the current classic quote path, v2 requires an independently authenticated v1 classic companion from the same exact tag, run and source commit, with each subject name/digest checked against the release. Missing or mismatched companions fail closed. All MRTD, RTMR0, machine-shape, HOST_DATA and CPU/GPU floors remain enforced.
 
 The [probe inventory](../tools/tinfoil-public-build/README.md) records exact root hashes and dependency versions. It does not appraise a GPU or authorize inference, so GPU/runtime qualification belongs to the [integrated public profile](tinfoil-public-profile.md), rather than this evidence-only probe. GitHub is additionally trusted to serve public source for the configuration comparison; signed subject digests authenticate downloaded deployment and guest artifact bytes.
 

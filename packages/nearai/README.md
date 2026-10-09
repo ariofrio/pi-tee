@@ -12,7 +12,7 @@ GPU evidence is optional local status detail. Even authentic reports do not esta
 
 The [direct channel](src/direct-channel.ts) owns one WebPKI-authenticated TLS 1.3 socket for fresh evidence, OHTTP inference and signature lookup. Attested SPKI approval precedes credentials, and reconnect, repeat inference POSTs and arbitrary paths are rejected. It supports Node 24 and Bun-compiled Pi. The SDK gateway remains Node-only. Both routes retain field encryption/OHTTP and buffer bounded responses until a model-serving signature verifies; shared signing keys do not identify exclusive serving-instance custody. Decrypted bodies are capped at 8 MiB and encrypted/network bodies at 32 MiB.
 
-`PI_NEARAI_POLICY` and `PI_NEARAI_ROUTE` are removed with migration errors. Removed `sdk` maps to `trust-provider-and-host`; `approved` points to pinned review, which is not yet supported. `/nearai policy <position>[,axis=value…]` aborts active requests and changes the current session only. `/status` and `/nearai status` show actual levels, trust, gaps, commitments and route choices. Commitments are displayed without gating admission or claiming verified deployed retention behavior.
+`PI_NEARAI_POLICY` and `PI_NEARAI_ROUTE` are removed with migration errors. Removed `sdk` maps to `trust-provider-and-host`; `approved` points to pinned review, which is not yet supported. `/nearai policy <position>[,axis=value…]` aborts active requests and changes only this provider in the current session. `/nearai status` shows actual levels, trust, gaps, commitments and route choices. Commitments are displayed without gating admission or claiming verified deployed retention behavior.
 
 ## Discovery and scope
 

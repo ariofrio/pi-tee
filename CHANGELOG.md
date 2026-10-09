@@ -2,10 +2,13 @@
 
 ## Unreleased
 
+- Accept Tinfoil’s `cvmimage/.github/workflows/platform-release.yml@refs/tags/platform-vMAJOR.MINOR.PATCH` platform authority alongside `platform-endorsements`, retaining exact tag/hosted-runner checks and every CPU/GPU floor and machine restriction. Authenticate strict v2 predicates and require their independently authenticated same-release classic companion for the current quote path.
+- Use only `/nearai status` and `/tinfoil status` to avoid Pi command collisions. Report actual rejected worker levels and failing axes; stop worker appraisal early when unchecked GPU evidence cannot improve. Reject unsupported `build=signed` and unrated legacy dispatch. Preserve and disclose the router SDK’s one key-rotation resend; no other retry is added.
+
 - Replace policy and route environment variables with `PI_TEE_POLICY=<position>[,axis=value…]`. Four positions disclose provider/host trust; defaults, forced values and categories are validated. The shipped default is `public-builds,egress=metadata`; removed `sdk`/`approved` and provider-specific variables return migration guidance. Build reproduction and pinned/window review remain unsupported.
 - Rate actual route evidence on code, CPU, GPU and plaintext handling; admit every threshold and select by code, host, GPU, then egress. Genoa can qualify as H2 under explicit host trust while retaining publisher minima, revocation and production checks. Intel OutOfDate Tinfoil direct workers remain unavailable under every policy.
 - Check NEAR's authenticated TDX SVN and collateral-edition floors locally for H1. Below-floor or unreadable values rate H2. NEAR routes remain A3/G3/X3; optional GPU diagnostics no longer gate admission and never contact NRAS. Direct TLS supports Bun-compiled Pi.
-- Authenticate NRAS overall/per-device tokens before applying the same G checks as local appraisal. `/status` and provider status commands show position, actual trusts, every gap, observations, commitments and route choices. Dispatch cannot outlive its appraised session.
+- Authenticate NRAS overall/per-device tokens before applying the same G checks as local appraisal. Provider-scoped status commands show position, actual trusts, every gap, observations, commitments and route choices. Dispatch cannot outlive its appraised session.
 - Validation for this model is recorded in [implementation.md](docs/implementation.md). The earlier entries below describe preceding implementations.
 
 - Validate pi-tee on Android/Termux (arm64 emulator, Node 24 and 26). Run CI on Node 26 as well, and give CLI-spawning tests more time for slow cold starts.

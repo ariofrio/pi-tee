@@ -1,6 +1,8 @@
 # Confidential-inference providers vs. the pi-tee security model
 
-Survey date: 2026-10-08; security-model ratings re-verified 2026-10-09. [Current model](security-model.md). ## Ratings under the security model
+Survey date: 2026-10-08; security-model ratings re-verified 2026-10-09. [Current model](security-model.md).
+
+## Ratings under the security model
 
 Each provider is rated on the model's four axes, under its "verified only" rule: anything a client can't check counts as the worst level it could be. "Tightest policy" is the strictest pi-tee policy that would admit the provider if pi-tee had an adapter for it: the position, plus every level stricter than that position's defaults. Every cell was re-verified on 2026-10-09 against current source at pinned commits and live probes with our own nonces ([verification report](provider-ratings-verification.md)). Cells marked † are unresolved: the value shown is the conservative one, not an observed failure.
 
@@ -8,8 +10,8 @@ Each provider is rated on the model's four axes, under its "verified only" rule:
 | --- | --- | --- | --- | --- | --- | --- |
 | **Tinfoil direct** (baseline) | A1 | H1 | G1 | X2 | `public-builds,egress=metadata` | The levels pi-tee's admission requires; workers below them are skipped. |
 | **Privatemode** | **A2** | H3 | G3 | X3 | `trust-provider-and-host,code=fixed-private` | The client compares the exact manifest it pinned, so code changes are visible (A2), but manifests aren't signed or publicly logged. Workers are checked by the Coordinator, not freshly by the client (H3). GPU checks stay in-guest (G3). The production manifest was byte-identical on 2026-10-09. |
-| **Confidential AI** | A3 | H1 | G3 | X3 | `trust-provider-and-host,host=current` | The operator key can exec into pods and read memory; its removal is still planned (A3). A same-connection probe verified the front door's nonce and key binding and six component receipts, all `UpToDate` and at current TDX floors (H1, for those components only). No raw GPU evidence is public (G3). |
-| **Chutes** | A3 | H3† | G3 | X3 | `trust-provider-and-host` | Chutes' own keys admit chute images at runtime (A3). Quotes are authentic and `UpToDate`, but the public response omits the key needed to check the nonce commitment, and the key endpoint returns 401 (H3†). Reported GPUs aren't shown to be the serving set (G3). |
+| **Confidential AI** | A3 | H1 | G3 | X3 | `trust-provider-and-host,host=current` | The operator key can exec into pods and read memory (A3). Its threat model still says "Removal of the operator key from production is planned" at the repository's current head, `0f4bcba`, checked 2026-10-09 ([threat-model.md L171–182](https://github.com/confidential-dot-ai/confidential-inference/blob/0f4bcba628b5af3f2572ab97f8cb5a9ec7dd926b/docs/threat-model.md#L171-L182)). A same-connection probe verified the front door's nonce and key binding and six component receipts, all `UpToDate` and at current TDX floors (H1, for those components only). No raw GPU evidence is public (G3). |
+| **Chutes** | A3 | **H1** | G3 | X3 | `trust-provider-and-host,host=current` | Chutes' own keys admit chute images at runtime (A3). With an API key, all four sampled instances' quotes commit to our nonce and their ML-KEM key, and are bound to the host TLS key that signs the attested body. All are `UpToDate` and meet pi-tee's TDX floors (H1, for the instance-key path only; the public API's TLS key is a different key). Reported GPUs aren't shown to be the serving set (G3). |
 | **Cohere** Model Vault | A3† | H3 | G3 | X3 | `trust-provider-and-host` | Some images are referenced by tag; whether the runtime can change executable code is unresolved (A3†). The passport flow has no client nonce (H3). |
 | **Phala / RedPill** | A3 | H3 | G3 | X3 | `trust-provider-and-host` | The gateway's upstreams change at runtime through an admin API (A3). The ACI endpoint omits the client nonce, and downstream coverage is unproven (H3). GPU evidence is empty (G3). |
 | **Venice**, NEAR-backed models | A3 | H2 | G3 | X3 | `trust-provider-and-host,host=outdated-firmware` | Inherits NEAR's runtime deployment (A3). The sampled NEAR worker's quote is nonce-bound but `OutOfDate` (H2). |
@@ -24,13 +26,14 @@ Each provider is rated on the model's four axes, under its "verified only" rule:
 | **Hyperscalers, Apple, Google, others** | — | — | — | — | Out of scope | No third-party chat API with client evidence; see the [rule-outs](#ruled-out-quickly). |
 
 - **Every in-scope provider lands at `trust-provider-and-host`,** the same position as NEAR. None reaches `public-builds` or the positions in between.
-- **Within that position, Privatemode ranks first** under the code-first tie-break: it's the only A2. Confidential AI is next, as the only other provider with H1 for its checked components.
+- **Within that position, Privatemode ranks first** under the code-first tie-break: it's the only A2. Confidential AI and Chutes come next, with H1 for their checked paths.
+- **Privatemode could reach A1 without Edgeless's help:** pin a manifest you rebuilt from `privatemode-public` under Nix. That's A1 at B1 and S1, a stronger build-integrity point than Tinfoil direct's B3, if the rebuild covers every plaintext-handling component (unverified). Its H3 and G3 remain, so the tightest policy would be `public-builds-trust-host`. The rebuild needs Linux x86-64 and Nix per release; pi-tee's CI could do it, but that's B2.
 - **What would move Privatemode up:**
   - To A1: signed manifests published through a named public workflow.
   - To fresh host checks: per-worker evidence reaching the client.
   - To G1: raw per-GPU evidence bound to the worker quote, with a multi-GPU mode check.
 - **Changes from the 2026-10-08 ratings:**
-  - Chutes and Prem dropped from H1 to H3†.
+  - Prem dropped from H1 to H3†. Chutes dropped to H3† too, then was settled at H1 with an API key on 2026-10-09.
   - CONFSEC dropped from A2 to A3†.
   - Cocoon was resolved to A3 and H3.
   - Venice was split by upstream.
