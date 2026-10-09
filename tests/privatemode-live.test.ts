@@ -60,6 +60,7 @@ test(
       "closure",
       "duplicate-policy",
       "manifest",
+      "shadowed-document",
       "secret-signature",
     ] as const) {
       let secretRequests = 0;
@@ -83,11 +84,18 @@ test(
           const response = await base(request);
           if (
             path.endsWith("/attest") &&
-            ["mesh-key", "closure", "duplicate-policy", "manifest"].includes(
-              mutation,
-            )
+            [
+              "mesh-key",
+              "closure",
+              "duplicate-policy",
+              "manifest",
+              "shadowed-document",
+            ].includes(mutation)
           ) {
-            const body = (await response.json()) as { AttestationDoc: string };
+            const body = (await response.json()) as {
+              AttestationDoc: string;
+              attestationdoc?: string;
+            };
             const doc = JSON.parse(
               Buffer.from(body.AttestationDoc, "base64").toString(),
             );
@@ -104,6 +112,12 @@ test(
                 Buffer.from(doc.manifests[0], "base64"),
                 Buffer.from("\n"),
               ]).toString("base64");
+            if (mutation === "shadowed-document") {
+              body.attestationdoc = body.AttestationDoc;
+              doc.raw_attestation_doc = Buffer.from(
+                "unauthenticated diagnostic bytes",
+              ).toString("base64");
+            }
             body.AttestationDoc = Buffer.from(JSON.stringify(doc)).toString(
               "base64",
             );

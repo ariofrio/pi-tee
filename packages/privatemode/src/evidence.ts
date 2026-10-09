@@ -1,4 +1,38 @@
-import { snpMeetsFloors, tdxMeetsFloors } from "pi-tee-core";
+import { snpMeetsFloors, tdxMeetsFloors, TeeError } from "pi-tee-core";
+
+// Go's JSON decoder accepts case aliases; restrict the shared input schema so
+// its verifier and our diagnostic decoder consume the same fields.
+export function decodeCoordinatorResponse(
+  value: unknown,
+): Record<string, unknown> {
+  if (
+    !value ||
+    typeof value !== "object" ||
+    Object.keys(value).length !== 1 ||
+    typeof (value as any).AttestationDoc !== "string"
+  )
+    throw new TeeError("TEE_ATTESTATION_REJECTED");
+  const doc = JSON.parse(
+    Buffer.from((value as any).AttestationDoc, "base64").toString(),
+  );
+  const fields = new Set([
+    "version",
+    "raw_attestation_doc",
+    "attestation_type",
+    "manifests",
+    "policies",
+    "root_ca",
+    "mesh_ca",
+  ]);
+  if (
+    !doc ||
+    typeof doc !== "object" ||
+    Array.isArray(doc) ||
+    Object.keys(doc).some((key) => !fields.has(key))
+  )
+    throw new TeeError("TEE_ATTESTATION_REJECTED");
+  return doc;
+}
 /** Diagnostic decoding only, after the Contrast SDK authenticated these exact
  * protobuf bytes. Parsing never establishes authenticity or worker coverage. */
 function fields(raw: Uint8Array): Map<number, bigint | Uint8Array> {

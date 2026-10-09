@@ -2,7 +2,10 @@ import { parentPort, workerData } from "node:worker_threads";
 import { createHash } from "node:crypto";
 import { TeeError, readBoundedBody, MAX_REQUEST_BYTES } from "pi-tee-core";
 import { loadPrivatemodeSdk } from "./sdk.js";
-import { coordinatorFloorObservation } from "./evidence.js";
+import {
+  coordinatorFloorObservation,
+  decodeCoordinatorResponse,
+} from "./evidence.js";
 const port = parentPort!;
 for (const method of ["log", "debug", "info", "warn", "error"] as const)
   console[method] = () => undefined;
@@ -66,10 +69,7 @@ globalThis.fetch = async (input, init) => {
     headers: reply.headers,
   });
   if (path === "/privatemode/v1/attest" && response.ok) {
-    const data = (await response.clone().json()) as { AttestationDoc: string };
-    const doc = JSON.parse(
-      Buffer.from(data.AttestationDoc, "base64").toString(),
-    ) as Record<string, unknown>;
+    const doc = decodeCoordinatorResponse(await response.clone().json());
     const manifests = doc.manifests as string[];
     if (
       !Array.isArray(manifests) ||

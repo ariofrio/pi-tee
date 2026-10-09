@@ -7,6 +7,42 @@ import {
   SHIPPED_CATALOG,
 } from "../packages/privatemode/src/catalog.js";
 import { createPinnedManifestPolicy } from "../packages/privatemode/src/manifest.js";
+import { decodeCoordinatorResponse } from "../packages/privatemode/src/evidence.js";
+
+test("the diagnostic decoder and Go verifier cannot select different case-aliased attestation fields", () => {
+  const doc = {
+    version: "fixture",
+    raw_attestation_doc: "",
+    attestation_type: [1, 3, 9901, 2, 1],
+    manifests: [],
+    policies: [],
+    root_ca: "",
+    mesh_ca: "",
+  };
+  const wrap = (value: object) => ({
+    AttestationDoc: Buffer.from(JSON.stringify(value)).toString("base64"),
+  });
+  assert.deepEqual(decodeCoordinatorResponse(wrap(doc)), doc);
+  assert.throws(
+    () =>
+      decodeCoordinatorResponse({
+        ...wrap(doc),
+        attestationdoc: wrap(doc).AttestationDoc,
+      }),
+    /TEE_ATTESTATION_REJECTED/,
+  );
+  assert.throws(
+    () =>
+      decodeCoordinatorResponse(
+        wrap({ ...doc, RAW_ATTESTATION_DOC: "shadowed" }),
+      ),
+    /TEE_ATTESTATION_REJECTED/,
+  );
+  assert.throws(
+    () => decodeCoordinatorResponse(wrap({ ...doc, Mesh_CA: "shadowed" })),
+    /TEE_ATTESTATION_REJECTED/,
+  );
+});
 
 test("native Pi reasoning-off selects the supported minimum effort instead of the server's default", async () => {
   for (const model of privatemodeCatalog(SHIPPED_CATALOG)) {
