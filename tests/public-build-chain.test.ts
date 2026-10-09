@@ -80,20 +80,24 @@ test("the artifact chain rejects substituted delivery bytes using the WebAssembl
   const down = await run(undefined, false, url => url === attestations);
   await assert.rejects(down.result, /TEE_PUBLIC_ARTIFACT_UNAVAILABLE/);
   assert.equal(down.requests.filter(url => url === attestations).length, 3);
-  // GitHub API metadata persists across processes once a chain verifies, and
-  // a failing chain discards what it read.
+  // Each GitHub API lookup persists across processes once its own check
+  // passes, survives unrelated failures, and is dropped when its check fails.
   const { mkdtemp, readdir, writeFile } = await import("node:fs/promises");
+  const { createHash: digest } = await import("node:crypto");
   const persistentCacheDir = await mkdtemp(resolve(".scratch/work/github-metadata-"));
   const githubApi = (requests: string[]) => requests.filter(url => url.startsWith("https://api.github.com/"));
-  const persist = async (fresh = true) => {
+  const commitsUrl = `https://api.github.com/repos/${repo}/git/commits/43dc8f6d1c4d9c1504559ab181cf9dfe00ad239b`;
+  const entry = (url: string) => resolve(persistentCacheDir, digest("sha256").update(url).digest("hex"));
+  const persist = async (unavailable?: (url: string) => boolean) => {
     const requests: string[] = [];
     const fetch = (async (input: RequestInfo | URL) => {
       const url = String(input); requests.push(url);
+      if (unavailable?.(url)) return new Response("unavailable", { status: 503 });
       const bytes = artifacts.get(url); assert(bytes, `Unexpected delivery endpoint ${url}`);
       return new Response(new Uint8Array(bytes));
     }) as typeof globalThis.fetch;
     const result = verifyPublicBuildArtifacts({ repo, raw: JSON.stringify(evidence.envelope), nonce: evidence.nonce, signal: AbortSignal.timeout(60000), evidenceFetch: fetch, persistentCacheDir });
-    return { result, requests, fresh };
+    return { result, requests };
   };
   const first = await persist();
   await first.result;
@@ -102,13 +106,21 @@ test("the artifact chain rejects substituted delivery bytes using the WebAssembl
   const second = await persist();
   await second.result;
   assert.equal(githubApi(second.requests).length, 0, "A new process reuses verified GitHub metadata.");
-  for (const name of await readdir(persistentCacheDir)) await writeFile(resolve(persistentCacheDir, name), '{"parents":[{"sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}],"attestations":[]}');
-  const poisoned = await persist();
-  await assert.rejects(poisoned.result, /TEE_PUBLIC_BUILD_REJECTED/);
-  assert.equal((await readdir(persistentCacheDir).catch(() => [])).length, 0, "A failing chain discards persisted metadata.");
-  const recovered = await persist();
-  await recovered.result;
-  assert.equal(githubApi(recovered.requests).length, 2);
+  const unrelated = await persist(url => url.startsWith("https://ghcr.io/"));
+  await assert.rejects(unrelated.result, /TEE_PUBLIC_ARTIFACT_UNAVAILABLE/);
+  assert.equal((await readdir(persistentCacheDir)).length, 2, "An unrelated outage keeps verified metadata.");
+  for (const [url, poison, code] of [
+    [attestations, '{"attestations":[]}', /TEE_PUBLIC_BUILD_REJECTED/],
+    [commitsUrl, '{"parents":[{"sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}]}', /TEE_PUBLIC_BUILD_REJECTED/],
+  ] as const) {
+    await writeFile(entry(url), poison);
+    const poisoned = await persist();
+    await assert.rejects(poisoned.result, code);
+    assert.deepEqual((await readdir(persistentCacheDir)).length, 1, "Only the entry whose check failed is dropped.");
+    const recovered = await persist();
+    await recovered.result;
+    assert.deepEqual(githubApi(recovered.requests), [url]);
+  }
   // Delivery outages are reported as unavailability, not rejection.
   // A cache directory other accounts can write is ignored.
   const { chmod, rm: remove } = await import("node:fs/promises");

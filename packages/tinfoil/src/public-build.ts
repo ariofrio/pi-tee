@@ -47,8 +47,9 @@ function cacheFor(fetch: typeof globalThis.fetch, helperDigest: string) {
 // GitHub's API allows 60 unauthenticated requests per hour per address, and
 // each Pi process starts with an empty in-memory cache. The two immutable
 // API lookups (guest-build attestations by manifest digest, a release
-// commit's parents) are persisted locally, but only after a chain that used
-// them fully verified; a failing chain that read any of them discards them all.
+// commit's parents) are persisted locally once their own check passes: a
+// guest build verified from the attestation list, the parent matched against
+// the build provenance. A stored lookup whose check fails is removed.
 function defaultPersistentCacheDir() {
   const xdg = process.env.XDG_CACHE_HOME;
   return join(xdg && isAbsolute(xdg) ? xdg : join(homedir(), ".cache"), "pi-tee", "github-metadata");
@@ -72,9 +73,23 @@ export async function verifyPublicBuildArtifacts(options: {
   const { raw, nonce, signal, repo } = options;
   const evidenceFetch = options.evidenceFetch ?? globalThis.fetch;
   const persistentDir = options.persistentCacheDir ?? (options.evidenceFetch ? undefined : defaultPersistentCacheDir());
-  const persistedReads: string[] = [];
+  // Per lookup URL: bytes read from disk, or fetched and awaiting their check.
+  const persistedReads = new Set<string>();
   const pendingWrites = new Map<string, Buffer>();
   const persistentPath = (url: string) => persistentDir && join(persistentDir, sha256(Buffer.from(url)));
+  // Persist a lookup once its own check passed; drop a stored one whose check failed.
+  async function checked<T>(url: string, check: () => Promise<T> | T): Promise<T> {
+    let result: T;
+    try { result = await check(); }
+    catch (error) {
+      const path = persistedReads.has(url) && persistentPath(url);
+      if (path) await rm(path, { force: true }).catch(() => {});
+      throw error;
+    }
+    const bytes = pendingWrites.get(url);
+    if (persistentDir && bytes) await persistMetadata(persistentDir, new Map([[persistentPath(url)!, bytes]]));
+    return result;
+  }
   let cache: ArtifactCache | undefined;
   async function get(url: string, redirect: RequestRedirect = "error", maxBytes = 2 * 1024 * 1024, headers: Record<string, string> = {}, expectedDigest?: string, immutable = false, missingRejects = false): Promise<Buffer> {
     signal.throwIfAborted();
@@ -88,7 +103,7 @@ export async function verifyPublicBuildArtifacts(options: {
     if (path && await privateDirectory(persistentDir!)) {
       const stored = await readFile(path).catch(() => undefined);
       if (stored && stored.length <= maxBytes) {
-        persistedReads.push(path);
+        persistedReads.add(url);
         if (key) cache?.put(key, stored);
         return stored;
       }
@@ -111,7 +126,7 @@ export async function verifyPublicBuildArtifacts(options: {
     const bytes = Buffer.from(await readBoundedBody(response.body, maxBytes, signal));
     if (expectedDigest) assert.equal(sha256(bytes), expectedDigest);
     if (key) cache?.put(key, bytes);
-    if (path) pendingWrites.set(path, bytes);
+    if (path) pendingWrites.set(url, bytes);
     return bytes;
   }
   const input = `{"nonce":${JSON.stringify(nonce)},"envelope":${raw}}`;
@@ -153,17 +168,22 @@ export async function verifyPublicBuildArtifacts(options: {
     // can authorize the exact release workflow, source commit and artifact bytes.
     // This bounded page is a candidate set, not an assertion that every attestation
     // was examined. No matching candidate means failure, never unchecked acceptance.
-    const candidates = parseJson(await get(`https://api.github.com/repos/tinfoilsh/cvmimage/attestations/sha256:${sha256(manifest)}?per_page=100`, "error", 2 * 1024 * 1024, {}, undefined, true, true));
-    assert(Array.isArray(candidates.attestations) && candidates.attestations.length <= 100, "TEE_CVM_BUILD_REJECTED");
-    let cvm;
-    for (const candidate of candidates.attestations) {
-      try {
-        cvm = await appraise(JSON.stringify({ tag: cvmTag, manifest: manifest.toString("base64"), bundle: candidate.bundle }), ["--cvm-build"]);
-        break;
-      } catch { /* Untrusted discovery may include unrelated build identities. */ }
-    }
-    assert(cvm?.cvmBuildVerified === true && cvm.inferenceQualified === false && cvm.repo === "tinfoilsh/cvmimage" && cvm.workflow === "release.yml", "TEE_CVM_BUILD_REJECTED");
-    assert(/^[a-f0-9]{40}$/.test(cvm.commit), "TEE_CVM_BUILD_REJECTED");
+    const attestationsUrl = `https://api.github.com/repos/tinfoilsh/cvmimage/attestations/sha256:${sha256(manifest)}?per_page=100`;
+    const cvmAttestationList = await get(attestationsUrl, "error", 2 * 1024 * 1024, {}, undefined, true, true);
+    const cvm = await checked(attestationsUrl, async () => {
+      const candidates = parseJson(cvmAttestationList);
+      assert(Array.isArray(candidates.attestations) && candidates.attestations.length <= 100, "TEE_CVM_BUILD_REJECTED");
+      let cvm;
+      for (const candidate of candidates.attestations) {
+        try {
+          cvm = await appraise(JSON.stringify({ tag: cvmTag, manifest: manifest.toString("base64"), bundle: candidate.bundle }), ["--cvm-build"]);
+          break;
+        } catch { /* Untrusted discovery may include unrelated build identities. */ }
+      }
+      assert(cvm?.cvmBuildVerified === true && cvm.inferenceQualified === false && cvm.repo === "tinfoilsh/cvmimage" && cvm.workflow === "release.yml", "TEE_CVM_BUILD_REJECTED");
+      assert(/^[a-f0-9]{40}$/.test(cvm.commit), "TEE_CVM_BUILD_REJECTED");
+      return cvm;
+    });
     for (const name of ["version", "root", "initrd", "kernel", "raw"]) {
       assert.equal(deployment.hashes[name], cvm.hashes[name], "TEE_CVM_MANIFEST_MISMATCH");
     }
@@ -247,13 +267,16 @@ export async function verifyPublicBuildArtifacts(options: {
       container.deploymentDigest === verified.digest && container.releaseCommit === verified.commit && container.imageDigest === selected.imageDigest &&
       /^[a-f0-9]{40}$/.test(container.sourceCommit) && /^[a-f0-9]{64}$/.test(container.dockerfileDigest), "TEE_CONTAINER_BUILD_REJECTED");
     assert(container.subjectPredicateMatched === true && container.codeStatementDigest === verified.codeStatementDigest, "TEE_CONTAINER_BUILD_REJECTED");
-    const [sourceCommit, dockerfile] = await Promise.all([
-      get(`https://api.github.com/repos/${repo}/git/commits/${verified.commit}`, "error", 2 * 1024 * 1024, {}, undefined, true).then(bytes => parseJson(bytes)),
+    const commitsUrl = `https://api.github.com/repos/${repo}/git/commits/${verified.commit}`;
+    const [commitBytes, dockerfile] = await Promise.all([
+      get(commitsUrl, "error", 2 * 1024 * 1024, {}, undefined, true),
       get(`https://raw.githubusercontent.com/${repo}/${container.sourceCommit}/Dockerfile`, "error", 2 * 1024 * 1024, {}, container.dockerfileDigest),
     ]);
-    assert(Array.isArray(sourceCommit.parents) && sourceCommit.parents.length === 1 && sourceCommit.parents[0].sha === container.sourceCommit, "TEE_PUBLIC_CONTAINER_SOURCE_REJECTED");
+    await checked(commitsUrl, () => {
+      const sourceCommit = parseJson(commitBytes);
+      assert(Array.isArray(sourceCommit.parents) && sourceCommit.parents.length === 1 && sourceCommit.parents[0].sha === container.sourceCommit, "TEE_PUBLIC_CONTAINER_SOURCE_REJECTED");
+    });
     assert.equal(sha256(dockerfile), container.dockerfileDigest, "TEE_PUBLIC_CONTAINER_SOURCE_REJECTED");
-    if (persistentDir && pendingWrites.size) await persistMetadata(persistentDir, pendingWrites);
     return {
       ...verified, publicArtifactDigestMatched: true, publicSourceConfigMatched: true,
       sourceUrl: `https://github.com/${repo}/blob/${verified.commit}/tinfoil-config.yml`,
@@ -268,9 +291,6 @@ export async function verifyPublicBuildArtifacts(options: {
     };
   } catch (error) {
     cache?.clear();
-    // Any persisted entry may be the cause; the cache holds only a few
-    // small, re-fetchable lookups, so drop all of it.
-    if (persistentDir && persistedReads.length) await rm(persistentDir, { recursive: true, force: true }).catch(() => {});
     signal.throwIfAborted();
     throw new TeeError(error instanceof TeeError && error.code === "TEE_PUBLIC_ARTIFACT_UNAVAILABLE" ? error.code : "TEE_PUBLIC_BUILD_REJECTED");
   }
