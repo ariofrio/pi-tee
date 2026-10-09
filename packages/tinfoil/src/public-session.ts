@@ -26,6 +26,8 @@ type SelectionDeps = {
 // connections. It authorizes nothing; it keeps them from using up appraisals.
 // At most 16 attempts run at once, and probing stops after eight reachable
 // hosts, matching the appraisal budget.
+// Delivery order decides which hosts finish probing first; reachability is only
+// an availability hint. The caller takes a bounded slice and appraises it afresh.
 function reachableHosts(hosts: string[], signal: AbortSignal): Promise<string[]> {
   return new Promise(resolve => {
     const reachable: string[] = [];

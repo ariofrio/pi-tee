@@ -73,6 +73,8 @@ function object(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
+// Classify the final serialized payload, after Pi hooks. Unknown fields, hosted
+// tools and remote media could add unaccounted recipients; fail before any send.
 function validateChat(body: unknown, model: string): asserts body is Record<string, unknown> {
   const fail = () => { throw new TeeError("TEE_REQUEST_REJECTED"); };
   if (!object(body) || body.model !== model || body.stream !== true || !Array.isArray(body.messages)) return fail();

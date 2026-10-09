@@ -95,6 +95,8 @@ export interface TeeRouteDefinition {
   /** Adapter-owned route availability; never persisted in catalog snapshots. */
   available?: (model: TeeCatalogModel) => boolean;
   limitations?: readonly string[];
+  /** Appraise without prompt content; return the transport owning the checked keys.
+   * Core rechecks actual levels and disposes every losing candidate session. */
   openSession(options: { apiKey: string; signal: AbortSignal; model: TeeCatalogModel; policy: SecurityPolicy }): Promise<{ security: RouteSecurity; transport: SdkTransport; admission?: PublicBuildAdmission; notes?: readonly string[] }>;
 }
 
@@ -106,6 +108,8 @@ const terminalCodes = new Set([
   "TEE_VERIFIER_ARTIFACT_REJECTED", "TEE_VERIFIER_PROCESS_REJECTED", "TEE_CPU_POLICY_REJECTED", "TEE_GPU_POLICY_REJECTED", "TEE_GPU_MODE_REJECTED", "TEE_PUBLIC_BUILD_REJECTED", "TEE_GPU_VERIFIER_LOCATION_REJECTED", "TEE_PUBLIC_SESSION_REJECTED", "TEE_PUBLIC_ARTIFACT_UNAVAILABLE",
 ]);
 
+// Fixed terminal errors suppress Pi provider/turn replay and discard partial
+// content. Profile success declares the accepted contract, not independent approval.
 function safeFailure(source: AssistantMessageEventStream, report: ProviderReport, rejection: () => string | undefined, signal: AbortSignal, admission: () => PublicBuildAdmission | undefined): AssistantMessageEventStream {
   const output = createAssistantMessageEventStream();
   void (async () => {
@@ -191,6 +195,9 @@ export function createTeeProvider(definition: ProviderDefinition) {
       run(model, options, (canonical, guarded) => api.streamSimple(canonical, context, guarded)),
   };
 
+  // Potential levels only filter prompt-free preflight. The final guarded fetch
+  // rechecks policy epoch and admission lifetime after payload hooks; selection
+  // cannot transfer a losing session's keys or weaken a failed route's policy.
   function run(
     requested: Model<"openai-completions">,
     options: SimpleStreamOptions | undefined,
@@ -326,6 +333,8 @@ export function createTeeProvider(definition: ProviderDefinition) {
     ...base,
     getModels: () => structuredClone(selectableCatalog()),
     getAllModels: () => structuredClone(selectableCatalog()),
+    // Publish a new checkedAt only on actual revalidation. Returning cached models
+    // through a generic fetchModels hook would slide the native freshness window.
     refreshModels: async (context) => {
       if (context.stored && (checkedAt === undefined || (context.stored.checkedAt ?? 0) > checkedAt)) {
         // Stored metadata never chooses the transport origin or caller headers.

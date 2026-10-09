@@ -59,6 +59,8 @@ async function openEncryptedTransport(signal: AbortSignal, hpke: string, endpoin
   const { Identity } = await import("ehbp");
   const identity = await Identity.fromPublicKeyHex(hpke);
   const addressed = `${baseUrl}/chat/completions`;
+  // A fresh encrypted salt isolates this dispatch's cache namespace. Reusing it
+  // across turns could correlate prompts; fresh salts sacrifice prefix-cache hits.
   const cacheSecret = randomBytes(32).toString("hex");
   let sent = false;
   return { baseUrl, fetch: async (input, init) => {

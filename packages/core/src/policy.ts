@@ -36,6 +36,9 @@ export function resolvePolicy(value?: string): PolicyMode {
   return value ?? DEFAULT_POLICY;
 }
 
+/** Position names disclose permitted trust. Reject contradictory refinements rather
+ * than silently weakening them; recognize future build/review values only to
+ * return an explicit unsupported-setting error, never as an approval alias. */
 export function parsePolicy(value = DEFAULT_POLICY): SecurityPolicy {
   const [name, ...settings] = value.split(",");
   function invalid(message: string): never { throw new TeeError("TEE_POLICY_INVALID", `TEE_POLICY_INVALID: ${message}`); }

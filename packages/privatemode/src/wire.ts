@@ -20,6 +20,8 @@ const metadataHeaders = new Set([
   "x-request-id",
   "privatemode-user-request-id",
 ]);
+// Runtime fetch may add User-Agent/accept-* headers after this SDK-header guard;
+// they are ordinary gateway-visible metadata, not attested request fields.
 /** Final network boundary: TLS-only API, fixed paths, full encrypted body and
  * bounded metadata. Manufacturer collateral requests carry no credentials. */
 export function guardPrivatemodeWire(

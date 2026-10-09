@@ -11,6 +11,8 @@ export const GATEWAY_LIMITATIONS = [
 ];
 
 export { GATEWAY_MODELS } from "./direct.js";
+// Seal headers route ciphertext; the appraised worker key authenticates it.
+// Include the extra metadata recipient and frame/replay limits in admission identity.
 const gatewayAuthorityDigest = createHash("sha256").update(JSON.stringify({
   workerAppraisal: PUBLIC_BUILD_AUTHORITY_POLICY_DIGEST, models: GATEWAY_MODELS,
   transport: { endpoint: TINFOIL_GATEWAY_BASE_URL, tls: "TLS1.3-WebPKI", body: "worker-key-EHBP", sends: 1, rotation: "reject", seal: "X-Tinfoil-Seal: appraised worker", cache: "fresh-encrypted-cache_salt", responseCompleteness: "frames-only-SSE-finish_reason", replayProtection: "none" },

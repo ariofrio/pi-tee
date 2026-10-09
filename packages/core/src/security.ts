@@ -95,6 +95,8 @@ export function compareRoutes(left: RouteSecurity, right: RouteSecurity): number
   return 0;
 }
 
+/** Every plaintext or key recipient contributes its weakest level. An empty
+ * inventory cannot establish CPU verification or inherit a stronger component. */
 export function weakestRoute(route: string, provider: string, components: readonly RouteSecurity[]): RouteSecurity {
   return {
     route, provider, cpuVerified: components.length > 0 && components.every(c => c.cpuVerified),

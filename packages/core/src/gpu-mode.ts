@@ -3,6 +3,7 @@ import { TeeError } from "./policy.js";
 // Field interpretation only. Callers must authenticate these exact bytes with
 // NVIDIA's verifier before using the result for admission. NVIDIA nvtrust maps
 // feature values 0/1/2 to SPT/MPT/PPCIe; the inspected C++ enum swaps 0 and 1.
+// Python mapping: https://github.com/NVIDIA/nvtrust/blob/858ada9a17f58c482f578414ea2455498fa51e17/guest_tools/gpu_verifiers/local_gpu_verifier/src/verifier/attestation/spdm_msrt_resp_msg.py#L365
 export function parseHopperGpuMode(report: string): "spt" | "mpt" | "ppcie" {
   const reject = () => { throw new TeeError("TEE_GPU_MODE_REJECTED"); };
   if (typeof report !== "string" || report.length > 24 * 1024) return reject();

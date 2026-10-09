@@ -69,6 +69,8 @@ export async function appraiseWorker(options: {
   const hpke = keys.find((k: { id: string; format: string }) => k.id === "hpke" && k.format === "https://tinfoil.sh/key/x25519-hpke/v1");
   requireCondition(/^[a-f0-9]{64}$/.test(tls?.data ?? "") && /^[a-f0-9]{64}$/.test(hpke?.data ?? ""), "TEE_ATTESTATION_REJECTED");
   const checkedAt = Date.now();
+  // A slow appraisal cannot renew its original challenge or either release
+  // witness. Handoff and TLS setup recheck this minimum before transmitting.
   const expiresAt = Math.min(checkedAt + 60000, challengeAt + 300000,
     Date.parse(build.codeFreshness) + 7 * 86400000, Date.parse(build.platformFreshness) + 7 * 86400000);
   requireCondition(Number.isSafeInteger(expiresAt) && expiresAt > checkedAt, "TEE_PUBLIC_SESSION_REJECTED");

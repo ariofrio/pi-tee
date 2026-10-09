@@ -32,6 +32,9 @@ function completionId(bytes: Uint8Array, contentType: string | null): string {
   return id;
 }
 
+/** Return headers promptly, but retain the complete bounded body until its one
+ * completion identity and signature authenticate. No text or tool byte escapes
+ * on partial/mixed/truncated responses; the body cap is not a total RSS budget. */
 export function authenticateResponse(response: Response, options: {
   signal: AbortSignal;
   verify(completionId: string): Promise<void>;
