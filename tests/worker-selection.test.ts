@@ -35,8 +35,18 @@ test("verification failures are capped and reported in preference to unavailabil
     reachable: async candidates => candidates,
     appraise: async (_model, host) => { appraised.push(host); throw new TeeError("TEE_CPU_POLICY_REJECTED"); },
   }), /TEE_CPU_POLICY_REJECTED/);
-  assert.equal(appraised.length, 4);
+  assert.equal(appraised.length, 8);
   await assert.rejects(selectPublicWorker("gemma4-31b", AbortSignal.timeout(5000), {
     discover: async () => ["h0"], reachable: async () => [], appraise: async (_model, host) => keys(host),
   }), /TEE_PUBLIC_BUILD_DEPLOYMENT_UNAVAILABLE/);
+});
+
+test("selection reaches a qualifying worker after four rejected candidates", async () => {
+  let attempted = 0;
+  const selected = await selectPublicWorker("gemma4-31b", AbortSignal.timeout(5000), {
+    discover: async () => Array.from({ length: 8 }, (_, i) => `h${i}`), reachable: async hosts => hosts,
+    appraise: async (_model, host) => { if (++attempted <= 4) throw new TeeError("TEE_CPU_POLICY_REJECTED"); return keys(host); },
+  });
+  assert.ok(selected.keys.security.cpuVerified);
+  assert.equal(attempted, 5);
 });

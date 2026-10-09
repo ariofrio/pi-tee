@@ -9,7 +9,7 @@ import { discoverTinfoilWorkers } from "./worker-discovery.js";
 // Requests address this canonical endpoint; the transport dials only the
 // worker whose evidence was just appraised. `.invalid` never resolves.
 export const PUBLIC_BUILD_BASE_URL = "https://direct-worker.tinfoil.invalid/v1";
-const MAX_WORKER_ATTEMPTS = 4;
+const MAX_WORKER_ATTEMPTS = 8;
 // Untrusted ordering hint only: the last host that passed is tried first.
 const lastHealthy = new Map<string, string>();
 
@@ -25,7 +25,7 @@ type SelectionDeps = {
 // TCP reachability only: many advertised workers accept no direct
 // connections. It authorizes nothing; it keeps them from using up appraisals.
 // At most 16 attempts run at once, and probing stops after eight reachable
-// hosts, twice the appraisal budget.
+// hosts, matching the appraisal budget.
 function reachableHosts(hosts: string[], signal: AbortSignal): Promise<string[]> {
   return new Promise(resolve => {
     const reachable: string[] = [];
