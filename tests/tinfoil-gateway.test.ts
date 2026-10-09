@@ -121,7 +121,7 @@ test("gateway response substitution cannot expose unauthenticated text", async (
   }
 });
 
-test("relay rejects wrong nonce and swapped key evidence before artifact or inference traffic", { skip: !process.env.PI_TEE_GATEWAY_TEST_EVIDENCE }, async () => {
+(process.env.PI_TEE_GATEWAY_TEST_EVIDENCE ? test : test.skip)("relay rejects wrong nonce and swapped key evidence before artifact or inference traffic", async () => {
   const fixture = JSON.parse(await readFile(process.env.PI_TEE_GATEWAY_TEST_EVIDENCE!, "utf8"));
   const original = fixture.envelope ?? fixture;
   assert.equal(original.format, "https://tinfoil.sh/predicate/attestation/v3");
