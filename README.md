@@ -56,7 +56,7 @@ Routes are selected at startup:
 | --- | --- |
 | `PI_TINFOIL_ROUTE=auto` | Default. Public policy uses the verified direct-worker profile; SDK policy uses the router catalog. |
 | `PI_TINFOIL_ROUTE=direct-public` | Same public profile, explicitly selected. Under `sdk` policy it runs the same appraisal and restricts the catalog to the profile's models. |
-| `PI_TINFOIL_ROUTE=router` | SDK policy only. Trusts the router's backend release policy and permits its SDK key-rotation resend. |
+| `PI_TINFOIL_ROUTE=router` | SDK policy only. The router enclave decrypts every request and checks workers more weakly (no fresh nonce, GPU evidence, freshness or firmware floors), so it protects against outsiders but not against a malicious host. Permits its SDK key-rotation resend. [Details](packages/tinfoil/README.md). |
 | `PI_TINFOIL_ROUTE=direct` | SDK policy only. Frozen AMD Gemma worker; lacks fresh v3, revocation and independent GPU appraisal. |
 | `PI_NEARAI_ROUTE=gateway` | Default NEAR SDK route. Both observed gateway instances failed the required `UpToDate` CPU check on 2026-10-07; [evidence](docs/near-gateway-evidence.json). |
 | `PI_NEARAI_ROUTE=direct` | SDK policy only. Restricts discovery to `z-ai/glm-5.3-flash` and binds inference to one attested TLS connection. |
