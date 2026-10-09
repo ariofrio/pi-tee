@@ -29,6 +29,6 @@ Unsupported request fields, hosted tools, transport overrides and remote media a
 
 ## Errors, retries and cancellation
 
-Direct owned transports send once and reject redirects, reconnects and resends. Chutes invocation owns its WebPKI socket so HTTP 421 cannot trigger a runtime resend. The Tinfoil router also sends once: a key rotation ends the dispatch. Pi provider retries are disabled; fixed terminal error codes also suppress Pi 1.0.4 turn/summarization retry paths. [safeFailure()](../../packages/core/src/provider.ts).
+Direct owned transports send once and reject redirects, reconnects and resends. Chutes invocation owns its WebPKI socket so HTTP 421 cannot trigger a runtime resend. The Tinfoil router also sends once: a key rotation ends the dispatch. Pi provider retries are disabled; fixed terminal error codes also suppress Pi 1.0.4 turn/summarization retry paths. A host failure's status class goes only in status, never in the error message, so it cannot match Pi's retry patterns. [safeFailure()](../../packages/core/src/provider.ts).
 
 Cancellation aborts local work/readers and disposes sessions, keys and verifier workers. A local acknowledgement or live-delta abort does not measure remote generation-stop timing. Availability, truthful billing, traffic analysis, output correctness and local compromise remain outside the [security boundary](../../SECURITY.md).

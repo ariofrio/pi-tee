@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { parsePolicy, readBoundedBody, TeeError, type RouteSecurity, type SdkTransport, type SecurityPolicy } from "pi-tee-core";
+import { fetchUpstream, parsePolicy, readBoundedBody, TeeError, type RouteSecurity, type SdkTransport, type SecurityPolicy } from "pi-tee-core";
 import { TINFOIL_BASE_URL } from "./catalog.js";
 import { openEncryptedWorkerTransport } from "./direct.js";
 import { verifyPublicBuildArtifacts } from "./public-build.js";
@@ -34,9 +34,7 @@ export async function appraiseRouter(options: { signal: AbortSignal; policy?: Se
   const signal = AbortSignal.any([options.signal, AbortSignal.timeout(120000)]);
   signal.throwIfAborted();
   const nonce = randomBytes(32).toString("hex");
-  const response = await (options.evidenceFetch ?? globalThis.fetch)(`https://${ROUTER_HOST}/.well-known/tinfoil-attestation?nonce=${nonce}`, { signal, redirect: "error" });
-  if (!response.ok) await response.body?.cancel();
-  requireCondition(response.ok, "TEE_ATTESTATION_REJECTED");
+  const response = await fetchUpstream(options.evidenceFetch ?? globalThis.fetch, `https://${ROUTER_HOST}/.well-known/tinfoil-attestation?nonce=${nonce}`, { signal, redirect: "error" }, "evidence", "TEE_ATTESTATION_REJECTED");
   const raw = new TextDecoder("utf-8", { fatal: true }).decode(await readBoundedBody(response.body, 2 * 1024 * 1024, signal));
   const envelope = JSON.parse(raw);
   const policy = options.policy ?? parsePolicy();

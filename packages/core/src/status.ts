@@ -1,4 +1,4 @@
-import { parsePolicy } from "./policy.js";
+import { describeUpstream, parsePolicy } from "./policy.js";
 import type { ProviderReport } from "./provider.js";
 
 /** Human-readable, request-specific evidence and choices; never uses potential levels as observations. */
@@ -19,7 +19,7 @@ export function formatProviderReport(report: ProviderReport): string {
     lines.push("", `${decision.route}${levels ? `: A${levels.code} H${levels.host} G${levels.gpu} X${levels.egress}${levels.build ? ` B${levels.build}` : ""}${levels.review ? ` S${levels.review}` : ""}` : ": levels not established"}`,
       `Choice: ${decision.reason}`, ...(decision.notes ?? []).map(note => `Candidate: ${note}`), ...decision.trusts.map(trust => `Trusts: ${trust}`), ...decision.gaps.map(gap => `Gap / observation: ${gap}`));
   }
-  if (report.reason) lines.push(`Request result: ${report.reason}`);
+  if (report.reason) lines.push(`Request result: ${report.reason}${report.upstream?.length ? ` (upstream: ${report.upstream.map(describeUpstream).join("; ")})` : ""}`);
   lines.push("", "Scope: prompt, tool arguments and completion dispatches through this provider; whole-session protection is not established.",
     ...report.assumptions.map(assumption => `Assumption / limitation: ${assumption}`));
   return lines.join("\n");

@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import {
   limitResponseBody, MAX_ENCRYPTED_RESPONSE_BYTES, MAX_RESPONSE_BYTES,
-  pinnedTlsFetch, webPkiTlsFetch, TeeError, type SdkTransport,
+  pinnedTlsFetch, webPkiTlsFetch, TeeError, upstreamFailure, type SdkTransport,
 } from "pi-tee-core";
 
 // `logicalBaseUrl` lets a profile with discovered workers keep one canonical
@@ -52,7 +52,7 @@ async function openEncryptedTransport(signal: AbortSignal, hpke: string, endpoin
     if (wire.status !== 200) {
       await wire.body?.cancel();
       // Rotation/auth/error responses never trigger re-attestation or a second prompt send.
-      throw new TeeError("TEE_RESPONSE_REJECTED");
+      throw upstreamFailure("TEE_RESPONSE_REJECTED", wire.status, "request");
     }
     const bounded = limitResponseBody(wire, { signal: requestSignal, maxBytes: MAX_ENCRYPTED_RESPONSE_BYTES });
     if (!wire.body || !wire.headers.get("ehbp-response-nonce")) {

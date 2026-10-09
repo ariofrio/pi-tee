@@ -4,7 +4,7 @@ import { Identity } from "ehbp";
 import { CipherSuite, KDF_HKDF_SHA256, AEAD_AES_256_GCM } from "hpke";
 import { KEM_DHKEM_X25519_HKDF_SHA256 } from "@panva/hpke-noble";
 import { normalizeContext } from "@earendil-works/pi-ai/compat";
-import { parsePolicy, formatProviderReport } from "../packages/core/src/index.js";
+import { parsePolicy, formatProviderReport, TeeError } from "../packages/core/src/index.js";
 import { createTinfoilProvider } from "../packages/tinfoil/src/index.js";
 import { appraiseRouter, openRatedRouterTransport, ROUTER_REPO, type RouterSeams } from "../packages/tinfoil/src/router.js";
 import { verifyPublicBuildArtifacts } from "../packages/tinfoil/src/public-build.js";
@@ -108,4 +108,26 @@ test("the router route sends once through the provider without the Tinfoil SDK",
   assert.deepEqual(attempts, ["Bearer synthetic-key"]);
   assert.equal(nonces.length, 1);
   assert.match(formatProviderReport(integration.getReport()), /without a resend/);
+});
+
+test("router evidence, dispatch and connection failures report a fixed cause, never the provider's text", async () => {
+  const catalogFetch = async () => Response.json({ data: [{ id: "gpt-oss-120b", name: "Synthetic router", type: "chat", tool_calling: true, endpoints: ["/v1/chat/completions"], context_window: 8192, max_tokens: 1024, pricing: { inputTokenPricePer1M: 1, outputTokenPricePer1M: 1 } }] });
+  const cases: [string, (deps: RouterSeams) => RouterSeams, string, RegExp][] = [
+    ["evidence", deps => ({ ...deps, evidenceFetch: async () => new Response("overloaded: synthetic cause prompt", { status: 503 }) }),
+      "TEE_POLICY_ROUTE_REJECTED", /TEE_ATTESTATION_REJECTED \(upstream: HTTP 503 upstream unavailable\)[\s\S]*Request result: TEE_POLICY_ROUTE_REJECTED \(upstream: HTTP 503 upstream unavailable\)/],
+    ["dispatch", deps => ({ ...deps, wireFetch: async () => new Response("slow down: synthetic cause prompt", { status: 429 }) }),
+      "TEE_RESPONSE_REJECTED", /Request result: TEE_RESPONSE_REJECTED \(upstream: HTTP 429 rate-limited\)/],
+    ["connection", deps => ({ ...deps, wireFetch: async () => { throw new TeeError("TEE_CONNECTION_FAILED"); } }),
+      "TEE_REQUEST_FAILED", /Request result: TEE_REQUEST_FAILED \(upstream: connection failed\)/],
+  ];
+  for (const [name, change, error, expected] of cases) {
+    const { deps } = await seams();
+    const integration = createTinfoilProvider({ policy: "trust-provider-and-host", route: "router", router: change(deps), catalogFetch });
+    await integration.initializeCatalog();
+    const result = await integration.provider.streamSimple(integration.provider.getModels()[0]!, normalizeContext({ messages: [{ role: "user", content: "synthetic cause prompt", timestamp: 1 }] }), { apiKey: "synthetic-key" }).result();
+    assert.equal(result.errorMessage, error, name);
+    const text = formatProviderReport(integration.getReport());
+    assert.match(text, expected, name);
+    assert.ok(!text.includes("synthetic cause prompt") && !text.includes("slow down") && !text.includes("overloaded"), text);
+  }
 });

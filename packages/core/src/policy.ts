@@ -24,11 +24,29 @@ export type SecurityPolicy = Readonly<{
 export const DEFAULT_POLICY = "public-builds,egress=metadata";
 export type ModelVisibility = "tee" | "all";
 
+/** Fixed upstream failure classes; provider bodies and messages are never kept. */
+export type UpstreamClass = "rate-limited" | "upstream unavailable" | "evidence unavailable" | "request refused" | "connection failed";
+export type UpstreamCause = Readonly<{ status?: number; class: UpstreamClass }>;
+
 export class TeeError extends Error {
-  constructor(readonly code: string, message = code) {
+  readonly upstream?: UpstreamCause;
+  constructor(readonly code: string, message = code, upstream?: UpstreamCause) {
     super(message);
     this.name = "TeeError";
+    if (upstream) this.upstream = upstream;
   }
+}
+
+/** Without a status, the request never received a response. */
+export function upstreamFailure(code: string, status?: number, phase: "evidence" | "request" = "request") {
+  const upstream: UpstreamCause = status === undefined ? { class: "connection failed" } : {
+    status, class: status === 429 ? "rate-limited" : status >= 500 ? "upstream unavailable" : phase === "evidence" ? "evidence unavailable" : "request refused",
+  };
+  return new TeeError(code, code, Object.freeze(upstream));
+}
+
+export function describeUpstream(cause: UpstreamCause) {
+  return cause.status === undefined ? cause.class : `HTTP ${cause.status} ${cause.class}`;
 }
 
 export function resolvePolicy(value?: string): PolicyMode {

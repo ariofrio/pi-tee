@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import { readBoundedBody, TeeError } from "pi-tee-core";
+import { isNetworkFailure, readBoundedBody, TeeError, upstreamFailure } from "pi-tee-core";
 import assert from "node:assert/strict";
 import { setTimeout as delay } from "node:timers/promises";
 import { lstat, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
@@ -114,8 +114,11 @@ export async function verifyPublicBuildArtifacts(options: {
     }
     // Content checks authenticate every byte, so transient delivery failures
     // can be retried without widening what is accepted.
-    const unavailable = () => new TeeError("TEE_PUBLIC_ARTIFACT_UNAVAILABLE");
-    const request = () => evidenceFetch(url, { signal, redirect, headers }).catch(error => { signal.throwIfAborted(); throw error instanceof TeeError ? error : unavailable(); });
+    const unavailable = (status?: number) => status !== undefined ? upstreamFailure("TEE_PUBLIC_ARTIFACT_UNAVAILABLE", status, "evidence") : new TeeError("TEE_PUBLIC_ARTIFACT_UNAVAILABLE");
+    const request = () => evidenceFetch(url, { signal, redirect, headers }).catch(error => {
+      signal.throwIfAborted();
+      throw error instanceof TeeError ? error : isNetworkFailure(error) ? upstreamFailure("TEE_PUBLIC_ARTIFACT_UNAVAILABLE") : unavailable();
+    });
     let response = await request();
     for (let attempt = 0; attempt < 2 && [502, 503, 504].includes(response.status); attempt++) {
       await response.body?.cancel();
@@ -125,7 +128,7 @@ export async function verifyPublicBuildArtifacts(options: {
     if (!response.ok || !response.body) {
       await response.body?.cancel();
       // A content-addressed lookup that finds nothing rejects those bytes.
-      throw missingRejects && response.status === 404 ? new TeeError("TEE_CVM_BUILD_REJECTED") : unavailable();
+      throw missingRejects && response.status === 404 ? new TeeError("TEE_CVM_BUILD_REJECTED") : unavailable(response.ok ? undefined : response.status);
     }
     const bytes = Buffer.from(await readBoundedBody(response.body, maxBytes, signal));
     if (expectedDigest) assert.equal(sha256(bytes), expectedDigest);

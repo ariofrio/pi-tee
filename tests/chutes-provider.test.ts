@@ -8,6 +8,7 @@ import { ml_kem768 } from "@noble/post-quantum/ml-kem.js";
 import { normalizeContext, Type } from "@earendil-works/pi-ai/compat";
 import type { Collateral, VerifiedReport } from "@phala/dcap-qvl";
 import { createChutesProvider } from "../packages/chutes/src/index.js";
+import { formatProviderReport } from "../packages/core/src/status.js";
 import { acceptRequest, serverStream } from "./chutes-crypto-fixture.js";
 
 const modelId = "test/Chat-TEE";
@@ -35,6 +36,7 @@ async function fixture(fault?: string) {
     if (url.pathname === `/e2e/instances/${chute}`) return Response.json({ nonce_expires_in: fault === "stale" ? 0 : 55,
       instances: [{ instance_id: instance, e2e_pubkey: publicKey, nonces: ["single-use-invocation-token"] }] });
     if (url.pathname === `/chutes/${chute}/evidence`) {
+      if (fault === "evidence-400") return new Response("Instances requires chutes_version >= 0.6.0; private-prompt-π", { status: 400 });
       const nonce = url.searchParams.get("nonce")!;
       const quote = Buffer.alloc(636);
       quote.writeUInt16LE(4, 0); quote.writeUInt32LE(0x81, 4);
@@ -60,6 +62,7 @@ async function fixture(fault?: string) {
     }
     opened = acceptRequest(blob, server.secretKey);
     if (fault === "invoke") return new Response(null, { status: 403 });
+    if (fault === "invoke-429") return new Response("rate limited: private-prompt-π", { status: 429 });
     if (fault === "stall") {
       const response = serverStream(opened.e2e_response_pk, ['data: {"id":"c1","choices":[{"index":0,"delta":{"content":"ok"},"finish_reason":null}]}\n\n'], "truncated");
       const bytes = new TextEncoder().encode(await response.text());
@@ -137,6 +140,24 @@ test("a Chutes invocation rejection cannot cause a resend or plaintext fallback"
     assert.equal(result.stopReason, "error");
     assert.equal(f.hops.filter(r => r.method === "POST").length, 1);
   } finally { await f.remove(); }
+});
+
+test("unavailable evidence and a rate-limited invocation report a fixed cause without provider text", async () => {
+  for (const [fault, error, expected] of [
+    ["evidence-400", "TEE_POLICY_ROUTE_REJECTED", /TEE_ATTESTATION_REJECTED \(upstream: HTTP 400 evidence unavailable\)[\s\S]*Request result: TEE_POLICY_ROUTE_REJECTED \(upstream: HTTP 400 evidence unavailable\)/],
+    ["invoke-429", "TEE_RESPONSE_REJECTED", /Request result: TEE_RESPONSE_REJECTED \(upstream: HTTP 429 rate-limited\)/],
+  ] as const) {
+    const f = await fixture(fault);
+    try {
+      const integration = createChutesProvider({ policy: "trust-provider-and-host,host=current", catalogFetch: f.fetch, seams: { fetch: f.fetch, invoke: f.fetch, cpu: f.cpu } });
+      await integration.initializeCatalog();
+      const result = await integration.provider.streamSimple(integration.provider.getModels()[0]!, context, { apiKey: "synthetic-key" }).result();
+      assert.equal(result.errorMessage, error);
+      const text = formatProviderReport(integration.getReport());
+      assert.match(text, expected);
+      assert.ok(!text.includes("chutes_version") && !text.includes("private-prompt"), text);
+    } finally { await f.remove(); }
+  }
 });
 
 test("cancellation after an authenticated text delta aborts Chutes response reads", async () => {

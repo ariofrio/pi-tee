@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { checkGpuAppraisal as checkGpuPolicy, rateGpuAppraisal, runNvidiaVerifier, runNrasVerifier, parsePolicy, TeeError, readBoundedBody, type SecurityPolicy, type RouteSecurity } from "pi-tee-core";
+import { checkGpuAppraisal as checkGpuPolicy, rateGpuAppraisal, runNvidiaVerifier, runNrasVerifier, parsePolicy, TeeError, fetchUpstream, readBoundedBody, type SecurityPolicy, type RouteSecurity } from "pi-tee-core";
 import { GPU_POLICIES } from "./gpu-policy.js";
 import { verifyPublicBuildArtifacts } from "./public-build.js";
 export { CERTIFICATE_CHAINS, REQUIRED_CLAIMS } from "pi-tee-core";
@@ -38,9 +38,7 @@ export async function appraiseWorker(options: {
   const nonce = randomBytes(32).toString("hex");
   requireCondition(options.attestationRelay === undefined || options.attestationRelay === "inference-gateway.tinfoil.sh", "TEE_REQUEST_REJECTED");
   const url = `https://${options.attestationRelay ?? options.host}/.well-known/tinfoil-attestation?nonce=${nonce}${options.attestationRelay ? `&enclave=${encodeURIComponent(options.host)}` : ""}`;
-  const response = await (options.evidenceFetch ?? globalThis.fetch)(url, { signal, redirect: "error" });
-  if (!response.ok) await response.body?.cancel();
-  requireCondition(response.ok, "TEE_ATTESTATION_REJECTED");
+  const response = await fetchUpstream(options.evidenceFetch ?? globalThis.fetch, url, { signal, redirect: "error" }, "evidence", "TEE_ATTESTATION_REJECTED");
   const raw = new TextDecoder("utf-8", { fatal: true }).decode(await readBoundedBody(response.body, 2 * 1024 * 1024, signal));
   const envelope = JSON.parse(raw);
   const policy = options.policy ?? parsePolicy();

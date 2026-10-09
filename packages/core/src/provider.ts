@@ -3,9 +3,9 @@ import {
   openAICompletionsApi,
   type AssistantMessageEventStream, type Model, type Provider, type SimpleStreamOptions,
 } from "@earendil-works/pi-ai/compat";
-import { parsePolicy, resolveModelVisibility, resolvePolicy, TeeError, type SecurityPolicy, type ModelVisibility, type PolicyMode } from "./policy.js";
+import { describeUpstream, parsePolicy, resolveModelVisibility, resolvePolicy, TeeError, upstreamFailure, type SecurityPolicy, type ModelVisibility, type PolicyMode, type UpstreamCause } from "./policy.js";
 import { assessRoute, compareRoutes, RouteFailure, RouteRejection, ROUTE_AXES, type RouteSecurity, type RouteDecision } from "./security.js";
-import { guardChatFetch, readBoundedBody } from "./transport.js";
+import { guardChatFetch, isNetworkFailure, readBoundedBody } from "./transport.js";
 
 export interface SdkTransport {
   /** An adapter-owned endpoint selected after canonical-model preflight. */
@@ -69,6 +69,8 @@ export interface ProviderReport {
   policy: PolicyMode;
   lastRequest: "not-run" | "blocked" | "failed" | "sdk-accepted" | "public-build-accepted" | "aborted";
   reason?: string;
+  /** Fixed status classes behind `reason`; never provider text. */
+  upstream?: readonly UpstreamCause[];
   catalogModels: number;
   modelVisibility?: ModelVisibility;
   declaredTeeModels?: number;
@@ -108,9 +110,29 @@ const terminalCodes = new Set([
   "TEE_VERIFIER_ARTIFACT_REJECTED", "TEE_VERIFIER_PROCESS_REJECTED", "TEE_CPU_POLICY_REJECTED", "TEE_GPU_POLICY_REJECTED", "TEE_GPU_MODE_REJECTED", "TEE_PUBLIC_BUILD_REJECTED", "TEE_GPU_VERIFIER_LOCATION_REJECTED", "TEE_PUBLIC_SESSION_REJECTED", "TEE_PUBLIC_ARTIFACT_UNAVAILABLE",
 ]);
 
+function upstreamOf(error: unknown): UpstreamCause | undefined {
+  if (error instanceof TeeError && error.upstream) return error.upstream;
+  return isNetworkFailure(error) ? { class: "connection failed" } : undefined;
+}
+
+/** Passes the body through unchanged, reporting a read failure's code and cause. */
+function observeBody(response: Response, note: (error: unknown) => void): Response {
+  if (!response.body) return response;
+  const reader = response.body.getReader();
+  return new Response(new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      let chunk: ReadableStreamReadResult<Uint8Array>;
+      try { chunk = await reader.read(); } catch (error) { note(error); throw error; }
+      if (chunk.done) controller.close();
+      else controller.enqueue(chunk.value);
+    },
+    cancel: reason => reader.cancel(reason),
+  }), { status: response.status, statusText: response.statusText, headers: response.headers });
+}
+
 // Fixed terminal errors suppress Pi provider/turn replay and discard partial
 // content. Profile success declares the accepted contract, not independent approval.
-function safeFailure(source: AssistantMessageEventStream, report: ProviderReport, rejection: () => string | undefined, signal: AbortSignal, admission: () => PublicBuildAdmission | undefined): AssistantMessageEventStream {
+function safeFailure(source: AssistantMessageEventStream, report: ProviderReport, rejection: () => string | undefined, signal: AbortSignal, admission: () => PublicBuildAdmission | undefined, failure: () => { code?: string; causes: readonly UpstreamCause[] }): AssistantMessageEventStream {
   const output = createAssistantMessageEventStream();
   void (async () => {
     for await (const event of source) {
@@ -118,6 +140,7 @@ function safeFailure(source: AssistantMessageEventStream, report: ProviderReport
         const message = event.type === "done" ? event.message : event.partial;
         report.lastRequest = "aborted";
         report.reason = "TEE_REQUEST_ABORTED";
+        delete report.upstream;
         report.publicBuildVerification = report.closedTrustSet = "not-established";
         delete report.lastAdmission;
         output.push({ type: "error", reason: "aborted", error: { ...message, content: [], stopReason: "aborted", errorMessage: "TEE_REQUEST_ABORTED" } });
@@ -126,9 +149,12 @@ function safeFailure(source: AssistantMessageEventStream, report: ProviderReport
       if (event.type === "error") {
         const known = event.error.errorMessage && terminalCodes.has(event.error.errorMessage) ? event.error.errorMessage : undefined;
         const aborted = signal.aborted || event.reason === "aborted";
-        const code = aborted ? "TEE_REQUEST_ABORTED" : rejection() ?? known ?? "TEE_REQUEST_FAILED";
+        const failed = failure();
+        const code = aborted ? "TEE_REQUEST_ABORTED" : rejection() ?? known ?? failed.code ?? "TEE_REQUEST_FAILED";
         report.lastRequest = aborted ? "aborted" : code === "TEE_APPROVED_DEPLOYMENT_UNAVAILABLE" || code === "TEE_PUBLIC_BUILD_DEPLOYMENT_UNAVAILABLE" ? "blocked" : "failed";
         report.reason = code;
+        if (!aborted && failed.causes.length) report.upstream = [...new Map(failed.causes.map(cause => [describeUpstream(cause), cause])).values()];
+        else delete report.upstream;
         report.publicBuildVerification = report.closedTrustSet = "not-established";
         delete report.lastAdmission;
         output.push({ ...event, reason: aborted ? "aborted" : "error", error: { ...event.error, content: [], stopReason: aborted ? "aborted" : "error", errorMessage: code } });
@@ -140,6 +166,7 @@ function safeFailure(source: AssistantMessageEventStream, report: ProviderReport
           report.closedTrustSet = accepted ? "profile-declared" : "not-established";
           report.lastAdmission = accepted ? structuredClone(accepted) : undefined;
           delete report.reason;
+          delete report.upstream;
         }
         output.push(event);
       }
@@ -209,6 +236,15 @@ export function createTeeProvider(definition: ProviderDefinition) {
     const requestEpoch = policyEpoch;
     let admission: PublicBuildAdmission | undefined;
     let rejection: string | undefined;
+    let failure: string | undefined;
+    const causes: UpstreamCause[] = [];
+    // Records a fixed code and cause class from a session or transport failure; never its message.
+    const note = (error: unknown) => {
+      if (signal.aborted) return;
+      if (error instanceof TeeError && terminalCodes.has(error.code)) failure ??= error.code;
+      const cause = upstreamOf(error);
+      if (cause) causes.push(cause);
+    };
     let transport: SdkTransport | undefined;
     const requestedTimeout = options?.timeoutMs;
     const timeout = typeof requestedTimeout === "number" && Number.isFinite(requestedTimeout) && requestedTimeout >= 0 ? Math.min(Math.floor(requestedTimeout), 600_000) : 600_000;
@@ -251,7 +287,10 @@ export function createTeeProvider(definition: ProviderDefinition) {
               signal.throwIfAborted();
               const rejected = error instanceof RouteRejection && error.security.route === route.id ? assessRoute(requestPolicy, error.security) : undefined;
               const notes = error instanceof RouteFailure && error.route === route.id ? error.notes : undefined;
-              decisions.push(rejected && !rejected.accepted ? { ...rejected, picked: false, notes } : { route: route.id, accepted: false, picked: false, reason: [error instanceof TeeError ? error.code : "TEE_ATTESTATION_REJECTED", ...(route.limitations ?? [])].join("; "), notes, trusts: [], gaps: [] });
+              const cause = upstreamOf(error);
+              if (cause) causes.push(cause);
+              const code = `${error instanceof TeeError ? error.code : "TEE_ATTESTATION_REJECTED"}${cause ? ` (upstream: ${describeUpstream(cause)})` : ""}`;
+              decisions.push(rejected && !rejected.accepted ? { ...rejected, picked: false, notes } : { route: route.id, accepted: false, picked: false, reason: [code, ...(route.limitations ?? [])].join("; "), notes, trusts: [], gaps: [] });
             }
           }
           sessions.sort((a, b) => compareRoutes(a.security, b.security));
@@ -281,7 +320,11 @@ export function createTeeProvider(definition: ProviderDefinition) {
       } else if (requestMode === "public-builds") {
         const publicProfile = profilesByModel.get(canonical.id);
         if (!publicProfile) throw new TeeError("TEE_MODEL_UNAVAILABLE");
-        const session = await publicProfile.openSession({ signal, model: structuredClone(canonical) });
+        const session = await publicProfile.openSession({ signal, model: structuredClone(canonical) }).catch((error: unknown) => {
+          const cause = upstreamOf(error);
+          if (cause && !signal.aborted) causes.push(cause);
+          throw error;
+        });
         transport = session.transport;
         captured = { baseUrl: transport.baseUrl, fetch: transport.fetch };
         admission = Object.freeze(structuredClone(session.admission));
@@ -310,13 +353,16 @@ export function createTeeProvider(definition: ProviderDefinition) {
             rejection = "TEE_PUBLIC_SESSION_REJECTED";
             throw new TeeError(rejection);
           }
-          return ownedFetch(input, init);
+          let response: Response;
+          try { response = await ownedFetch(input, init); } catch (error) { note(error); throw error; }
+          if (!response.ok) causes.push(upstreamFailure("TEE_REQUEST_FAILED", response.status).upstream!);
+          return observeBody(response, note);
         }, endpoint: `${baseUrl}/chat/completions`, model: canonical.id,
         apiKey: options.apiKey, signal, onRejection: () => { rejection = "TEE_REQUEST_REJECTED"; },
       });
       return invoke({ ...canonical, baseUrl }, { ...options, signal, fetch, maxRetries: 0, headers: undefined, sessionId: undefined, cacheRetention: "none" });
     });
-    const result = safeFailure(source, report, () => rejection, signal, () => admission);
+    const result = safeFailure(source, report, () => rejection, signal, () => admission, () => ({ code: failure, causes }));
     void result.result().then(() => {
       active.delete(controller);
       transport?.dispose?.();

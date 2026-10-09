@@ -1,11 +1,14 @@
 import { Worker } from "node:worker_threads";
 import {
   TeeError,
+  isNetworkFailure,
+  upstreamFailure,
   readBoundedBody,
   MAX_REQUEST_BYTES,
   MAX_ENCRYPTED_RESPONSE_BYTES,
   type RouteSecurity,
   type SdkTransport,
+  type UpstreamCause,
 } from "pi-tee-core";
 import { guardPrivatemodeWire, PRIVATEMODE_BASE_URL } from "./wire.js";
 import type { AdmittedManifest } from "./manifest.js";
@@ -43,6 +46,8 @@ export async function openPrivatemodeTransport(options: {
     sent = false;
   let controller: ReadableStreamDefaultController<Uint8Array> | undefined;
   let pendingChunk: number | undefined;
+  // The SDK's own errors are discarded; only a fixed class of the last failed hop is kept.
+  let upstream: UpstreamCause | undefined;
   let finishReady: (result: { observed: string[] }) => void;
   let rejectReady: (error: Error) => void;
   const admitted = new Promise<{ observed: string[] }>((resolve, reject) => {
@@ -60,9 +65,8 @@ export async function openPrivatemodeTransport(options: {
     void worker.terminate();
   };
   const fail = () => {
-    const error = new TeeError(
-      ready ? "TEE_RESPONSE_REJECTED" : "TEE_ATTESTATION_REJECTED",
-    );
+    const code = ready ? "TEE_RESPONSE_REJECTED" : "TEE_ATTESTATION_REJECTED";
+    const error = new TeeError(code, code, upstream);
     rejectReady(error);
     controller?.error(error);
     dispose();
@@ -132,7 +136,18 @@ export async function openPrivatemodeTransport(options: {
           const response = await (options.networkFetch ?? globalThis.fetch)(
             request,
             { redirect: "error", signal: options.signal },
-          );
+          ).catch((error: unknown) => {
+            if (isNetworkFailure(error)) upstream = { class: "connection failed" };
+            throw error;
+          });
+          if (!response.ok)
+            upstream = upstreamFailure(
+              "TEE_RESPONSE_REJECTED",
+              response.status,
+              new URL(request.url).pathname === "/v1/chat/completions"
+                ? "request"
+                : "evidence",
+            ).upstream;
           if (disposed) {
             await response.body?.cancel();
             return;

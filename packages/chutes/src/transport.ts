@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { assessRoute, entries, MAX_REQUEST_BYTES, readBoundedBody, record, RouteRejection, TeeError, webPkiTlsFetch, withAbort,
+import { assessRoute, entries, fetchUpstream, MAX_REQUEST_BYTES, readBoundedBody, record, RouteRejection, TeeError, webPkiTlsFetch, withAbort,
   type RouteSecurity, type SecurityPolicy, type SdkTransport } from "pi-tee-core";
 import { CHUTES_API_URL, CHUTES_BASE_URL, parseChutesCatalog, UUID } from "./catalog.js";
 import { createE2eeRequest, decryptE2eeStream } from "./crypto.js";
@@ -14,10 +14,9 @@ export async function openChutesTransport(apiKey: string, model: string, signal:
   const bound = AbortSignal.any([signal, controller.signal, AbortSignal.timeout(60000)]);
   const network = seams.fetch ?? globalThis.fetch;
   const json = async (url: string, authenticated = false) => {
-    const response = await withAbort(network(url, { signal: bound, redirect: "error", headers: {
+    const response = await withAbort(fetchUpstream(network, url, { signal: bound, redirect: "error", headers: {
       accept: "application/json", "cache-control": "no-cache, no-store", ...(authenticated ? { authorization: `Bearer ${apiKey}` } : {}),
-    } }), bound);
-    if (!response.ok) { void response.body?.cancel(); throw new TeeError("TEE_ATTESTATION_REJECTED"); }
+    } }, "evidence", "TEE_ATTESTATION_REJECTED"), bound);
     return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(await readBoundedBody(response.body, 32 * 1024 * 1024, bound)));
   };
   try {
@@ -86,13 +85,12 @@ export async function openChutesTransport(apiKey: string, model: string, signal:
         callSignal.throwIfAborted();
         if (Date.now() >= expiresAt) throw new TeeError("TEE_PUBLIC_SESSION_REJECTED");
         try {
-          const response = await withAbort(invoke(`${CHUTES_API_URL}/e2e/invoke`, {
+          const response = await withAbort(fetchUpstream(invoke, `${CHUTES_API_URL}/e2e/invoke`, {
             method: "POST", body: new Uint8Array(sealed.body), signal: callSignal, redirect: "error",
             headers: { authorization: `Bearer ${apiKey}`, "content-type": "application/octet-stream",
               "X-Chute-Id": chute, "X-Instance-Id": selected.id, "X-E2E-Nonce": selected.token,
               "X-E2E-Stream": "true", "X-E2E-Path": "/v1/chat/completions" },
-          }), callSignal);
-          if (!response.ok) { void response.body?.cancel(); throw new TeeError("TEE_RESPONSE_REJECTED"); }
+          }, "request", "TEE_RESPONSE_REJECTED"), callSignal);
           return decryptE2eeStream(response, sealed.responseSecret, callSignal);
         } catch (error) { responseSecret.fill(0); controller.abort(); throw error; }
       },

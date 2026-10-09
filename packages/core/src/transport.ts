@@ -1,4 +1,4 @@
-import { TeeError } from "./policy.js";
+import { TeeError, upstreamFailure } from "./policy.js";
 
 export const MAX_REQUEST_BYTES = 16 * 1024 * 1024;
 export const MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
@@ -22,6 +22,25 @@ export function limitResponseBody(response: Response, options: {
     },
   }), { signal: options.signal });
   return new Response(body, { status: response.status, statusText: response.statusText, headers: response.headers });
+}
+
+/** Network-level rejection (Node TypeError, Bun system error), as opposed to a local or abort failure. */
+export function isNetworkFailure(error: unknown) {
+  if (error instanceof TeeError) return error.code === "TEE_CONNECTION_FAILED";
+  return error instanceof TypeError || (error instanceof Error && error.name !== "AbortError" && error.name !== "TimeoutError" && typeof (error as { code?: unknown }).code === "string");
+}
+
+/** Throws `code` with a fixed cause on a network failure or non-2xx status; the provider's body is discarded unread. */
+export async function fetchUpstream(fetch: typeof globalThis.fetch, input: string | URL | Request, init: RequestInit, phase: "evidence" | "request", code: string) {
+  let response: Response;
+  try { response = await fetch(input, init); }
+  catch (error) {
+    if (init.signal?.aborted || error instanceof TeeError || !isNetworkFailure(error)) throw error;
+    throw upstreamFailure(code);
+  }
+  if (response.ok) return response;
+  void response.body?.cancel().catch(() => undefined);
+  throw upstreamFailure(code, response.status, phase);
 }
 
 export async function withAbort<T>(operation: Promise<T>, signal: AbortSignal): Promise<T> {

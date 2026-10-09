@@ -226,6 +226,34 @@ test("unverified Coordinator assertions and complete-looking GPU metadata cannot
   assert.equal(adapter.getReport().routeDecisions?.[0]?.accepted, false);
 });
 
+import { formatProviderReport } from "../packages/core/src/status.js";
+import { describeUpstream, TeeError } from "../packages/core/src/policy.js";
+test("a rate-limited Coordinator attestation reports its status class, not the provider's message", async () => {
+  const paths: string[] = [];
+  const adapter = createPrivatemodeProvider({
+    policy: "trust-provider-and-host,code=fixed-private",
+    recordAdmission: async () => undefined,
+    networkFetch: async (input) => {
+      paths.push(new URL(new Request(input).url).pathname);
+      return new Response("exceeded the configured rate limit; synthetic prompt", { status: 429 });
+    },
+  });
+  await adapter.initializeCatalog();
+  const result = await adapter.provider
+    .streamSimple(
+      adapter.provider.getModels()[0]!,
+      normalizeContext({ messages: [{ role: "user", content: "synthetic prompt", timestamp: 1 }] }),
+      { apiKey: "fixture-key" },
+    )
+    .result();
+  assert.equal(result.errorMessage, "TEE_POLICY_ROUTE_REJECTED");
+  assert.ok(paths.includes("/privatemode/v1/attest"));
+  const text = formatProviderReport(adapter.getReport());
+  assert.match(text, /TEE_ATTESTATION_REJECTED \(upstream: HTTP 429 rate-limited\)/);
+  assert.match(text, /Request result: TEE_POLICY_ROUTE_REJECTED \(upstream: HTTP 429 rate-limited\)/);
+  assert.ok(!text.includes("configured rate limit") && !text.includes("synthetic prompt"), text);
+});
+
 import { Worker } from "node:worker_threads";
 test("actual SDK encrypts every prompt/tool/reasoning content field and rejects plaintext response bytes", async () => {
   const sentinels = [
@@ -420,4 +448,11 @@ test("native catalog refresh uses the configured credential, filters non-tool mo
     adapter.provider.getModels().map((m) => m.id),
     ["glm-5.3"],
   );
+});
+
+test("an unavailable CDN manifest keeps its fixed status class", async () => {
+  const policy = createRecordedCdnManifestPolicy({ fetch: async () => new Response("down: private-prompt", { status: 503 }), record: async () => assert.fail("Nothing to record") });
+  const error = await policy.admit(AbortSignal.timeout(1000)).then(() => assert.fail("admitted"), (error: TeeError) => error);
+  assert.equal(error.code, "TEE_WORKLOAD_PIN_REJECTED");
+  assert.equal(describeUpstream(error.upstream!), "HTTP 503 upstream unavailable");
 });

@@ -259,3 +259,42 @@ test("status distinguishes wrapped TLS/WebPKI rejection from connection failure 
     } else assert.match(status, /unreachable/);
   }
 });
+
+test("rate-limited and unreachable direct evidence report a fixed cause per endpoint and in the request result", async () => {
+  const hostname = "limited.completions.near.ai";
+  const cases: [string, () => Promise<{ response: Response; peerSpkiFingerprint?: string }>, RegExp][] = [
+    ["HTTP 429 rate-limited", async () => ({ response: new Response("slow down: synthetic prompt", { status: 429 }) }), /evidence rejected/],
+    ["connection failed", async () => { throw new TeeError("TEE_CONNECTION_FAILED"); }, /unreachable \(TEE_CONNECTION_FAILED\)/],
+  ];
+  for (const [cause, request, reason] of cases) {
+    const integration = createNearProvider({ route: "direct", policy: "trust-provider-and-host",
+      catalogFetch: discovery([raw(qwen)], [{ domain: hostname, models: [qwen] }]),
+      directSeams: () => ({ channel: {
+        request: request as never, fetch: async () => (await request()).response,
+        approve() { assert.fail("No approval after unavailable evidence"); }, close() {},
+      } }),
+    });
+    await integration.initializeCatalog();
+    const result = await integration.provider.streamSimple(integration.provider.getModels()[0]!, context, { apiKey: "synthetic-key" }).result();
+    assert.equal(result.errorMessage, "TEE_POLICY_ROUTE_REJECTED");
+    const status = formatProviderReport(integration.getReport());
+    assert.match(status, new RegExp(`limited\\.completions\\.near\\.ai: skipped \\(${reason.source}; upstream: ${cause}\\)`));
+    assert.match(status, new RegExp(`TEE_ATTESTATION_REJECTED \\(upstream: ${cause}\\)`));
+    assert.match(status, new RegExp(`Request result: TEE_POLICY_ROUTE_REJECTED \\(upstream: ${cause}\\)`));
+    assert.doesNotMatch(status, /slow down|synthetic prompt/);
+  }
+});
+
+test("a rate-limited gateway attestation reports its status class without the provider's text", async () => {
+  const request = async () => ({ response: new Response("slow down: synthetic prompt", { status: 429 }) });
+  const integration = createNearProvider({ route: "gateway", policy: "trust-provider-and-host", catalogFetch: discovery([raw(qwen)]),
+    gatewaySeams: { channel: { request: request as never, fetch: async () => (await request()).response, approve() { assert.fail("No approval"); }, close() {} } },
+  });
+  await integration.initializeCatalog();
+  const result = await integration.provider.streamSimple(integration.provider.getModels()[0]!, context, { apiKey: "synthetic-key" }).result();
+  assert.equal(result.errorMessage, "TEE_POLICY_ROUTE_REJECTED");
+  const status = formatProviderReport(integration.getReport());
+  assert.match(status, /TEE_ATTESTATION_REJECTED \(upstream: HTTP 429 rate-limited\)/);
+  assert.match(status, /Request result: TEE_POLICY_ROUTE_REJECTED \(upstream: HTTP 429 rate-limited\)/);
+  assert.doesNotMatch(status, /slow down|synthetic prompt/);
+});

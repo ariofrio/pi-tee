@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { readFile, mkdir, appendFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
-import { TeeError, readBoundedBody } from "pi-tee-core";
+import { TeeError, fetchUpstream, readBoundedBody } from "pi-tee-core";
 
 export interface AdmittedManifest {
   bytes: Uint8Array;
@@ -51,12 +51,14 @@ export function createRecordedCdnManifestPolicy(options: {
 }): ManifestAdmissionPolicy {
   return {
     async admit(signal) {
-      const response = await (options.fetch ?? globalThis.fetch)(
+      const response = await fetchUpstream(
+        options.fetch ?? globalThis.fetch,
         MANIFEST_CDN_URL,
         { signal, redirect: "error" },
+        "evidence",
+        "TEE_WORKLOAD_PIN_REJECTED",
       );
       if (
-        !response.ok ||
         response.redirected ||
         (response.url && response.url !== MANIFEST_CDN_URL)
       )

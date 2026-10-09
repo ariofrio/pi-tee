@@ -1,4 +1,4 @@
-import { TeeError, POLICY_VALUES, type SecurityPolicy } from "./policy.js";
+import { TeeError, POLICY_VALUES, type SecurityPolicy, type UpstreamCause } from "./policy.js";
 
 export interface RouteSecurity {
   route: string;
@@ -15,8 +15,8 @@ export interface RouteSecurity {
 /** Adapter-owned request diagnostics; no security levels are implied. */
 export class RouteFailure extends TeeError {
   readonly notes: readonly string[];
-  constructor(readonly route: string, code: string, notes: readonly string[] = []) {
-    super(code);
+  constructor(readonly route: string, code: string, notes: readonly string[] = [], upstream?: UpstreamCause) {
+    super(code, code, upstream);
     this.notes = Object.freeze([...notes]);
   }
 }

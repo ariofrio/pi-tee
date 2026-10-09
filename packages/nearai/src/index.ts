@@ -1,6 +1,6 @@
 import {
-  assessRoute, compareRoutes, RouteFailure, RouteRejection, createTeeProvider, resolveModelVisibility, resolvePolicy, TeeError,
-  type ModelVisibility, type PolicyMode, type ProviderDefinition, type RouteSecurity, type SecurityPolicy,
+  assessRoute, compareRoutes, RouteFailure, RouteRejection, createTeeProvider, describeUpstream, resolveModelVisibility, resolvePolicy, TeeError, upstreamFailure,
+  type ModelVisibility, type UpstreamCause, type PolicyMode, type ProviderDefinition, type RouteSecurity, type SecurityPolicy,
 } from "pi-tee-core";
 import { NEAR_BASE_URL } from "./catalog.js";
 import { openNearGatewayTransport, type NearGatewaySeams } from "./gateway.js";
@@ -24,6 +24,21 @@ export const NEAR_ASSUMPTIONS = [
 // Both routes own one node:tls socket, which Node 24+ and Bun provide.
 export function assertNearRuntime() {
   if (Number(process.versions.node.split(".")[0]) < 24) throw new TeeError("TEE_RUNTIME_UNSUPPORTED");
+}
+
+/** The SDK's structured failure keeps only the status; its message is never read. */
+function nearUpstream(error: unknown): UpstreamCause | undefined {
+  const seen = new Set<unknown>();
+  while (error && typeof error === "object" && !seen.has(error)) {
+    seen.add(error);
+    if (error instanceof TeeError && error.upstream) return error.upstream;
+    if (error instanceof TeeError && error.code === "TEE_CONNECTION_FAILED") return upstreamFailure(error.code).upstream;
+    const { failure } = error as { failure?: { code?: unknown; details?: { status?: unknown } } };
+    if (failure?.code === "api.transport_failed") return upstreamFailure("TEE_ATTESTATION_REJECTED").upstream;
+    if (failure?.code === "api.http_status" && Number.isSafeInteger(failure.details?.status)) return upstreamFailure("TEE_ATTESTATION_REJECTED", failure.details!.status as number, "evidence").upstream;
+    error = (error as { cause?: unknown }).cause;
+  }
+  return undefined;
 }
 
 function directFailureReason(error: unknown, timedOut: boolean): string {
@@ -86,6 +101,7 @@ export function createNearProvider(options: {
         openSession: async ({ apiKey, signal, model, policy }: { apiKey: string; signal: AbortSignal; model: { id: string }; policy: SecurityPolicy }) => {
           assertNearRuntime();
           const directNotes: string[] = [];
+          let upstream: UpstreamCause | undefined;
           let picked: Awaited<ReturnType<typeof openDirectNearTransport>> | undefined;
           let rejected: RouteSecurity | undefined;
           try {
@@ -96,7 +112,9 @@ export function createNearProvider(options: {
               try { transport = await openDirectNearTransport(apiKey, bounded, target, options.directSeams?.(target)); }
               catch (error) {
                 signal.throwIfAborted();
-                directNotes.push(`${hostname}: skipped (${directFailureReason(error, bounded.aborted)}); no levels established.`);
+                const cause = nearUpstream(error);
+                upstream ??= cause;
+                directNotes.push(`${hostname}: skipped (${directFailureReason(error, bounded.aborted)}${cause ? `; upstream: ${describeUpstream(cause)}` : ""}); no levels established.`);
                 continue;
               }
               const assessed = assessRoute(policy, transport.security);
@@ -112,7 +130,7 @@ export function createNearProvider(options: {
             signal.throwIfAborted();
             if (!picked) {
               if (rejected) throw new RouteRejection(rejected, directNotes);
-              throw new RouteFailure("near-direct", "TEE_ATTESTATION_REJECTED", directNotes);
+              throw new RouteFailure("near-direct", "TEE_ATTESTATION_REJECTED", directNotes, upstream);
             }
             return { security: picked.security, transport: picked, notes: directNotes };
           } catch (error) { picked?.dispose?.(); throw error; }
@@ -121,7 +139,11 @@ export function createNearProvider(options: {
       ...(route === "direct" ? [] : [{ id: "near-gateway", potential: { ...potential, route: "near-gateway" },
         openSession: async ({ apiKey, signal, model }: { apiKey: string; signal: AbortSignal; model: { id: string } }) => {
           assertNearRuntime();
-          const transport = options.openSdkTransport ? await options.openSdkTransport({ apiKey, signal, model: model as import("pi-tee-core").TeeCatalogModel }) as import("pi-tee-core").SdkTransport & { security?: import("pi-tee-core").RouteSecurity } : await openNearGatewayTransport(apiKey, signal, model.id, options.gatewaySeams);
+          const transport = options.openSdkTransport ? await options.openSdkTransport({ apiKey, signal, model: model as import("pi-tee-core").TeeCatalogModel }) as import("pi-tee-core").SdkTransport & { security?: import("pi-tee-core").RouteSecurity } : await openNearGatewayTransport(apiKey, signal, model.id, options.gatewaySeams).catch((error: unknown) => {
+            const cause = nearUpstream(error);
+            if (!cause || signal.aborted || error instanceof RouteRejection || (error instanceof TeeError && error.upstream)) throw error;
+            throw new TeeError(error instanceof TeeError ? error.code : "TEE_ATTESTATION_REJECTED", undefined, cause);
+          });
           if (!transport.security) { transport.dispose?.(); throw new TeeError("TEE_ATTESTATION_REJECTED"); }
           return { security: transport.security, transport };
         },

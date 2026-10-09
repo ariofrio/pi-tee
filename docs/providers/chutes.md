@@ -31,6 +31,6 @@ Invocation-token and attestation expiry are checked before dispatch. The transpo
 
 ## Discovery and diagnosis
 
-Discovery admits declared confidential tool-chat models with an instance-discovery ID. There is no plaintext route or silent fallback. `/chutes status` reports current levels, trusts, gaps and transport disclosures. Use [shared commands](../reference/commands-settings.md) and [limits](../reference/support-limits.md).
+Discovery admits declared confidential tool-chat models with an instance-discovery ID. There is no plaintext route or silent fallback. `/chutes status` reports current levels, trusts, gaps and transport disclosures. A listed model whose instances serve no evidence, such as `Qwen/Qwen3-235B-A22B-Thinking-2507-TEE` on 2026-10-09, stays listed and fails with `HTTP 400 evidence unavailable`; a 429 shows as `rate-limited`. [Diagnosis](../quick-start.md#diagnose-a-blocked-request). Use [shared commands](../reference/commands-settings.md) and [limits](../reference/support-limits.md).
 
 [Credentialed validation and receipt matrix](../chutes-validation.md) distinguish accepted from rejected samples; they do not establish permanent model ratings. Real private evidence replay is separate from synthetic cryptographic tests. [Qualification procedure](../procedures/live-validation.md).

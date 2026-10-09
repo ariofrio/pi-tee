@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { readBoundedBody, record, RouteRejection, TeeError, type SecurityPolicy } from "pi-tee-core";
+import { fetchUpstream, readBoundedBody, record, RouteRejection, TeeError, type SecurityPolicy } from "pi-tee-core";
 import { GATEWAY_MODELS, openEncryptedGatewayTransport, TINFOIL_GATEWAY_BASE_URL } from "./direct.js";
 import { appraiseWorker, PUBLIC_MODELS, WORKER_HOST, type PublicModel } from "./worker-appraisal.js";
 import { selectPublicWorker } from "./public-session.js";
@@ -27,14 +27,13 @@ export async function discoverGatewayWorkers(model: string, signal: AbortSignal,
   if (!gatewayModel(model)) throw new TeeError("TEE_MODEL_UNAVAILABLE");
   const bound = AbortSignal.any([signal, AbortSignal.timeout(10000)]);
   try {
-    const response = await fetch("https://inference-gateway.tinfoil.sh/catalog", { signal: bound, redirect: "error" });
-    if (!response.ok) { await response.body?.cancel(); throw new TeeError("TEE_WORKER_DISCOVERY_UNAVAILABLE"); }
+    const response = await fetchUpstream(fetch, "https://inference-gateway.tinfoil.sh/catalog", { signal: bound, redirect: "error" }, "evidence", "TEE_WORKER_DISCOVERY_UNAVAILABLE");
     const catalog = record(JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(await readBoundedBody(response.body, 2 * 1024 * 1024, bound))));
     const entry = record(catalog[model]);
     if (entry.repo !== PUBLIC_MODELS[model] || !Array.isArray(entry.hosts) || !entry.hosts.length || entry.hosts.length > 128 ||
         entry.hosts.some(host => typeof host !== "string" || host.length > 253 || !WORKER_HOST.test(host))) throw new TeeError("TEE_WORKER_DISCOVERY_UNAVAILABLE");
     return [...new Set(entry.hosts as string[])];
-  } catch { signal.throwIfAborted(); throw new TeeError("TEE_WORKER_DISCOVERY_UNAVAILABLE"); }
+  } catch (error) { signal.throwIfAborted(); throw new TeeError("TEE_WORKER_DISCOVERY_UNAVAILABLE", undefined, error instanceof TeeError ? error.upstream : undefined); }
 }
 
 export async function openRatedGatewayTransport(signal: AbortSignal, model: string, policy: SecurityPolicy,

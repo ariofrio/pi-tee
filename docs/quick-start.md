@@ -42,6 +42,7 @@ These are thresholds, not guaranteed availability. An outdated NEAR/Chutes insta
 ## Diagnose a blocked request
 
 - Run `/<provider> status`: before verification, levels are not established; afterwards it lists actual levels, failing axes and sanitized observations.
+- When the host failed rather than a check, `Choice` and `Request result` add a fixed cause, such as `TEE_ATTESTATION_REJECTED (upstream: HTTP 429 rate-limited)`. The classes are `rate-limited` (429), `upstream unavailable` (5xx), `evidence unavailable` (other evidence errors), `request refused` (other inference errors) and `connection failed` (no response). Provider response text is never shown, so the cause cannot carry echoed prompts or injected instructions.
 - Run `/<provider> models refresh` to refresh discovery. Catalogs are provider claims, never security evidence. Failed refresh retains the previous snapshot.
 - Check the [provider page](providers.md) for route-specific limits. A failed check does not relax policy, resend content or silently authorize a weaker route.
 - Use `/<provider> policy <setting>` only when you intend to change that provider's trust. It aborts active requests and lasts for the session.
