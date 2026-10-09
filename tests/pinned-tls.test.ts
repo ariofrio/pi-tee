@@ -181,3 +181,43 @@ test("a stalled consumer bounds what the pinned peer can make the client buffer"
     }
   } finally { await peer.close(); }
 });
+
+test("WebPKI rejects CA-trusted wrong names; production gateway uses authenticated native TLS", { timeout: 60000 }, async () => {
+  await mkdir(".scratch/work", { recursive: true });
+  const dir = await mkdtemp(resolve(".scratch/work/gateway-ca-"));
+  const openssl = (args: string[]) => assert.equal(spawnSync("openssl", args, { stdio: "ignore" }).status, 0);
+  try {
+    openssl(["req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1", "-subj", "/CN=ephemeral-test-CA", "-keyout", join(dir, "ca.key"), "-out", join(dir, "ca.pem")]);
+    for (const [name, hostname] of [["wrong", "other.example"], ["right", "localhost"], ["gateway", "inference-gateway.tinfoil.sh"]]) {
+      const { writeFile } = await import("node:fs/promises");
+      await writeFile(join(dir, `${name}.ext`), `subjectAltName=DNS:${hostname}\n`);
+      openssl(["req", "-new", "-newkey", "rsa:2048", "-nodes", "-subj", `/CN=${hostname}`, "-keyout", join(dir, `${name}.key`), "-out", join(dir, `${name}.csr`)]);
+      openssl(["x509", "-req", "-in", join(dir, `${name}.csr`), "-CA", join(dir, "ca.pem"), "-CAkey", join(dir, "ca.key"), "-CAcreateserial", "-days", "1", "-extfile", join(dir, `${name}.ext`), "-out", join(dir, `${name}.pem`)]);
+    }
+    const run = (name: string, mode: string, trusted = true) => {
+      const env = { ...process.env };
+      delete env.NODE_EXTRA_CA_CERTS;
+      if (trusted) env.NODE_EXTRA_CA_CERTS = join(dir, "ca.pem");
+      const result = spawnSync(process.execPath, [...(process.versions.bun ? [] : ["--import", "tsx"]), "tests/fixtures/gateway-tls-client.ts", join(dir, `${name}.pem`), join(dir, `${name}.key`), mode], { env, encoding: "utf8", timeout: 15000 });
+      assert.equal(result.status, 0, result.stderr);
+      return JSON.parse(result.stdout) as { outcome: string; sends: number; globalFetchCalls: number; validSeal: boolean; dial?: Record<string, unknown> };
+    };
+    const wrong = run("wrong", "webpki");
+    assert.match(wrong.outcome, /TEE_CONNECTION_FAILED|TEE_TLS_KEY_REJECTED/);
+    assert.equal(wrong.sends, 0, "A trusted CA does not authorize another hostname to receive credentials or body.");
+    const right = run("right", "webpki");
+    assert.equal(right.outcome, "accepted");
+    assert.equal(right.sends, 1, "The same CA authorizes a certificate for the requested name.");
+    const untrustedGateway = run("ca", "gateway", false);
+    assert.match(untrustedGateway.outcome, /TEE_CONNECTION_FAILED|TEE_TLS_KEY_REJECTED/, JSON.stringify(untrustedGateway));
+    assert.equal(untrustedGateway.sends, 0, "Production gateway wiring must not send HTTP to an untrusted socket.");
+    assert.equal(untrustedGateway.globalFetchCalls, 0);
+    assert.deepEqual(untrustedGateway.dial, { host: "inference-gateway.tinfoil.sh", port: 443,
+      servername: "inference-gateway.tinfoil.sh", rejectUnauthorized: true, minVersion: "TLSv1.3" });
+    const gateway = run("gateway", "gateway");
+    assert.match(gateway.outcome, /TEE_RESPONSE_REJECTED/);
+    assert.equal(gateway.sends, 1, "Production wiring reaches the authenticated socket with a sealed body.");
+    assert.equal(gateway.globalFetchCalls, 0);
+    assert.equal(gateway.validSeal, true);
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
