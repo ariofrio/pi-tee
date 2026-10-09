@@ -25,7 +25,7 @@ The [workflow](../.github/workflows/wasm-verifiers.yml) rebuilds the modules and
 ## Limits
 
 - Android/Termux has not been executed. The modules need only Node's WebAssembly, worker threads and `node:tls`, but the gate is an actual run.
-- NEAR's experimental direct route still uses `https.Agent` to keep its evidence, inference and signature requests on one socket. It is untested under Bun.
+- NEAR's experimental direct route sends its evidence, inference and signature requests as sequential HTTP/1.1 exchanges on one `node:tls` socket, so it no longer depends on `https.Agent`. Its [channel tests](../tests/near-direct-channel.test.ts) pass under Node and Bun, and on 2026-10-09 the Bun-compiled Pi 1.0.4 binary reached NEAR's credential check with a synthetic key: fresh evidence, CPU and GPU verification, SPKI approval and the encrypted request on the same socket. The credentialed Pi suite has not yet run under Bun.
 - Reproducing the committed bytes requires the CI build directory; see [reproducibility](../tools/nvidia-verifier/README.md#reproducibility).
 
 Written by Claude.

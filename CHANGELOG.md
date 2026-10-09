@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Run NEAR's experimental direct route under Bun. Its channel subclassed `https.Agent`, which Bun cannot bind to one socket, and the route refused Bun outright, so the Bun-compiled Pi binary failed every request with `TEE_RUNTIME_UNSUPPORTED`. The channel now writes sequential HTTP/1.1 exchanges on one WebPKI-authenticated `node:tls` socket through the shared pinned-TLS reader, keeping evidence, inference and signature lookup on one connection that is never replaced. Unsolicited bytes between exchanges end the channel. The SDK gateway route still refuses Bun. Channel tests pass under Node and Bun; against NEAR's live endpoint, the Bun-compiled Pi 1.0.4 binary reached the credential check with a synthetic key. The credentialed Pi suite under Bun is pending.
+
 - Persist each GitHub metadata lookup once its own check passes and drop only a stored lookup whose check fails, so unrelated outages or rejected workers no longer clear the cache.
 
 - Enable the Tinfoil public-build profile for Gemma 4 31B, DeepSeek V4.1 Flash and GLM-5.3 after independent review of the WebAssembly verifiers, the NVIDIA reference-manifest patch, the TLS client and the multi-model/SEV-SNP profile. Default `auto` routing now admits these models under the default `public-builds` policy; other catalog models stay unavailable without an SDK fallback.
