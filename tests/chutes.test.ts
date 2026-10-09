@@ -15,3 +15,11 @@ test("Chutes catalog offers only declared confidential tool-capable chat models 
   assert.equal(models[0]!.cost.input, 0.2);
   assert.equal(models[0]!.teeCapability, "declared");
 });
+
+test("Chutes thinking is an on/off chat-template switch only for reasoning models", () => {
+  const [reasoning, plain] = parseChutesCatalog({ data: [{ ...raw, supported_sampling_parameters: ["reasoning_effort"] }, { ...raw, id: "plain", supported_features: ["tools"] }] });
+  assert.equal(reasoning!.compat?.thinkingFormat, "chat-template");
+  assert.equal(reasoning!.compat?.supportsReasoningEffort, false);
+  assert.equal(plain!.reasoning, false);
+  assert.equal(plain!.compat?.thinkingFormat, undefined);
+});

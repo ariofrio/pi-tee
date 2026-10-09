@@ -17,4 +17,6 @@ No route currently establishes X1. Tinfoil's authenticated G2 gaps require a pol
 
 All four providers support native key login, tool chat, reasoning, usage and cancellation. NEAR, Tinfoil and Chutes discover supported chat/tool models; Privatemode starts with a shipped three-model catalog and restricts credentialed refresh to those IDs. Prices and capabilities are provider claims. Missing prices are labeled, and NEAR pricing tiers beyond base costs are not modeled.
 
+Pi's thinking level is sent as each host accepts it. NEAR and Chutes reasoning models only switch thinking on or off, so every level above off behaves the same. Tinfoil sends the effort its catalog declares, plus an on/off switch for chat-template models; `gpt-oss-120b` cannot turn reasoning off. Privatemode maps levels to effort only ([details](providers/privatemode.md#models-and-reasoning)). [Catalog mapping](../packages/core/src/catalog.ts).
+
 The [ecosystem survey](provider-survey.md) covers prospective providers separately. It is not an installed-adapter support matrix.

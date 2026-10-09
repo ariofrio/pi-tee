@@ -29,6 +29,13 @@ export function price(value: unknown): number | undefined {
   return value !== "" && Number.isFinite(number) && number >= 0 ? number : undefined;
 }
 
+/** Open-weight chat templates name their thinking switch either way and ignore the
+ * other; hosts that ignore Pi's effort level still honor this on/off switch. */
+export function thinkingSwitch() {
+  const enabled = { $var: "thinking.enabled" } as const;
+  return { thinking: enabled, enable_thinking: enabled };
+}
+
 export function catalogModel(options: {
   provider: string; baseUrl: string; id: string; name: unknown; contextWindow: unknown;
   maxTokens: unknown; reasoning: boolean; image: boolean;

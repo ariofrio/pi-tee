@@ -1,4 +1,4 @@
-import { catalogModel, entries, price, record, strings } from "pi-tee-core";
+import { catalogModel, entries, price, record, strings, thinkingSwitch } from "pi-tee-core";
 import type { Model, OpenAICompletionsCompat } from "@earendil-works/pi-ai/compat";
 
 export const TINFOIL_BASE_URL = "https://inference.tinfoil.sh/v1";
@@ -24,9 +24,13 @@ function applyThinking(model: Model<"openai-completions">, params: Record<string
   const mapped: NonNullable<OpenAICompletionsCompat["chatTemplateKwargs"]> = {};
   for (const [key, value] of Object.entries(kwargs)) {
     if (key === "reasoning_effort" && value === "$EFFORT") mapped[key] = { $var: "thinking.effort" };
-    else if (key === "enable_thinking" && typeof value === "boolean") mapped[key] = { $var: "thinking.enabled" };
+    else if ((key === "enable_thinking" || key === "thinking") && typeof value === "boolean") mapped[key] = { $var: "thinking.enabled" };
     else if (key === "clear_thinking" && typeof value === "boolean") mapped[key] = value;
   }
+  // Some chat-template models declare only an effort, or nothing, yet think by default;
+  // without a switch Pi's "off" would leave thinking on.
+  const topLevel = record(enable.thinking).type === "enabled" || enable.reasoning_effort === "$EFFORT";
+  if (model.reasoning && !topLevel && !("thinking" in mapped) && !("enable_thinking" in mapped)) Object.assign(mapped, thinkingSwitch());
   if (Object.keys(mapped).length) model.compat = { ...model.compat, thinkingFormat: "chat-template", chatTemplateKwargs: mapped };
   else if (record(enable.thinking).type === "enabled") model.compat = { ...model.compat, thinkingFormat: "deepseek", supportsReasoningEffort: enable.reasoning_effort === "$EFFORT" };
   else if (enable.reasoning_effort === "$EFFORT") model.compat = { ...model.compat, supportsReasoningEffort: true };

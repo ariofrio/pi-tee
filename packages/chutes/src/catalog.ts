@@ -1,4 +1,4 @@
-import { catalogModel, entries, price, record, strings, type TeeCatalogModel } from "pi-tee-core";
+import { catalogModel, entries, price, record, strings, thinkingSwitch, type TeeCatalogModel } from "pi-tee-core";
 
 export const CHUTES_BASE_URL = "https://llm.chutes.ai/v1";
 export const CHUTES_API_URL = "https://api.chutes.ai";
@@ -16,7 +16,9 @@ export function parseChutesCatalog(value: unknown): TeeCatalogModel[] {
     });
     model.teeCapability = "declared";
     model.sdkTransportAvailable = true;
-    model.compat = { ...model.compat, supportsReasoningEffort: strings(raw.supported_sampling_parameters).includes("reasoning_effort") };
+    // Chutes ignores the effort level, and some models refuse particular reasoning_effort
+    // values, so only the on/off switch is sent.
+    if (model.reasoning) model.compat = { ...model.compat, thinkingFormat: "chat-template", chatTemplateKwargs: thinkingSwitch() };
     return model;
   });
 }

@@ -23,6 +23,7 @@
 - Preserve native credential selection across all four extensions; reject ambiguous Privatemode attestation-field aliases and manifest/policy mismatches before inference.
 - Guard final post-hook payload/model/endpoint/authentication; bind actual sockets/recipient keys, bound memory/time and reject forged output, reconnects and unwanted resends. Chutes' owned invocation socket cannot replay HTTP 421.
 - Status names why a host failed with its HTTP status and a fixed class (rate-limited, upstream unavailable, evidence unavailable, request refused, connection failed), never provider text. Terminal codes thrown during dispatch, such as a rejected Tinfoil wire status, now surface instead of `TEE_REQUEST_FAILED`. [Diagnosis](docs/quick-start.md#diagnose-a-blocked-request).
+- Pi's thinking level now takes effect on NEAR, Chutes and Tinfoil reasoning models whose hosts ignored it: "off" disables thinking, which several models otherwise enable by default, and any other level enables it. Effort values that some Chutes and NEAR models refuse are no longer sent. [Thinking levels](docs/providers.md).
 - Correct documentation facts/links and reconcile anonymous versus credentialed provider evidence. Document Privatemode runtime-added gateway headers and the cost of Tinfoil per-request cache salts. Local Markdown links are checked in CI.
 
 ### Security and limits

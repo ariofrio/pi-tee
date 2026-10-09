@@ -105,6 +105,20 @@ test("native Chutes dispatch seals prompt, tools and reasoning before the unatte
   } finally { await f.remove(); }
 });
 
+test("Pi's thinking level switches Chutes reasoning on and off through the sealed chat template", async () => {
+  for (const [reasoning, enabled] of [["medium", true], [undefined, false]] as const) {
+    const f = await fixture();
+    try {
+      const integration = createChutesProvider({ policy: "trust-provider-and-host,host=current", catalogFetch: f.fetch, seams: { fetch: f.fetch, invoke: f.fetch, cpu: f.cpu } });
+      await integration.initializeCatalog();
+      const result = await integration.provider.streamSimple(integration.provider.getModels()[0]!, context, { apiKey: "synthetic-key", ...(reasoning ? { reasoning } : {}) }).result();
+      assert.equal(result.stopReason, "stop");
+      assert.deepEqual(f.opened().chat_template_kwargs, { thinking: enabled, enable_thinking: enabled });
+      assert.equal(f.opened().reasoning_effort, undefined, "Chutes models refuse some effort values; the level only switches thinking.");
+    } finally { await f.remove(); }
+  }
+});
+
 test("authenticated below-floor Chutes hosts can be admitted only by a policy allowing H2", async () => {
   const f = await fixture("floor");
   try {
