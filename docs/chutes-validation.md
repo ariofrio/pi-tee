@@ -33,6 +33,8 @@ Rejection does not assign H3 or authenticate a lower route. The samples establis
 
 ## Local verification
 
+The rebased implementation passed [CI on `54f9db3`](https://github.com/ariofrio/pi-tee/actions/runs/37933366961): Node 24.21.0, Node 26.10.0, Bun 1.3.13 and Go checks. The local Node 24 suite passed 145 tests with four unrelated/private fixture skips; both required smokes passed, including isolated Chutes loading/login. The local Bun selection passed 55 tests with one private gateway fixture skipped. Real Chutes evidence passed on both runtimes.
+
 The native provider/network tests cover wrong nonce, swapped key, stale discovery, dispatch after evidence expiry, below-floor H2 rejection/admission, an instance outside the matching evidence set, no plaintext content at the API hop, encrypted prompt/tools/reasoning, response corruption/replay/plaintext/truncation, no resend, and cancellation after an authenticated text delta. Synthetic CPU verifier results test dispatch enforcement, not deployment qualification. [Provider tests](../tests/chutes-provider.test.ts), [protocol tests](../tests/chutes-crypto.test.ts).
 
 Saved private evidence from the research probe passes real Intel signature/collateral verification and host-envelope/nonce/key tests under Node and Bun; corrupted keys, nonces, certificates, signatures and quotes fail. Set `CHUTES_TEST_EVIDENCE_DIR` to run these; CI skips the private fixture. [Evidence tests](../tests/chutes-evidence.test.ts), [research and pinned source](provider-ratings-verification.md#chutes).

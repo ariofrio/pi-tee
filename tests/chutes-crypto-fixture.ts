@@ -51,4 +51,3 @@ export function serverStream(responsePk: string, chunks: string[], fault?: "tag"
     (fault === "plain" ? 'data: {"choices":[{"delta":{"content":"injected"}}]}\n\n' : "") +
     (fault === "truncated" ? "" : "data: [DONE]\n\n"), { headers: { "content-type": "text/event-stream" } });
 }
-
