@@ -17,3 +17,5 @@ export * from "./tdx-host.js";
 export * from "./nras.js";
 
 export * from "./status.js";
+
+export * from "./cpu-floors.js";
