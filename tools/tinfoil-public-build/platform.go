@@ -100,6 +100,7 @@ func authenticatePlatformStatement(raw []byte, repo, tag, digest string) (*platf
 	return &statement, ext, nil
 }
 
+// A v2 projection cannot authorize missing classic boot constraints; authenticate its same-tag/run/source companion separately.
 func authenticatePlatform(raw []byte, repo, tag, digest string, classic *platformCompanion) (*provenance.PlatformEndorsements, error) {
 	reject := errors.New("TEE_PLATFORM_REFERENCE_REJECTED")
 	statement, ext, err := authenticatePlatformStatement(raw, repo, tag, digest)

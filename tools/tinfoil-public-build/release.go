@@ -34,6 +34,7 @@ type deployment struct {
 	Config  string      `json:"config"`
 }
 
+// Compare strict decoded fields with the CPU-accepted statement; independent parsers must not select different boot expectations.
 func codePredicate(raw []byte, code *provenance.Code) (*deployment, string, error) {
 	reject := errors.New("TEE_PUBLIC_BUILD_BINDING_REJECTED")
 	var b bundle.Bundle
@@ -60,6 +61,7 @@ func codePredicate(raw []byte, code *provenance.Code) (*deployment, string, erro
 	return p, digest256(payload), nil
 }
 
+// Digest-authenticated deployment bytes must equal that statement predicate, binding runtime/OCI checks to the same CPU workload.
 func authenticateDeployment(repo, tag string, raw, releaseBundle []byte) (*provenance.Code, *deployment, string, error) {
 	reject := errors.New("TEE_PUBLIC_BUILD_BINDING_REJECTED")
 	if requireCodeWorkflow(releaseBundle, repo, tag) != nil {

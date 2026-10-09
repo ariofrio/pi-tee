@@ -103,6 +103,7 @@ func verify(raw, nonce []byte, now time.Time, allowOutdated ...bool) (*result, e
 	return verifyWithPlatform(raw, nonce, now, nil, allowOutdated...)
 }
 
+// Authenticate the envelope, CPU and each named release/freshness authority before returning quote-bound keys and boot expectations.
 func verifyWithPlatform(raw, nonce []byte, now time.Time, classic *platformCompanion, allowOutdated ...bool) (*result, error) {
 	doc, reportData, err := envelope.Check(raw, nonce)
 	if err != nil {

@@ -474,6 +474,7 @@ func runRuntimeRelease(reader io.Reader, writer io.Writer) int {
 	return 0
 }
 
+// A signed constrained configuration authenticates inputs, not a live CPU/GPU/channel session; standalone success never qualifies inference.
 func authenticateRuntimeRelease(input *containerReferenceInput) (*runtimeResult, error) {
 	reject := errors.New("TEE_RUNTIME_CONFIG_REJECTED")
 	code, imageDigest, err := authenticatedContainerReference(input.Repo, input.Tag, input.Deployment, input.Bundle)

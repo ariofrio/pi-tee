@@ -125,6 +125,7 @@ func authenticatedContainerReference(codeRepo, tag, deployment64 string, release
 	return code, strings.TrimPrefix(image, prefix), nil
 }
 
+// Traverse only digest-bound image/provenance descriptors; embedded BuildKit claims inherit release-publisher trust, not a new builder authority.
 func authenticateContainer(i *containerInput) (map[string]any, error) {
 	rejected := errors.New("TEE_CONTAINER_BUILD_REJECTED")
 	codeRepo := i.Repo
