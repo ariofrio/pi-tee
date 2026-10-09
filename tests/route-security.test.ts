@@ -4,6 +4,7 @@ import { normalizeContext, type Model } from "@earendil-works/pi-ai/compat";
 import { createTeeProvider } from "../packages/core/src/provider.js";
 import { RouteRejection, assessRoute, compareRoutes, weakestRoute, type RouteSecurity } from "../packages/core/src/security.js";
 import { parsePolicy } from "../packages/core/src/policy.js";
+import { TeeError } from "../packages/core/src/policy.js";
 
 const model: Model<"openai-completions"> = { id: "m", provider: "test", name: "M", api: "openai-completions", baseUrl: "https://test.example/v1", reasoning: false, input: ["text"], contextWindow: 8192, maxTokens: 512, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } };
 
@@ -12,6 +13,34 @@ const genoa = { ...direct, host: 2 as const };
 const router: RouteSecurity = { route: "tinfoil-router", provider: "Tinfoil", cpuVerified: true, code: 3, host: 3, gpu: 3, egress: 3, observed: [] };
 const near: RouteSecurity = { ...router, route: "near-direct", provider: "NEAR", host: 1 };
 const gateway: RouteSecurity = { ...near, route: "near-gateway", host: 2 };
+
+test("an equal-level Tinfoil gateway is used only when no direct worker qualifies", async () => {
+  const model: Model<"openai-completions"> = { id: "m", provider: "test", name: "M", api: "openai-completions", baseUrl: "https://test.example/v1", reasoning: false, input: ["text"], contextWindow: 8192, maxTokens: 512, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } };
+  for (const directAvailable of [true, false]) {
+    const opened: string[] = [], sent: string[] = [];
+    const integration = createTeeProvider({ id: "test", name: "Test", baseUrl: model.baseUrl, apiKeyEnv: "TEST_KEY", policy: "public-builds,egress=metadata",
+      parseCatalog: () => [model], catalogFetch: async () => Response.json({}), assumptions: [], openSdkTransport: async () => { throw Error(); },
+      routes: [direct, { ...direct, route: "tinfoil-gateway" }].map(security => ({
+        id: security.route, potential: security,
+        ...(security.route === "tinfoil-gateway" ? { fallbackFor: "tinfoil-direct", preferenceReason: "Direct exposes the API key and metadata to fewer parties." } : {}),
+        openSession: async () => {
+          opened.push(security.route);
+          if (security.route === "tinfoil-direct" && !directAvailable) throw new TeeError("TEE_PUBLIC_BUILD_DEPLOYMENT_UNAVAILABLE");
+          return { security, transport: { fetch: async () => {
+            sent.push(security.route);
+            return new Response('data: {"id":"c","choices":[{"index":0,"delta":{"content":"ok"},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n', { headers: { "content-type": "text/event-stream" } });
+          } } };
+        },
+      })),
+    });
+    await integration.initializeCatalog();
+    const result = await integration.provider.streamSimple(model, normalizeContext({ messages: [{ role: "user", content: "synthetic", timestamp: 1 }] }), { apiKey: "synthetic-key" }).result();
+    assert.equal(result.stopReason, "stop");
+    assert.deepEqual(sent, [directAvailable ? "tinfoil-direct" : "tinfoil-gateway"]);
+    assert.equal(opened.includes("tinfoil-gateway"), !directAvailable);
+    if (directAvailable) assert.match(integration.getReport().routeDecisions!.find(r => r.route === "tinfoil-gateway")!.reason, /fewer parties/);
+  }
+});
 
 test("the tightest documented policies admit each route and reject weaker evidence", () => {
   for (const [route, policy] of [

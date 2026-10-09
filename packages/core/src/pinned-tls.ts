@@ -19,9 +19,18 @@ const FORBIDDEN_REQUEST_HEADERS = new Set(["host", "connection", "content-length
 
 /** Credentials are transmitted only after the exact socket presents the attested SPKI. */
 export function pinnedTlsFetch(endpoint: string, fingerprint: string, expiresAt?: number): typeof globalThis.fetch {
+  if (!/^[a-f0-9]{64}$/.test(fingerprint)) throw new TeeError("TEE_REQUEST_REJECTED");
+  return socketTlsFetch(endpoint, fingerprint, expiresAt);
+}
+
+/** Unattested gateway: WebPKI authorizes metadata delivery; EHBP protects bodies. */
+export function webPkiTlsFetch(endpoint: string, expiresAt?: number): typeof globalThis.fetch {
+  return socketTlsFetch(endpoint, undefined, expiresAt);
+}
+
+function socketTlsFetch(endpoint: string, fingerprint: string | undefined, expiresAt?: number): typeof globalThis.fetch {
   const target = new URL(endpoint);
   if (target.protocol !== "https:" || target.username || target.password || target.search || target.hash ||
-      !/^[a-f0-9]{64}$/.test(fingerprint) ||
       (expiresAt !== undefined && (!Number.isSafeInteger(expiresAt) || expiresAt <= 0))) throw new TeeError("TEE_REQUEST_REJECTED");
   return async (input, init) => {
     const request = new Request(input, init);
@@ -32,8 +41,8 @@ export function pinnedTlsFetch(endpoint: string, fingerprint: string, expiresAt?
     const socket = connect({
       host: target.hostname, port: Number(target.port || 443),
       servername: isIP(target.hostname) ? undefined : target.hostname,
-      // Attested SPKI replaces WebPKI authorization. No HTTP is written before checking it.
-      rejectUnauthorized: false, minVersion: "TLSv1.3", ALPNProtocols: ["http/1.1"],
+      // An attested SPKI replaces WebPKI authorization when supplied. No HTTP is written before authorization.
+      rejectUnauthorized: fingerprint === undefined, minVersion: "TLSv1.3", ALPNProtocols: ["http/1.1"],
     });
     const abort = () => socket.destroy(new TeeError("TEE_CONNECTION_FAILED"));
     signal.addEventListener("abort", abort, { once: true });
@@ -44,10 +53,12 @@ export function pinnedTlsFetch(endpoint: string, fingerprint: string, expiresAt?
         socket.once("close", () => reject(new TeeError("TEE_CONNECTION_FAILED")));
         socket.once("secureConnect", () => {
           try {
-            const certificate = socket.getPeerCertificate().raw;
-            if (!certificate) throw new TeeError("TEE_TLS_KEY_REJECTED");
-            const spki = new X509Certificate(certificate).publicKey.export({ type: "spki", format: "der" });
-            if (createHash("sha256").update(spki).digest("hex") !== fingerprint) throw new TeeError("TEE_TLS_KEY_REJECTED");
+            if (fingerprint !== undefined) {
+              const certificate = socket.getPeerCertificate().raw;
+              if (!certificate) throw new TeeError("TEE_TLS_KEY_REJECTED");
+              const spki = new X509Certificate(certificate).publicKey.export({ type: "spki", format: "der" });
+              if (createHash("sha256").update(spki).digest("hex") !== fingerprint) throw new TeeError("TEE_TLS_KEY_REJECTED");
+            }
             // Bun ignores minVersion, so check the negotiated version on every runtime.
             if (socket.getProtocol() !== "TLSv1.3") throw new TeeError("TEE_TLS_KEY_REJECTED");
             resolve();

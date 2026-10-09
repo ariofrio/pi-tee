@@ -6,7 +6,7 @@ import { mkdtemp, mkdir, readFile, rm } from "node:fs/promises";
 import { createServer } from "node:https";
 import { connect as connectTcp, createServer as createTcpServer, type Socket } from "node:net";
 import { resolve, join } from "node:path";
-import { pinnedTlsFetch } from "../packages/core/src/pinned-tls.js";
+import { pinnedTlsFetch, webPkiTlsFetch } from "../packages/core/src/pinned-tls.js";
 
 test("an attested TLS key authorizes the socket before any HTTP headers or body are sent", { timeout: 60000 }, async () => {
   await mkdir(".scratch/work", { recursive: true });
@@ -41,6 +41,8 @@ test("an attested TLS key authorizes the socket before any HTTP headers or body 
     const endpoint = `https://localhost:${address.port}/v1/chat/completions`;
     const signal = AbortSignal.timeout(10000);
     const options = { method: "POST", body: "synthetic", headers: { authorization: "Bearer synthetic-key" }, signal };
+    await assert.rejects(webPkiTlsFetch(endpoint)(endpoint, options), /TEE_CONNECTION_FAILED|TEE_TLS_KEY_REJECTED/);
+    assert.equal(sends, 0, "An untrusted gateway certificate must receive neither credentials nor ciphertext.");
     // A relay that holds the server's first handshake bytes delays TLS setup on any runtime.
     const relays = new Set<Socket>();
     const relay = createTcpServer(client => {

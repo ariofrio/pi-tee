@@ -85,6 +85,9 @@ export interface ProviderReport {
 }
 
 export interface TeeRouteDefinition {
+  /** Try this route only if the preceding named route has no qualifying session. */
+  fallbackFor?: string;
+  preferenceReason?: string;
   id: string;
   /** Best possible levels, used only for catalog filtering and preflight eligibility. */
   potential: RouteSecurity;
@@ -218,6 +221,10 @@ export function createTeeProvider(definition: ProviderDefinition) {
         try {
           for (const route of definition.routes) {
             if (route.modelIds && !route.modelIds.includes(canonical.id)) continue;
+            if (route.fallbackFor && sessions.some(session => session.security.route === route.fallbackFor)) {
+              decisions.push({ route: route.id, accepted: false, picked: false, reason: `Not appraised: ${route.fallbackFor} qualifies. ${route.preferenceReason ?? "Preferred route qualifies."}`, trusts: [], gaps: [] });
+              continue;
+            }
             const possible = assessRoute(requestPolicy, route.potential);
             if (!possible.accepted) {
               decisions.push({ route: route.id, accepted: false, picked: false, reason: `Cannot qualify: ${possible.reason}`, trusts: [], gaps: [] });
