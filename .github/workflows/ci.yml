@@ -48,7 +48,7 @@ jobs:
           bun-version: 1.3.13
       - run: npm ci --ignore-scripts
       - run: npm run build
-      - run: bun test tests/pinned-tls.test.ts tests/wasm-verifiers.test.ts tests/worker-selection.test.ts tests/near-direct-channel.test.ts tests/tinfoil-gateway.test.ts tests/route-security.test.ts tests/chutes.test.ts tests/chutes-evidence.test.ts tests/chutes-crypto.test.ts tests/chutes-provider.test.ts tests/chutes-invoke-channel.test.ts
+      - run: bun test tests/pinned-tls.test.ts tests/wasm-verifiers.test.ts tests/worker-selection.test.ts tests/near-direct-channel.test.ts tests/near-direct-discovery.test.ts tests/tinfoil-gateway.test.ts tests/route-security.test.ts tests/chutes.test.ts tests/chutes-evidence.test.ts tests/chutes-crypto.test.ts tests/chutes-provider.test.ts tests/chutes-invoke-channel.test.ts
 
   go:
     runs-on: ubuntu-24.04

@@ -106,7 +106,7 @@ PI_TEE_POLICY=trust-provider-and-host,host=current node --env-file=/path/to/priv
 
 Chutes uses the same harness: `scripts/live-pi.ts chutes Qwen/Qwen3.8-27B-TEE` with `CHUTES_API_KEY` loaded for that command and `PI_TEE_POLICY=trust-provider-and-host,host=current`. `scripts/live-chutes-attestation.ts` checks catalog models with credentials but no inference. [Chutes validation](docs/chutes-validation.md).
 
-Live tests are opt-in and billable. Add `--cancel-stream` to test abort after a text delta; set `PI_TEE_LIVE_PI_BINARY` to an absolute Pi binary path to test a compiled Pi. Cancellation establishes local abort and acknowledgement, not remote generation-stop timing. The harness removes its temporary credential store and never prints keys or provider payloads.
+Live tests are opt-in and billable. Use `nearai <model> --direct` to qualify a discovered direct endpoint and assert its observed levels; see [NEAR direct discovery](docs/near-direct-discovery.md) for the GLM/Qwen policy matrix. Add `--cancel-stream` to test abort after a text delta; set `PI_TEE_LIVE_PI_BINARY` to an absolute Pi binary path to test a compiled Pi. Cancellation establishes local abort and acknowledgement, not remote generation-stop timing. The harness removes its temporary credential store and never prints keys or provider payloads.
 
 Add `--gateway` to a Tinfoil `--public-builds` run to qualify the production gateway adapter explicitly, including when direct access is available.
 

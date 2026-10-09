@@ -11,6 +11,8 @@ const publicCandidate = process.argv.includes("--public-builds-candidate");
 assert.ok(!publicCandidate || provider === "tinfoil", "The public-build candidate is Tinfoil only.");
 const publicProduction = process.argv.includes("--public-builds");
 const gateway = process.argv.includes("--gateway");
+const direct = process.argv.includes("--direct");
+assert.ok(!direct || provider === "nearai", "Direct qualification requires nearai.");
 assert.ok(!gateway || (provider === "tinfoil" && publicProduction), "Gateway qualification requires Tinfoil --public-builds.");
 assert.ok(!publicProduction || (provider === "tinfoil" && !publicCandidate), "Select the production Tinfoil public policy separately from candidate registration.");
 const testPolicy = process.env.PI_TEE_POLICY ?? (publicCandidate || publicProduction ? "public-builds,egress=metadata" : "trust-provider-and-host");
@@ -28,7 +30,24 @@ await mkdir(".scratch/work", { recursive: true });
 const scratch = await mkdtemp(resolve(".scratch/work/pi-live-"));
 const cwd = join(scratch, "project");
 const agentDir = join(scratch, "agent");
-const entry = gateway ? join(scratch, "gateway.ts") : publicCandidate ? join(scratch, "public-candidate.ts") : resolve("packages", provider, "dist/extension.js");
+const entry = direct ? join(scratch, "direct.ts") : gateway ? join(scratch, "gateway.ts") : publicCandidate ? join(scratch, "public-candidate.ts") : resolve("packages", provider, "dist/extension.js");
+if (direct) await writeFile(entry, `
+import { writeSync } from "node:fs";
+import { createNearProvider } from ${JSON.stringify(resolve("packages/nearai/dist/index.js"))};
+export default async function(pi) {
+  const integration = createNearProvider({route:"direct"});
+  await integration.initializeCatalog();
+  pi.registerProvider(integration.provider);
+  pi.on("message_end", async event => {
+    if (event.message.role !== "assistant") return;
+    const security = integration.getReport().routeDecisions?.find(route => route.picked)?.security;
+    if (security) writeSync(3, JSON.stringify({type:"live_route_report",route:security.route,
+      code:security.code,host:security.host,gpu:security.gpu,egress:security.egress,
+      intel:security.observed.filter(value=>/^Intel (UpToDate|OutOfDate)$/.test(value)),
+    }) + "\\n");
+  });
+}
+`);
 if (gateway) await writeFile(entry, `
 import { writeSync } from "node:fs";
 import { createTinfoilProvider } from ${JSON.stringify(resolve("packages/tinfoil/dist/index.js"))};
@@ -120,6 +139,7 @@ async function runCli(model: string, prompt: string, options: { tool?: boolean; 
   let headersSeen = false;
   let streamSeen = false;
   let gatewayVerified = false;
+  let directReport: Event | undefined;
   let forceTimer: ReturnType<typeof setTimeout> | undefined;
   const terminate = () => {
     child.kill("SIGTERM");
@@ -164,6 +184,7 @@ async function runCli(model: string, prompt: string, options: { tool?: boolean; 
       let event: Event;
       try { event = JSON.parse(line); } catch { continue; }
       if (event.type === "live_route_report") {
+        if (event.route === "near-direct") directReport = event;
         gatewayVerified = event.route === "tinfoil-gateway" && event.code === 1 && event.host === 1 && event.gpu === 1 && event.egress === 2 && event.gatewayDisclosed === true;
       }
       if (event.type === "live_response_headers" && event.status === 200) {
@@ -184,6 +205,10 @@ async function runCli(model: string, prompt: string, options: { tool?: boolean; 
   const assistants = events.filter(e => e.type === "message_end" && e.message?.role === "assistant").map(e => e.message);
   assert.ok(assistants.length > 0, "Pi produced no completed assistant message.");
   if (gateway) assert.equal(gatewayVerified, true, "Gateway dispatch did not report A1/H1/G1/X2 and its credential boundary.");
+  if (direct) {
+    assert.ok(directReport?.code === 3 && [1, 2].includes(directReport?.host) && directReport?.gpu === 3 && directReport?.egress === 3, "Direct dispatch did not report A3/H1-or-H2/G3/X3.");
+    console.log(`PASS: near-direct A3 H${directReport.host} G3 X3; ${directReport.intel.join(", ")}.`);
+  }
   return { events, assistants, headersSeen, streamSeen };
 }
 

@@ -2,7 +2,7 @@
 
 **NEAR support is implemented, but its `public-builds` guarantee cannot be established for any current NEAR model.** NEAR's operator chooses the serving software at runtime, and that software can use the instance's TLS key and the app-wide keys that sign responses and decrypt end-to-end-encrypted payloads. A client can authenticate what one instance has deployed so far, but not that public release processes authorize the software that will serve its request. No client-side check can close that gap; it needs a NEAR server change.
 
-The experimental `sdk` routes keep working under their disclosed assumptions. This is our assessment of NEAR's published code and live attestation evidence, not a NEAR-published statement. No inference was sent to gather it.
+The current routes require a provider-and-host-trusting position. Direct discovery now includes GLM-5.3 Flash and tool-capable Qwen models, with per-request H1/H2 appraisal and G3; [discovery and live validation](near-direct-discovery.md) describe the current behavior. Earlier `sdk` route observations below are historical. This is our assessment of NEAR's published code and live attestation evidence, not a NEAR-published statement. No inference was sent to gather it.
 
 ## Own-fleet models
 

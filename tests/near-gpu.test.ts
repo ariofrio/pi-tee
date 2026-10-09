@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { readFile } from "node:fs/promises";
-import { openDirectNearTransport, NEAR_DIRECT_PROFILE } from "../packages/nearai/src/direct.js";
+import { openDirectNearTransport } from "../packages/nearai/src/direct.js";
 import { checkNearGpuEvidence } from "../packages/nearai/src/gpu.js";
 
 // Policy over NVIDIA's local verdict. Signature, reference and revocation
@@ -109,7 +109,7 @@ test("the direct route appraises GPU evidence locally and never contacts NRAS", 
     close() {},
   };
   try {
-    await assert.rejects(openDirectNearTransport("synthetic-key", AbortSignal.timeout(30000), {
+    await assert.rejects(openDirectNearTransport("synthetic-key", AbortSignal.timeout(30000), { model: "z-ai/glm-5.3-flash", hostname: "glm-5-3-flash.completions.near.ai" }, {
       channel, cpu: { collateral: async () => { throw new Error("synthetic CPU failure"); } },
       runNvidiaVerifier: async options => { gpuRuns.push(options); return verdict([]); },
     }));

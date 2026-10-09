@@ -1,6 +1,6 @@
 # Direct-worker assessment
 
-Current policy and route behavior is defined by the [security model](security-model.md). Earlier validation below describes the settings and restrictions used at the time; provider-specific policy/route variables are now removed.
+Current policy and route behavior is defined by the [security model](security-model.md) and [NEAR direct discovery and live validation](near-direct-discovery.md). Earlier validation below describes the settings and restrictions used at the time; provider-specific policy/route variables are now removed.
 
 Observed 2026-10-07 UTC. Author: Codex. Node 24.21.0; Pi 1.0.4; NEAR SDK 0.1.0; Tinfoil SDK/verifier 1.2.2; EHBP 0.3.3.
 

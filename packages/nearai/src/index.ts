@@ -1,11 +1,11 @@
 import {
-  authenticateResponse, createTeeProvider, limitResponseBody, MAX_ENCRYPTED_RESPONSE_BYTES, resolveModelVisibility, resolvePolicy, TeeError, withAbort,
-  type GpuPolicyTable, type ModelVisibility, type PolicyMode, type ProviderDefinition,
+  assessRoute, compareRoutes, RouteRejection, createTeeProvider, resolveModelVisibility, resolvePolicy, TeeError,
+  type ModelVisibility, type PolicyMode, type ProviderDefinition, type RouteSecurity, type SecurityPolicy,
 } from "pi-tee-core";
 import { NEAR_BASE_URL } from "./catalog.js";
 import { openNearGatewayTransport } from "./gateway.js";
-import { loadNearCatalog } from "./discovery.js";
-import { openDirectNearTransport, NEAR_DIRECT_PROFILE } from "./direct.js";
+import { discoverNearDirectEndpoints, loadNearCatalog } from "./discovery.js";
+import { openDirectNearTransport, type NearDirectTarget } from "./direct.js";
 export { NEAR_BASE_URL, parseNearCatalog } from "./catalog.js";
 
 export const NEAR_ASSUMPTIONS = [
@@ -31,6 +31,7 @@ export function createNearProvider(options: {
   route?: "gateway" | "direct";
   modelVisibility?: ModelVisibility;
   catalogFetch?: typeof globalThis.fetch;
+  directSeams?: (target: NearDirectTarget) => Parameters<typeof openDirectNearTransport>[3];
   openSdkTransport?: ProviderDefinition["openSdkTransport"];
 } = {}) {
   for (const variable of ["PI_NEARAI_POLICY", "PI_NEARAI_ROUTE"]) {
@@ -40,17 +41,64 @@ export function createNearProvider(options: {
   if (route && route !== "gateway" && route !== "direct") throw new TeeError("TEE_ROUTE_INVALID");
   const policy = options.policy ?? resolvePolicy(process.env.PI_TEE_POLICY);
   const potential = { provider: "NEAR", cpuVerified: true, code: 3 as const, host: 1 as const, gpu: 3 as const, egress: 3 as const, observed: [] };
-  return createTeeProvider({
+  const directModelIds: string[] = [];
+  let directEndpoints = new Map<string, string[]>();
+  let discoveryNotes: string[] = [];
+  let directNotes: string[] = [];
+  const integration = createTeeProvider({
     id: "nearai", name: "NEAR AI", baseUrl: NEAR_BASE_URL, apiKeyEnv: "NEARAI_API_KEY", policy,
     modelVisibility: options.modelVisibility ?? resolveModelVisibility(process.env.PI_NEARAI_MODEL_VISIBILITY),
-    parseCatalog: loadNearCatalog, requireDeclaredTee: true, catalogFetch: options.catalogFetch, assumptions: NEAR_ASSUMPTIONS,
+    parseCatalog: async (value, context) => {
+      const models = await loadNearCatalog(value, context);
+      if (route === "gateway") return models;
+      try {
+        directEndpoints = await discoverNearDirectEndpoints(models, context);
+        discoveryNotes = [`Direct discovery: ${directEndpoints.size} catalog/registry candidates; levels are unestablished until per-request appraisal.`];
+      } catch {
+        directEndpoints = new Map();
+        discoveryNotes = ["Direct discovery unavailable or incomplete; no direct candidates offered. Gateway eligibility is unchanged."];
+      }
+      directModelIds.splice(0, directModelIds.length, ...directEndpoints.keys());
+      for (const model of models) if (directEndpoints.has(model.id)) model.sdkTransportAvailable = true;
+      return models;
+    }, requireDeclaredTee: true, catalogFetch: options.catalogFetch, assumptions: NEAR_ASSUMPTIONS,
     openSdkTransport: options.openSdkTransport ?? (async () => { throw new TeeError("TEE_POLICY_ROUTE_REJECTED"); }),
     routes: [
-      ...(route === "gateway" ? [] : [{ id: "near-direct", potential: { ...potential, route: "near-direct" }, modelIds: [NEAR_DIRECT_PROFILE.model],
-        openSession: async ({ apiKey, signal }: { apiKey: string; signal: AbortSignal }) => {
+      ...(route === "gateway" ? [] : [{ id: "near-direct", potential: { ...potential, route: "near-direct" }, modelIds: directModelIds,
+        openSession: async ({ apiKey, signal, model, policy }: { apiKey: string; signal: AbortSignal; model: { id: string }; policy: SecurityPolicy }) => {
           assertNearRuntime("direct");
-          const transport = await openDirectNearTransport(apiKey, signal);
-          return { security: transport.security, transport };
+          directNotes = [];
+          let picked: Awaited<ReturnType<typeof openDirectNearTransport>> | undefined;
+          let rejected: RouteSecurity | undefined;
+          try {
+            for (const hostname of directEndpoints.get(model.id) ?? []) {
+              const target = { model: model.id, hostname };
+              const bounded = AbortSignal.any([signal, AbortSignal.timeout(120_000)]);
+              let transport: Awaited<ReturnType<typeof openDirectNearTransport>>;
+              try { transport = await openDirectNearTransport(apiKey, bounded, target, options.directSeams?.(target)); }
+              catch (error) {
+                signal.throwIfAborted();
+                const failure = (error as { failure?: { code?: string } })?.failure;
+                directNotes.push(`${hostname}: skipped (${failure?.code === "api.transport_failed" || bounded.aborted ? "unreachable or channel failed" : "evidence rejected"}); no levels established.`);
+                continue;
+              }
+              const assessed = assessRoute(policy, transport.security);
+              if (!assessed.accepted) {
+                if (!rejected || compareRoutes(transport.security, rejected) < 0) rejected = transport.security;
+                directNotes.push(`${hostname}: skipped by policy (${assessed.reason}).`);
+                transport.dispose?.();
+              } else if (!picked || compareRoutes(transport.security, picked.security) < 0) {
+                picked?.dispose?.();
+                picked = transport;
+              } else transport.dispose?.();
+            }
+            signal.throwIfAborted();
+            if (!picked) {
+              if (rejected) throw new RouteRejection(rejected);
+              throw new TeeError("TEE_ATTESTATION_REJECTED");
+            }
+            return { security: picked.security, transport: picked };
+          } catch (error) { picked?.dispose?.(); throw error; }
         },
       }]),
       ...(route === "direct" ? [] : [{ id: "near-gateway", potential: { ...potential, route: "near-gateway" },
@@ -61,6 +109,10 @@ export function createNearProvider(options: {
         },
       }]),
     ],
-    availableModelIds: route === "direct" ? [NEAR_DIRECT_PROFILE.model] : undefined,
   });
+  return { ...integration, getReport: () => {
+    const report = integration.getReport();
+    report.assumptions = [...report.assumptions, ...discoveryNotes, ...directNotes];
+    return report;
+  } };
 }

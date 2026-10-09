@@ -14,12 +14,20 @@ globalThis.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
 // Imported after the recorder: the SDK's quote verifier keeps the fetch it sees at load.
 const { DirectAttestationClient, verifyDirectModelAttestations } = await import("@nearai/inference-sdk/node");
 const { NearDirectChannel } = await import("../packages/nearai/src/direct-channel.js");
-const { NEAR_DIRECT_PROFILE } = await import("../packages/nearai/src/direct.js");
+const { createNearProvider } = await import("../packages/nearai/src/index.js");
+const { discoverNearDirectEndpoints } = await import("../packages/nearai/src/discovery.js");
 const { checkNearGpuEvidence } = await import("../packages/nearai/src/gpu.js");
 const { runNvidiaVerifier } = await import("pi-tee-core");
 
 const signal = AbortSignal.timeout(240000);
-const channel = new NearDirectChannel(new URL(NEAR_DIRECT_PROFILE.baseUrl).origin, signal);
+const integration = createNearProvider({ route: "direct", policy: "trust-provider-and-host" });
+await integration.initializeCatalog(signal);
+const models = integration.provider.getModels();
+const model = process.argv[2] ?? models[0]?.id;
+assert.ok(model && models.some(candidate => candidate.id === model), "Choose a discovered direct model.");
+const endpoints = await discoverNearDirectEndpoints(models, { fetch: globalThis.fetch, signal });
+const baseUrl = `https://${endpoints.get(model)![0]!}/v1`;
+const channel = new NearDirectChannel(new URL(baseUrl).origin, signal);
 class Evidence extends DirectAttestationClient {
   protected override requestAttestation(request: Request) { return channel.request(request); }
   fresh() { return this.fetchModelAttestationsWithOptions({ signingAlgo: "ed25519", includeSpkiFingerprint: true }); }
@@ -28,7 +36,7 @@ let gpuRuns = 0;
 let nvidia: Record<string, unknown> | undefined;
 const started = Date.now();
 try {
-  const fetched = await new Evidence({ baseUrl: `${NEAR_DIRECT_PROFILE.baseUrl}/` }).fresh();
+  const fetched = await new Evidence({ baseUrl: `${baseUrl}/` }).fresh();
   const verified = await verifyDirectModelAttestations({
     ...fetched,
     policy: { acceptedTcbStatuses: ["UpToDate"], gpuEvidence: "required" },
@@ -49,7 +57,7 @@ try {
   assert.ok(gpuRuns >= 1);
   assert.ok(![...contacted].some(host => host.endsWith("nvidia.com")), "The SDK contacted an NVIDIA service directly.");
   console.log(JSON.stringify({
-    model: NEAR_DIRECT_PROFILE.model, attestations: verified.attestations.length, gpuAppraisals: gpuRuns,
+    model: model, attestations: verified.attestations.length, gpuAppraisals: gpuRuns,
     gpuEvidence: "verified-locally", tlsBinding: "attested", elapsedMs: Date.now() - started, hostsContactedByMainThread: [...contacted].sort(),
   }));
 } catch (error) {
