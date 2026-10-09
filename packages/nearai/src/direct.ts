@@ -1,34 +1,27 @@
-import { authenticateResponse, TeeError, withAbort, type GpuPolicyTable, type runNvidiaVerifier, type SdkTransport } from "pi-tee-core";
+import { authenticateResponse, TeeError, withAbort, type runNvidiaVerifier, type SdkTransport, type RouteSecurity } from "pi-tee-core";
+import { createNearCpuVerifier, type NearHostRating } from "./cpu.js";
 import { NearDirectChannel } from "./direct-channel.js";
-import { checkNearGpuEvidence } from "./gpu.js";
+import { observeNearGpuEvidence } from "./gpu.js";
 
 export const NEAR_DIRECT_PROFILE = {
   model: "z-ai/glm-5.3-flash",
   baseUrl: "https://glm-5-3-flash.completions.near.ai/v1",
 } as const;
 
-/**
- * `gpuPolicy` replaces the shared default GPU policy table, which fails closed on
- * hardware it does not admit. Tests may substitute the owned channel and
- * NVIDIA's verifier; production uses both as built.
- */
 export async function openDirectNearTransport(apiKey: string, signal: AbortSignal, seams: {
-  gpuPolicy?: GpuPolicyTable;
+  cpu?: Pick<Parameters<typeof createNearCpuVerifier>[0], "collateral" | "verify">;
   channel?: Pick<NearDirectChannel, "request" | "fetch" | "approve" | "close">;
   runNvidiaVerifier?: typeof runNvidiaVerifier;
-} = {}): Promise<SdkTransport> {
+} = {}): Promise<SdkTransport & { security: RouteSecurity }> {
   const { DirectAttestationClient, DirectInferenceClient } = await import("@nearai/inference-sdk/node");
   signal.throwIfAborted();
   const baseUrl = NEAR_DIRECT_PROFILE.baseUrl;
   const channel = seams.channel ?? new NearDirectChannel(new URL(baseUrl).origin, signal);
-  // Replaces the SDK's default NRAS verifier, so no GPU evidence leaves for a remote verdict.
-  // The serving attestation also appears in the attestation set; appraise each payload once.
-  const appraisals = new Map<string, Promise<void>>();
-  const gpuEvidence = (payload: string) => {
-    let appraisal = appraisals.get(payload);
-    if (!appraisal) appraisals.set(payload, appraisal = checkNearGpuEvidence(payload, { signal, policy: seams.gpuPolicy, run: seams.runNvidiaVerifier }));
-    return appraisal;
-  };
+  // GPU reports provide optional local status details; NEAR remains G3.
+  const hostRatings: NearHostRating[] = [];
+  const observed: string[] = [];
+  const tdxQuote = createNearCpuVerifier({ ...seams.cpu, signal, onRating: rating => hostRatings.push(rating) });
+  const appraisals = new Map<string, Promise<string[]>>();
   class BoundEvidence extends DirectAttestationClient {
     override fetchModelAttestations() {
       return this.fetchModelAttestationsWithOptions({ signingAlgo: "ed25519", includeSpkiFingerprint: true });
@@ -41,7 +34,19 @@ export async function openDirectNearTransport(apiKey: string, signal: AbortSigna
   }
   const evidence = new BoundEvidence({ baseUrl: `${baseUrl}/` });
   class BoundInference extends DirectInferenceClient {
-    protected override fetchModelAttestations() { return evidence.fetchModelAttestations(); }
+    protected override async fetchModelAttestations() {
+      const fetched = await evidence.fetchModelAttestations();
+      const strip = async (attestation: typeof fetched.servingAttestation) => {
+        const { nvidiaPayload, ...cpuEvidence } = attestation;
+        if (nvidiaPayload) {
+          let appraisal = appraisals.get(nvidiaPayload);
+          if (!appraisal) appraisals.set(nvidiaPayload, appraisal = observeNearGpuEvidence(nvidiaPayload, fetched.clientBinding.nonce, { signal, run: seams.runNvidiaVerifier }));
+          observed.push(...await appraisal);
+        }
+        return cpuEvidence;
+      };
+      return { ...fetched, servingAttestation: await strip(fetched.servingAttestation), attestations: await Promise.all(fetched.attestations.map(strip)) };
+    }
     protected override createDirectSessionTransport({ tlsBinding }: {
       tlsBinding: import("@nearai/inference-sdk/node").DirectTlsBinding;
       attestations: readonly import("@nearai/inference-sdk/node").VerifiedDirectModelAttestation[];
@@ -53,12 +58,20 @@ export async function openDirectNearTransport(apiKey: string, signal: AbortSigna
   }
   const client = new BoundInference({
     apiKey, baseUrl: `${baseUrl}/`, signingAlgo: "ed25519", e2ee: true, ohttp: true,
-    attestationCacheTimeToLiveMs: 0, responseCacheTimeToLiveMs: 60_000,
-    modelVerification: { policy: { acceptedTcbStatuses: ["UpToDate"], gpuEvidence: "required" }, verifiers: { gpuEvidence } },
+    attestationCacheTimeToLiveMs: 300_000, responseCacheTimeToLiveMs: 60_000,
+    modelVerification: { policy: { acceptedTcbStatuses: ["UpToDate", "OutOfDate"], gpuEvidence: "if-present" }, verifiers: { tdxQuote } },
   });
+  const challengeAt = Date.now();
+  try { await withAbort(client.verify(NEAR_DIRECT_PROFILE.model), signal); }
+  catch (error) { channel.close(); throw error; }
   signal.throwIfAborted();
+  if (!hostRatings.length) { channel.close(); throw new TeeError("TEE_CPU_POLICY_REJECTED"); }
   return {
-    baseUrl, dispose: () => channel.close(),
+    security: { route: "near-direct", provider: "NEAR", cpuVerified: true, code: 3,
+      host: hostRatings.some(r => r.host === 2) ? 2 : 1, gpu: 3, egress: 3,
+      observed: [...new Set([...hostRatings.flatMap(r => r.observed), ...observed, "Shared NEAR endpoint and response keys do not identify exclusive serving-instance custody"])],
+    },
+    baseUrl, expiresAt: challengeAt + 300_000, dispose: () => channel.close(),
     fetch: async (input, init) => {
       const controller = new AbortController();
       const request = new Request(input, init);

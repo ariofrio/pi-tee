@@ -166,6 +166,14 @@ func snpCPU(reportBase64 string) ([3]byte, error) {
 // production policy for a non-debug, non-migratable guest at VMPL0 on
 // released firmware.
 func floorSNPArtifact(artifact *policy.Artifact, identity string, cpu [3]byte) (*policy.Artifact, error) {
+	return snpArtifactPolicy(artifact, identity, cpu, true)
+}
+
+func baseSNPArtifact(artifact *policy.Artifact, identity string, cpu [3]byte) (*policy.Artifact, error) {
+	return snpArtifactPolicy(artifact, identity, cpu, false)
+}
+
+func snpArtifactPolicy(artifact *policy.Artifact, identity string, cpu [3]byte, floors bool) (*policy.Artifact, error) {
 	reject := errors.New("TEE_CPU_POLICY_REJECTED")
 	floor, known := snpFloors[cpu]
 	if !known {
@@ -191,6 +199,9 @@ func floorSNPArtifact(artifact *policy.Artifact, identity string, cpu [3]byte) (
 	version, ok := versionParts(snp.MinimumAPIVersion)
 	if !ok {
 		return nil, reject
+	}
+	if !floors {
+		return copy, nil
 	}
 	if version[0] < floor.api[0] || (version[0] == floor.api[0] && version[1] < floor.api[1]) {
 		snp.MinimumAPIVersion = fmt.Sprintf("%d.%d", floor.api[0], floor.api[1])

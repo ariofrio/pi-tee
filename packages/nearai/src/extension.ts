@@ -1,3 +1,4 @@
+import { formatProviderReport, registerSecurityStatus, TeeError } from "pi-tee-core";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { createNearProvider } from "./index.js";
 
@@ -5,6 +6,7 @@ export default async function nearai(pi: ExtensionAPI) {
   const integration = createNearProvider();
   if (process.env.PI_TEE_OFFLINE !== "1") await integration.initializeCatalog().catch(() => undefined);
   pi.registerProvider(integration.provider);
+  registerSecurityStatus(pi.registerCommand.bind(pi), integration.provider.id, () => integration.getReport());
   const show = (ctx: ExtensionContext) => {
     const report = integration.getReport();
     ctx.ui.setStatus("nearai-policy", ctx.model?.provider === "nearai" ? `NEAR AI: ${report.policy} / ${report.lastRequest}` : undefined);
@@ -13,10 +15,10 @@ export default async function nearai(pi: ExtensionAPI) {
   pi.on("model_select", async (_event, ctx) => show(ctx));
   pi.on("message_end", async (_event, ctx) => show(ctx));
   pi.registerCommand("nearai", {
-    description: "NEAR AI policy/report; /nearai policy public-builds|sdk|approved; /nearai models tee|all|refresh",
+    description: "NEAR AI policy/report; /nearai policy <position>[,axis=value…]; /nearai models tee|all|refresh",
     handler: async (args, ctx) => {
       try {
-        if (args === "policy public-builds" || args === "policy sdk" || args === "policy approved") {
+        if (args.startsWith("policy ")) {
           integration.setPolicy(args.slice(7));
           await ctx.modelRegistry.refresh({ providers: ["nearai"], allowNetwork: false });
         }
@@ -32,13 +34,13 @@ export default async function nearai(pi: ExtensionAPI) {
           const result = await ctx.modelRegistry.refresh({ providers: ["nearai"], force: true, allowNetwork: true });
           if (result.errors.has("nearai")) ctx.ui.notify("NEAR AI model refresh failed; cached catalog retained.", "warning");
         } else if (args && args !== "status") {
-          ctx.ui.notify("Use /nearai status, /nearai policy public-builds|sdk|approved, or /nearai models tee|all|refresh.", "warning");
+          ctx.ui.notify("Use /nearai status, /nearai policy <position>[,axis=value…], or /nearai models tee|all|refresh.", "warning");
           return;
         }
         const report = integration.getReport();
-        ctx.ui.notify(JSON.stringify(report, null, 2), "info");
+        ctx.ui.notify(formatProviderReport(report), "info");
         show(ctx);
-      } catch { ctx.ui.notify("NEAR AI command failed. Run /nearai status for the current policy.", "error"); }
+      } catch (error) { ctx.ui.notify(error instanceof TeeError ? error.message : "NEAR AI command failed. Run /nearai status for the current policy.", "error"); }
     },
   });
 }

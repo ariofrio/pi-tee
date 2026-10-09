@@ -1,6 +1,6 @@
 import { randomInt } from "node:crypto";
 import { connect as netConnect } from "node:net";
-import { TeeError, type PublicBuildProfile, type SdkTransport } from "pi-tee-core";
+import { assessRoute, compareRoutes, parsePolicy, TeeError, type SecurityPolicy, type PublicBuildProfile, type SdkTransport } from "pi-tee-core";
 import { openEncryptedWorkerTransport } from "./direct.js";
 import { PUBLIC_BUILD_AUTHORITY_POLICY_DIGEST, PUBLIC_BUILD_PROFILE_ID } from "./public-policy.js";
 import { appraiseWorker, PUBLIC_MODELS, type PublicModel } from "./worker-appraisal.js";
@@ -65,8 +65,9 @@ const defaultDeps: SelectionDeps = {
   appraise: (model, host, signal) => appraiseWorker({ model, host, signal: AbortSignal.any([signal, AbortSignal.timeout(120000)]) }),
 };
 
-export async function selectPublicWorker(model: PublicModel, signal: AbortSignal, deps: Partial<SelectionDeps> = {}) {
-  const { discover, reachable, appraise } = { ...defaultDeps, ...deps };
+export async function selectPublicWorker(model: PublicModel, signal: AbortSignal, deps: Partial<SelectionDeps> = {}, policy: SecurityPolicy = parsePolicy()) {
+  const { discover, reachable } = { ...defaultDeps, ...deps };
+  const appraise = deps.appraise ?? ((model: PublicModel, host: string, signal: AbortSignal) => appraiseWorker({ model, host, signal: AbortSignal.any([signal, AbortSignal.timeout(120000)]), policy }));
   const candidates = await reachable(await discover(model, signal), signal);
   signal.throwIfAborted();
   for (let index = candidates.length - 1; index > 0; index--) {
@@ -79,12 +80,15 @@ export async function selectPublicWorker(model: PublicModel, signal: AbortSignal
   // reachability never authorize one, and a failure relaxes nothing for the next.
   let rejection: TeeError | undefined;
   let unavailable: TeeError | undefined;
+  let best: { host: string; keys: WorkerKeys } | undefined;
   for (const host of candidates.slice(0, MAX_WORKER_ATTEMPTS)) {
     signal.throwIfAborted();
     try {
       const keys = await appraise(model, host, signal);
-      lastHealthy.set(model, host);
-      return { host, keys };
+      if (!assessRoute(policy, keys.security).accepted) throw new TeeError("TEE_POLICY_ROUTE_REJECTED");
+      if (!best || compareRoutes(keys.security, best.keys.security) < 0) best = { host, keys };
+      // A1/H1/G1/X2 is the strongest possible direct worker under this protocol.
+      if (keys.security.host === 1 && keys.security.gpu === 1) break;
     } catch (error) {
       signal.throwIfAborted();
       if (lastHealthy.get(model) === host) lastHealthy.delete(model);
@@ -93,7 +97,19 @@ export async function selectPublicWorker(model: PublicModel, signal: AbortSignal
       else if (error instanceof TeeError && error.code === "TEE_PUBLIC_ARTIFACT_UNAVAILABLE") unavailable = error;
     }
   }
+  if (best) { lastHealthy.set(model, best.host); return best; }
   throw rejection ?? unavailable ?? new TeeError("TEE_PUBLIC_BUILD_DEPLOYMENT_UNAVAILABLE");
+}
+
+export async function openRatedPublicWorkerTransport(signal: AbortSignal, model: string, policy: SecurityPolicy) {
+  if (!isPublicModel(model)) throw new TeeError("TEE_MODEL_UNAVAILABLE");
+  const { host, keys } = await selectPublicWorker(model, signal, {}, policy);
+  const { platform: _platform, gpus: _gpus, ...admission } = keys.publicBuild;
+  return {
+    security: keys.security,
+    admission: { profile: PUBLIC_BUILD_PROFILE_ID, model, authorityPolicyDigest: PUBLIC_BUILD_AUTHORITY_POLICY_DIGEST, ...admission },
+    transport: await openEncryptedWorkerTransport(signal, host, keys, "cache_salt", keys.publicBuild.expiresAt, PUBLIC_BUILD_BASE_URL),
+  };
 }
 
 /** SDK-policy route over the same appraisal. */

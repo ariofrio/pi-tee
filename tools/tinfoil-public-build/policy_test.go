@@ -170,3 +170,29 @@ func TestSNPFloorsRejectUnknownCPUsMismatchedShapesAndNonProductionPolicies(t *t
 		}
 	}
 }
+
+func TestOutdatedSNPAdmissionKeepsAuthenticatedPublisherFloorsAndProductionRules(t *testing.T) {
+	artifact, identity := snpArtifact(t, "snp-test-prod", false, false)
+	cpu := [3]byte{0x19, 0x11, 0x01}
+	outdated, err := baseSNPArtifact(artifact, identity, cpu)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snp, ucode, _ := snpFloorsOf(t, outdated, identity); snp != 14 || ucode != 72 {
+		t.Fatalf("publisher minima changed: %d/%d", snp, ucode)
+	}
+	if _, err := baseSNPArtifact(artifact, identity, [3]byte{}); err == nil {
+		t.Fatal("unknown CPU accepted")
+	}
+	for _, name := range []string{"snp-test-dev", "snp-test-prod"} {
+		bad, id := snpArtifact(t, name, false, false)
+		if name == "snp-test-prod" {
+			key, selected, _ := bad.PolicyFor(id, policy.PlatformSEVSNP)
+			selected.SEVSNP.GuestPolicy.Debug = true
+			bad.Policies[key] = *selected
+		}
+		if _, err := baseSNPArtifact(bad, id, cpu); err == nil {
+			t.Fatal("non-production or debug policy accepted")
+		}
+	}
+}

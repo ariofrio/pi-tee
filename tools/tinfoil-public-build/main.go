@@ -38,11 +38,13 @@ var publicRepos = map[string]string{
 var stableTag = regexp.MustCompile(`^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$`)
 
 type input struct {
-	Nonce    string          `json:"nonce"`
-	Envelope json.RawMessage `json:"envelope"`
+	AllowOutdated bool            `json:"allowOutdated,omitempty"`
+	Nonce         string          `json:"nonce"`
+	Envelope      json.RawMessage `json:"envelope"`
 }
 
 type result struct {
+	HostLevel           int       `json:"hostLevel"`
 	CPUVerified         bool      `json:"cpuVerified"`
 	PublicBuildVerified bool      `json:"publicBuildVerified"`
 	GPUVerified         bool      `json:"gpuVerified"`
@@ -97,7 +99,7 @@ func requirePublicWorkflow(raw []byte, repo, workflow, ref string) error {
 	return nil
 }
 
-func verify(raw, nonce []byte, now time.Time) (*result, error) {
+func verify(raw, nonce []byte, now time.Time, allowOutdated ...bool) (*result, error) {
 	doc, reportData, err := envelope.Check(raw, nonce)
 	if err != nil {
 		return nil, errors.New("TEE_ENVELOPE_REJECTED")
@@ -177,11 +179,27 @@ func verify(raw, nonce []byte, now time.Time) (*result, error) {
 	if err != nil {
 		return nil, errors.New("TEE_CPU_POLICY_REJECTED")
 	}
+	hostLevel := 1
 	assembled, err := quote.Assemble(floored, code.Measurement, code.Shape, reportData, authenticated)
 	if err != nil || assembled.Validate() != nil {
-		return nil, errors.New("TEE_CPU_POLICY_REJECTED")
+		if authenticated.Platform != policy.PlatformSEVSNP || len(allowOutdated) != 1 || !allowOutdated[0] {
+			return nil, errors.New("TEE_CPU_POLICY_REJECTED")
+		}
+		cpu, cpuErr := snpCPU(doc.CPUEvidence.ReportBase64)
+		if cpuErr != nil {
+			return nil, errors.New("TEE_CPU_POLICY_REJECTED")
+		}
+		base, baseErr := baseSNPArtifact(platform.Artifact, authenticated.Identity, cpu)
+		if baseErr != nil {
+			return nil, errors.New("TEE_CPU_POLICY_REJECTED")
+		}
+		weaker, weakerErr := quote.Assemble(base, code.Measurement, code.Shape, reportData, authenticated)
+		if weakerErr != nil || weaker.Validate() != nil {
+			return nil, errors.New("TEE_CPU_POLICY_REJECTED")
+		}
+		hostLevel = 2
 	}
-	return &result{CPUVerified: true, PublicBuildVerified: true, Repo: codeRepo, Platform: authenticated.Platform, Workflow: codeWorkflow,
+	return &result{HostLevel: hostLevel, CPUVerified: true, PublicBuildVerified: true, Repo: codeRepo, Platform: authenticated.Platform, Workflow: codeWorkflow,
 		Tag: code.Tag, Commit: code.Commit, Digest: code.Digest,
 		PlatformTag: platform.Tag, PlatformCommit: platform.Commit, PlatformDigest: platform.Digest,
 		CodeStatementDigest: statementDigest, SNPMeasurement: predicate.SNP, RTMR1: predicate.TDX.RTMR1, RTMR2: predicate.TDX.RTMR2, Shape: predicate.Shape,
@@ -202,7 +220,7 @@ func run(reader io.Reader, writer io.Writer, now time.Time) int {
 	}
 	var checked *result
 	if err == nil {
-		checked, err = verify(i.Envelope, nonce, now)
+		checked, err = verify(i.Envelope, nonce, now, i.AllowOutdated)
 	}
 	if err != nil {
 		code := "TEE_EVIDENCE_INPUT_REJECTED"

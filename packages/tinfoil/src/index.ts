@@ -3,20 +3,18 @@ import {
   createTeeProvider, resolvePolicy, withAbort,
   TeeError, type PolicyMode, type ProviderDefinition,
 } from "pi-tee-core";
-import { openDirectTinfoilTransport, TINFOIL_DIRECT_PROFILE } from "./direct.js";
-import { openPublicWorkerTransport, PUBLIC_BUILD_PROFILE } from "./public-session.js";
+import { openRatedPublicWorkerTransport } from "./public-session.js";
 import { PUBLIC_MODELS } from "./worker-appraisal.js";
 import { PUBLIC_BUILD_PROFILE_ENABLED } from "./public-policy.js";
 import { parseTinfoilCatalog, TINFOIL_BASE_URL } from "./catalog.js";
 export { parseTinfoilCatalog, TINFOIL_BASE_URL } from "./catalog.js";
 
 export const TINFOIL_ASSUMPTIONS = [
-  "Local Pi, runtime, extensions, tools and the pinned Tinfoil SDK are trusted.",
-  "The JS verifier accepts AMD Genoa SEV-SNP and tagged-release Sigstore provenance; AMD certificate revocation is not checked.",
-  "Tinfoil's router and backend/hardware release authorities remain trusted; exact model-worker software is not independently approved.",
-  "ATC/proxies may select an older authentic tagged release; SDK policy supplies no local rollback floor.",
-  "The SDK can re-attest and resend after key rotation without independent approval before that resend.",
-  "GPU channel assurance, runtime integrity, egress and credential-dependent sidecars depend on accepted router/guest code.",
+  "Local OS, clock, Pi/runtime, enabled extensions/hooks/tools, locked dependencies and hash-checked verifier modules are trusted.",
+  "Intel, AMD and NVIDIA are trusted as manufacturers. Evidence and route-wide levels are established for each request, including hidden plaintext components.",
+  "Admitted public publishers are trusted for release correctness; B3 uses GitHub hosted workflows and Sigstore, without independent reproduction or per-release review.",
+  "Direct transport binds keys before credentials/body and sends once. Router transport follows SDK rotation/retry behavior within its provider-and-host trust position.",
+  "API credentials and authorization metadata reach Tinfoil. Whole-Pi-session protection remains unestablished.",
 ];
 
 export function createTinfoilProvider(options: {
@@ -25,32 +23,37 @@ export function createTinfoilProvider(options: {
   catalogFetch?: typeof globalThis.fetch;
   openSdkTransport?: ProviderDefinition["openSdkTransport"];
 } = {}) {
-  const route = options.route ?? process.env.PI_TINFOIL_ROUTE ?? "auto";
-  if (route !== "auto" && route !== "router" && route !== "direct" && route !== "direct-public") throw new TeeError("TEE_ROUTE_INVALID");
-  // direct-public runs the production appraisal under SDK policy while
-  // production admission is closed, so it shares the profile's assumptions.
-  const assumptions = route === "direct-public" ? [
-    "SDK-policy route running the public-build appraisal below for the profile's models only.",
-    ...PUBLIC_BUILD_PROFILE.assumptions,
-  ] : route === "direct" ? [
-    "Local Pi, runtime, extensions, tools, the pinned JS verifier and EHBP are trusted.",
-    "This direct SDK-policy candidate pins one worker, artifact digest and launch measurement; it is not independently approved.",
-    "The AMD Genoa JS verifier supplies no revocation checks or independent GPU appraisal; fresh v3 evidence is not yet enforced.",
-    "API credentials and encrypted prompts use the exact socket presenting the attested TLS SPKI; rotation fails without a resend.",
-    "Runtime integrity, GPU channel assurance and model integrity still require qualification of the pinned guest and model artifacts.",
-  ] : TINFOIL_ASSUMPTIONS;
+  for (const variable of ["PI_TINFOIL_POLICY", "PI_TINFOIL_ROUTE"]) {
+    if (process.env[variable] !== undefined) throw new TeeError("TEE_POLICY_INVALID", `${variable} was removed; use PI_TEE_POLICY. Routes are selected by verified levels.`);
+  }
+  const route = options.route ?? "auto";
+  if (!["auto", "router", "direct", "direct-public"].includes(route)) throw new TeeError("TEE_ROUTE_INVALID");
+  const publicPotential = { route: "tinfoil-direct", provider: "Tinfoil", cpuVerified: true, code: 1 as const, host: 1 as const, gpu: 1 as const, egress: 2 as const, build: 3 as const, review: 3 as const, observed: [] };
+  const routerSecurity = { route: "tinfoil-router", provider: "Tinfoil", cpuVerified: true, code: 3 as const, host: 3 as const, gpu: 3 as const, egress: 3 as const,
+    observed: ["Router and hidden worker/sidecar code is not fully pinned by client checks.", "CPU evidence has no client nonce; AMD revocation and local firmware floors are unchecked.", "Worker GPU protection is unchecked; web-search and sidecar paths can carry plaintext.", "Router tags are signed, but their build workflow and runner are unchecked (B4 for the router component).", "Tinfoil handling commitments have not been reviewed."] };
   return createTeeProvider({
     id: "tinfoil", name: "Tinfoil", baseUrl: TINFOIL_BASE_URL, apiKeyEnv: "TINFOIL_API_KEY",
-    policy: options.policy ?? resolvePolicy(process.env.PI_TINFOIL_POLICY),
-    parseCatalog: parseTinfoilCatalog, catalogFetch: options.catalogFetch, assumptions,
-    publicBuildProfile: (route === "auto" || route === "direct-public") && PUBLIC_BUILD_PROFILE_ENABLED ? PUBLIC_BUILD_PROFILE : undefined,
-    availableModelIds: route === "direct-public" ? Object.keys(PUBLIC_MODELS) : route === "direct" ? [TINFOIL_DIRECT_PROFILE.model] : undefined,
-    openSdkTransport: options.openSdkTransport ?? (route === "direct-public" ? ({ signal, model }) => openPublicWorkerTransport(signal, model.id) : route === "direct" ? ({ signal }) => openDirectTinfoilTransport(signal) : async ({ signal }) => {
-      const { SecureClient } = await import("tinfoil");
-      signal.throwIfAborted();
-      const client = new SecureClient({ baseURL: TINFOIL_BASE_URL, transport: "ehbp", userCacheSecret: randomBytes(32).toString("hex") });
-      await withAbort(client.ready(), signal);
-      return { fetch: client.fetch };
-    }),
+    policy: options.policy ?? resolvePolicy(process.env.PI_TEE_POLICY),
+    parseCatalog: parseTinfoilCatalog, catalogFetch: options.catalogFetch,
+    assumptions: [...TINFOIL_ASSUMPTIONS, "Intel OutOfDate TDX direct workers are unavailable under every policy; the pinned verifier rejects them during authentication."],
+    openSdkTransport: async () => { throw new TeeError("TEE_POLICY_ROUTE_REJECTED"); },
+    routes: [
+      ...(route === "router" || !PUBLIC_BUILD_PROFILE_ENABLED ? [] : [{ id: "tinfoil-direct", potential: publicPotential, limitations: ["Intel OutOfDate TDX workers are skipped under every policy because the pinned verifier rejects them during authentication."], modelIds: Object.keys(PUBLIC_MODELS),
+        openSession: async ({ signal, model, policy }: { signal: AbortSignal; model: { id: string }; policy: import("pi-tee-core").SecurityPolicy }) => openRatedPublicWorkerTransport(signal, model.id, policy),
+      }]),
+      ...(route === "direct" || route === "direct-public" ? [] : [{ id: "tinfoil-router", potential: routerSecurity,
+        openSession: async ({ apiKey, signal, model }: { apiKey: string; signal: AbortSignal; model: import("pi-tee-core").TeeCatalogModel }) => {
+          const transport = options.openSdkTransport ? await options.openSdkTransport({ apiKey, signal, model }) : await (async () => {
+            const { SecureClient } = await import("tinfoil");
+            signal.throwIfAborted();
+            const client = new SecureClient({ baseURL: TINFOIL_BASE_URL, transport: "ehbp", userCacheSecret: randomBytes(32).toString("hex") });
+            await withAbort(client.ready(), signal);
+            return { fetch: client.fetch };
+          })();
+          return { security: routerSecurity, transport };
+        },
+      }]),
+    ],
+    availableModelIds: route === "direct" || route === "direct-public" ? Object.keys(PUBLIC_MODELS) : undefined,
   });
 }

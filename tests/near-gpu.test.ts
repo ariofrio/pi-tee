@@ -109,14 +109,10 @@ test("the direct route appraises GPU evidence locally and never contacts NRAS", 
     close() {},
   };
   try {
-    const transport = await openDirectNearTransport("synthetic-key", AbortSignal.timeout(30000), {
-      channel, runNvidiaVerifier: async options => { gpuRuns.push(options); return verdict([]); },
-    });
-    await assert.rejects(transport.fetch(`${NEAR_DIRECT_PROFILE.baseUrl}/chat/completions`, {
-      method: "POST", headers: { "content-type": "application/json" },
-      body: JSON.stringify({ model: NEAR_DIRECT_PROFILE.model, messages: [{ role: "user", content: "synthetic" }] }),
+    await assert.rejects(openDirectNearTransport("synthetic-key", AbortSignal.timeout(30000), {
+      channel, cpu: { collateral: async () => { throw new Error("synthetic CPU failure"); } },
+      runNvidiaVerifier: async options => { gpuRuns.push(options); return verdict([]); },
     }));
-    transport.dispose?.();
   } finally { globalThis.fetch = realFetch; }
   assert.ok(!contacted.some(host => host.endsWith("nvidia.com")), `NVIDIA services are reached only from the verifier's bridge: ${contacted.join(", ")}`);
   assert.deepEqual(channelRequests, ["GET /v1/attestation/report"], "No credentials or inference without verified evidence.");

@@ -69,6 +69,7 @@ export async function verifyPublicBuildArtifacts(options: {
   raw: string; nonce: string; signal: AbortSignal; repo: string; evidenceFetch?: typeof globalThis.fetch;
   /** Defaults to the user cache directory for production delivery; off for injected fetches unless given. */
   persistentCacheDir?: string;
+  allowOutdated?: boolean;
 }) {
   const { raw, nonce, signal, repo } = options;
   const evidenceFetch = options.evidenceFetch ?? globalThis.fetch;
@@ -129,7 +130,7 @@ export async function verifyPublicBuildArtifacts(options: {
     if (path) pendingWrites.set(url, bytes);
     return bytes;
   }
-  const input = `{"nonce":${JSON.stringify(nonce)},"envelope":${raw}}`;
+  const input = `{"nonce":${JSON.stringify(nonce)},"allowOutdated":${options.allowOutdated ?? false},"envelope":${raw}}`;
   async function appraise(input: string, args: string[] = []): Promise<any> {
     signal.throwIfAborted();
     const key = args.length === 1 && ["--cvm-build", "--runtime-config", "--container-reference", "--container-build"].includes(args[0]!) ? `helper:${args[0]}:${sha256(Buffer.from(input))}` : undefined;

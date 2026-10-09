@@ -1,9 +1,20 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { TeeError } from "pi-tee-core";
+import { TeeError, parsePolicy } from "pi-tee-core";
 import { selectPublicWorker } from "../packages/tinfoil/src/public-session.js";
 
-const keys = (host: string) => ({ tls: "a".repeat(64), hpke: "b".repeat(64), publicBuild: { host } } as any);
+const keys = (host: string, level: 1 | 2 = 1) => ({ tls: "a".repeat(64), hpke: "b".repeat(64), publicBuild: { host },
+  security: { route: "tinfoil-direct", provider: "Tinfoil", cpuVerified: true, code: 1, host: level, gpu: 1, egress: 2, build: 3, review: 3, observed: [host] } } as any);
+
+test("Genoa needs an H2 policy and current workers win when both qualify", async () => {
+  const deps = { discover: async () => ["genoa", "tdx"], reachable: async (hosts: string[]) => hosts,
+    appraise: async (_model: unknown, host: string) => keys(host, host === "genoa" ? 2 : 1) };
+  const relaxed = parsePolicy("public-builds-trust-host,egress=metadata,host=outdated-firmware,gpu=verified");
+  assert.equal((await selectPublicWorker("gemma4-31b", AbortSignal.timeout(5000), deps, relaxed)).host, "tdx");
+  const genoaOnly = { ...deps, discover: async () => ["genoa"] };
+  await assert.rejects(selectPublicWorker("gemma4-31b", AbortSignal.timeout(5000), genoaOnly, parsePolicy()), /TEE_POLICY_ROUTE_REJECTED/);
+  assert.equal((await selectPublicWorker("gemma4-31b", AbortSignal.timeout(5000), genoaOnly, relaxed)).host, "genoa");
+});
 
 test("unreachable workers do not consume full appraisals", async () => {
   const hosts = Array.from({ length: 30 }, (_, index) => `h${index}`);

@@ -42,7 +42,7 @@ test("default public admission lists only profile models and stale selections ca
       await integration.initializeCatalog();
       assert.equal(integration.getReport().policy, "public-builds,egress=metadata");
       assert.deepEqual(integration.provider.getModels().map(m => m.id), ["gemma4-31b"], "Only catalog models in the public profile are selectable.");
-      assert.deepEqual(integration.getReport().assumptions, PUBLIC_BUILD_PROFILE.assumptions);
+      assert.match(integration.getReport().assumptions.join(" "), /Intel OutOfDate/);
       if (route === undefined) {
         // A non-profile model selected under SDK policy cannot reach the SDK
         // after switching back; it fails before any network request.
@@ -51,7 +51,7 @@ test("default public admission lists only profile models and stale selections ca
         integration.setPolicy("public-builds,egress=metadata");
         assert.ok(stale);
         const result = await integration.provider.streamSimple(stale, normalizeContext({ messages: [{ role: "user", content: "synthetic prompt", timestamp: 1 }] }), { apiKey: "synthetic-key", maxRetries: 10 }).result();
-        assert.equal(result.errorMessage, "TEE_MODEL_UNAVAILABLE");
+        assert.equal(result.errorMessage, "TEE_POLICY_ROUTE_REJECTED");
         assert.equal(sdkOpened, 0);
         assert.equal(integration.getReport().publicBuildVerification, "not-established");
       }
@@ -59,8 +59,7 @@ test("default public admission lists only profile models and stale selections ca
       assert.equal(integration.provider.getModels().length, 0);
       integration.setPolicy("trust-provider-and-host");
       assert.deepEqual(integration.provider.getModels().map(m => m.id), route ? ["gemma4-31b"] : ["gemma4-31b", "gpt-oss-120b"]);
-      if (route === undefined) assert.deepEqual(integration.getReport().assumptions, TINFOIL_ASSUMPTIONS);
-      else assert.match(integration.getReport().assumptions[0]!, /^SDK-policy route running the public-build appraisal/);
+      assert.equal(integration.getReport().settings?.position, "trust-provider-and-host");
     }
   } finally {
     for (const [name, value] of [["PI_TINFOIL_ROUTE", oldRoute], ["PI_TINFOIL_POLICY", oldPolicy]]) {
@@ -132,6 +131,6 @@ test("auto preserves SDK discovery while explicit router cannot admit public wor
   router.setPolicy("public-builds");
   assert.equal(router.provider.getModels().length, 0);
   const result = await router.provider.streamSimple(model, normalizeContext({ messages: [{ role: "user", content: "synthetic prompt", timestamp: 1 }] }), { apiKey: "synthetic-key" }).result();
-  assert.equal(result.errorMessage, "TEE_PUBLIC_BUILD_DEPLOYMENT_UNAVAILABLE");
+  assert.equal(result.errorMessage, "TEE_POLICY_ROUTE_REJECTED");
   assert.equal(sdkOpened, 0);
 });

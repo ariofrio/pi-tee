@@ -28,8 +28,9 @@
     "node": ">=24"
   },
   "dependencies": {
-    "pi-tee-core": "0.1.0",
-    "@nearai/inference-sdk": "0.1.0"
+    "@nearai/inference-sdk": "0.1.0",
+    "@phala/dcap-qvl": "0.6.3",
+    "pi-tee-core": "0.1.0"
   },
   "peerDependencies": {
     "@earendil-works/pi-ai": "1.0.4",
