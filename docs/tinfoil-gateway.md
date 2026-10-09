@@ -8,7 +8,7 @@ The client reads the untrusted [gateway catalog](https://inference-gateway.tinfo
 
 TLS 1.3 terminates at the unattested gateway, authorized by normal WebPKI hostname/certificate checks. It receives the API key, model, headers and worker hostname. This differs from direct's attested-socket credential rule and is disclosed separately from the axes. The gateway has no worker HPKE private key and never receives a plaintext body. Billing truthfulness and availability are outside the model. The named public releases remain trusted to preserve the [worker key-custody contract](tinfoil-public-profile.md).
 
-Gateway admission uses a distinct profile/policy digest that includes the direct appraisal authority plus the gateway endpoint, WebPKI transport, seal, metadata recipient and send-once rules. The worker's authority and appraisal are unchanged. [Admission identity](../packages/tinfoil/src/gateway.ts).
+Gateway admission uses a distinct profile/policy digest that includes the direct appraisal authority plus the gateway endpoint, WebPKI transport, seal, metadata recipient, send-once rules and completeness/replay limits. The worker's authority and appraisal are unchanged. [Admission identity](../packages/tinfoil/src/gateway.ts).
 
 ## Protocol facts
 
@@ -29,7 +29,7 @@ EHBP authenticates individual response frames but has no authenticated end-of-st
 
 ## Validation
 
-On 2026-10-09, after rebasing onto the [approved platform-authority update](https://github.com/ariofrio/pi-tee/commit/45c122e6e7c480bf2f61dac5ff16a074382abb58), all 119 Node 24 checks passed with the private boot/artifact/relay fixtures supplied and no skips. Both package/load smokes and the Go helper's format/vet/test checks passed. All 29 Bun 1.3.13 transport/verifier/selection/crypto checks passed with relay evidence supplied. [Gateway CI](https://github.com/ariofrio/pi-tee/actions/runs/37925191094) passed Node 24, Node 26, Bun and Go; private evidence stays outside the repository.
+On 2026-10-09, after the gateway review fixes and rebasing onto [main at `149d83b`](https://github.com/ariofrio/pi-tee/commit/149d83bc9604d219dc9f44cfa13f3cb7b31365d5), all 135 Node 24 checks passed with private boot/artifact/relay fixtures supplied and no skips. Both package/load smokes and the Go helper's format/vet/test checks passed. All 43 Bun 1.3.13 transport/verifier/selection/crypto checks passed with relay evidence supplied. Tests now cover CA-trusted wrong hostnames, the production gateway's native TLS and relay wiring, and the 120-second per-candidate cap. [CI](../.github/workflows/ci.yml) covers Node 24, Node 26, Bun and Go; private evidence stays outside the repository.
 
 The [live Pi harness](../scripts/live-pi.ts) passed the following matrix using `tinfoil <model> --public-builds --gateway` with local GPU appraisal. Each dispatch also asserted the actual gateway A1/H1/G1/X2 report and its credential disclosure. `PI_TEE_LIVE_PI_BINARY` selected the official [Pi 1.0.4 macOS ARM64 release](https://github.com/earendil-works/pi/releases/tag/v1.0.4); its archive matched GitHub's SHA256 `717dcd38a03849e919f9dec9daa96f5ca102e15ea33d804e5db57b1d47e513bc`.
 
