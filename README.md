@@ -2,7 +2,7 @@
 
 NEAR AI and Tinfoil providers for Pi, with native API-key login, live model discovery, tools, reasoning, usage accounting and encrypted inference.
 
-**Work in progress; packages are unpublished.** The default `public-builds` policy admits Tinfoil Gemma 4 31B, DeepSeek V4.1 Flash and GLM-5.3, each verified freshly on every request. Tinfoil's other models are reachable only through a router that does not enforce the policy. [Coverage](docs/design.md#provider-assessment). NEAR's `sdk` routes work, but NEAR public builds are not possible today: NEAR's operator deploys serving software at runtime without a public release process, so no client can confine its keys. [Why](docs/nearai-status.md).
+**Work in progress; packages are unpublished.** The default `public-builds,egress=metadata` admits freshly verified Tinfoil public workers with current firmware and protected GPUs. NEAR and the Tinfoil router require a position that trusts both provider and host. Each request selects the strongest route meeting every policy threshold. [Security model](docs/security-model.md).
 
 | Package | Purpose |
 | --- | --- |
@@ -40,30 +40,20 @@ Pi stores credentials and handles `/logout`. Stored keys take precedence over `N
 
 ## Policy and routes
 
-`PI_NEARAI_POLICY` and `PI_TINFOIL_POLICY` select policy at startup:
+Set `PI_TEE_POLICY=<position>[,axis=value…]` for both extensions. The four positions are `public-builds`, `public-builds-trust-host`, `trust-provider`, and `trust-provider-and-host`. Names disclose permitted trust; optional values set code, host, GPU, handling, build and review thresholds. The shipped default adds `egress=metadata` because no route supplies sealed handling.
 
-| Policy | Behavior |
-| --- | --- |
-| `public-builds` | Default. Admits Tinfoil Gemma 4 31B, DeepSeek V4.1 Flash and GLM-5.3. NEAR cannot qualify. |
-| `sdk` | Enables experimental routes under their disclosed trust assumptions. |
-| `approved` | Reserved for independently approved frozen workloads; no profile is implemented. |
+Examples:
 
-Use `/nearai policy sdk`, `/tinfoil policy sdk` or the corresponding `policy public-builds` command to switch during a session. Changes abort active requests and are not persisted. Verification failures never fall back to SDK policy.
+```sh
+PI_TEE_POLICY=public-builds,egress=metadata pi -e ./packages/tinfoil/dist/extension.js
+PI_TEE_POLICY=trust-provider-and-host,host=current pi -e ./packages/nearai/dist/extension.js
+```
 
-Routes are selected at startup:
+Tinfoil's qualified direct route supplies A1/H1/G1/X2/B3/S3. Its Genoa workers need H2 admission: `public-builds-trust-host,egress=metadata,host=outdated-firmware,gpu=verified`. Intel `OutOfDate` Tinfoil workers remain unavailable under every policy because the pinned verifier rejects them. The router is A3/H3/G3/X3. NEAR is A3/G3/X3, with H1 or H2 based on each instance's verified CPU evidence and local floors; only GLM-5.3 Flash has a direct adapter. Routes qualify independently, then code, host, GPU and egress break ties in that order.
 
-| Setting | Route |
-| --- | --- |
-| `PI_TINFOIL_ROUTE=auto` | Default. Public policy uses the verified direct-worker profile; SDK policy uses the router catalog. |
-| `PI_TINFOIL_ROUTE=direct-public` | Same public profile, explicitly selected. Under `sdk` policy it runs the same appraisal and restricts the catalog to the profile's models. |
-| `PI_TINFOIL_ROUTE=router` | SDK policy only. The router enclave decrypts every request and checks workers more weakly (no fresh nonce, GPU evidence, freshness or firmware floors), so it protects against outsiders but not against a malicious host. Permits its SDK key-rotation resend. [Details](packages/tinfoil/README.md). |
-| `PI_TINFOIL_ROUTE=direct` | SDK policy only. Frozen AMD Gemma worker; lacks fresh v3, revocation and independent GPU appraisal. |
-| `PI_NEARAI_ROUTE=gateway` | Default NEAR SDK route. Both observed gateway instances failed the required `UpToDate` CPU check on 2026-10-07; [evidence](docs/near-gateway-evidence.json). |
-| `PI_NEARAI_ROUTE=direct` | SDK policy only. Restricts discovery to `z-ai/glm-5.3-flash`, binds inference to one attested TLS connection and appraises GPU evidence locally, without NRAS. NEAR's current eight-GPU Hopper hardware fails the default GPU policy, so the route fails closed. |
+`/status`, `/nearai status` and `/tinfoil status` show actual levels, who you trust, gaps, observations and selection reasons. `/nearai policy <setting>` and `/tinfoil policy <setting>` use the same syntax, abort active requests, and do not persist changes. `verifier=local` is the default; opt-in `verifier=nras` applies the same G checks and adds NVIDIA service trust. NEAR GPU diagnostics remain local and never gate its G3 admission.
 
-See the [Tinfoil route details](packages/tinfoil/README.md) and [NEAR direct assessment](docs/direct-access.md#near-direct-route-and-evidence) for requirements and limitations.
-
-`/nearai status` and `/tinfoil status` show policy and trust assumptions. A successful public dispatch reports `publicBuildVerification: profile-established`, `closedTrustSet: profile-declared`, artifact digests and appraisal expiry. Independent approval and whole-session protection remain `not-established`.
+Removed `sdk` migrates to `trust-provider-and-host`; `approved` points to the not-yet-supported `public-builds,review=pinned`. Replace `PI_NEARAI_POLICY`, `PI_TINFOIL_POLICY`, `PI_NEARAI_ROUTE` and `PI_TINFOIL_ROUTE` with `PI_TEE_POLICY`; old variables now return migration errors. Explicit bare `public-builds` requests `egress=none` and currently admits no route. [Defaults, forced combinations, route policies and limits](docs/security-model.md).
 
 ## Model discovery
 
@@ -71,11 +61,11 @@ Both providers fetch chat/tool models from public catalogs, mapping prices, cont
 
 NEAR defaults to **TEE-only discovery**: metadata must match the model and declare `providerType: "vllm"` and `attestationSupported: true`. Non-TEE, unknown and failed lookups are hidden. `/nearai models all` or `PI_NEARAI_MODEL_VISIBILITY=all` shows labeled entries whose inference remains blocked; `/nearai models tee` restores the filter. Session choices are not persisted.
 
-NEAR public-build and Approved policies show no selectable models. Tinfoil public builds show only the profile's models that the live catalog also lists. Missing prices are labeled, and NEAR pricing tiers beyond base costs are not modeled.
+NEAR has no route qualifying for a public-build position. Tinfoil public builds show only the profile's models that the live catalog also lists. Missing prices are labeled, and NEAR pricing tiers beyond base costs are not modeled.
 
 ## Security scope
 
-Public-build policy trusts the named public maintainers, workflows and build processes, plus Intel/AMD/NVIDIA and the local installation, including the hash-checked WebAssembly verifiers. Compatible vendor releases are verified automatically without maintained deployment pins. A malicious authorized release can be accepted before detection; public evidence permits later auditing, not guaranteed detection. Changes to authorities, workload repositories, supported schemas/GPU configurations, SEV-SNP firmware or local verifier artifacts can require a client update. [Exact trust set and serving contract](docs/tinfoil-public-profile.md).
+Public-build positions trust the named public maintainers, workflows and build processes, plus Intel/AMD/NVIDIA and the local installation, including the hash-checked WebAssembly verifiers. Compatible vendor releases are verified automatically without maintained deployment pins. A malicious authorized release can be accepted before detection; public evidence permits later auditing, not guaranteed detection. Changes to authorities, workload repositories, supported schemas/GPU configurations, SEV-SNP firmware or local verifier artifacts can require a client update. [Exact trust set and serving contract](docs/tinfoil-public-profile.md).
 
 The final request guard fixes model, endpoint and authentication after Pi's payload hooks, rejecting transport overrides, hosted tools, remote media and unsupported fields. Direct routes bind the actual TLS socket before credentials or ciphertext, send once and reject reconnect/resend. Pi provider retries are disabled; terminal security errors also suppress Pi 1.0.4's turn/summarization retries. The SDK router retains its disclosed rotation resend.
 
@@ -97,15 +87,15 @@ npm run build:wasm        # maintainers: rebuild the WebAssembly verifiers
 
 [CI](.github/workflows/ci.yml) runs the first three, the Go helper's checks and the Bun-specific tests on every push to `main` and pull request; the [WebAssembly verifier workflow](.github/workflows/wasm-verifiers.yml) rebuilds the modules and runs their tests on six platforms.
 
-On 2026-10-08, `npm run check` passed 87 tests; three more need private evidence fixtures or boot artifacts and also passed. The experimental `direct-public` route, which runs the full public-build appraisal through the WebAssembly verifiers, passed the actual Pi suite for all three models under Node and the Bun-compiled Pi 1.0.4 binary: login, stored-key precedence, completion/usage, Unicode tools and follow-up, reasoning, and cancellation, including after a live text delta. [Portable verification evidence](docs/portable-verification.md#evidence).
+The security-model tests cover all position defaults, forced/category combinations, route thresholds, tie-breaking, report gaps and dispatch expiry. Private boot/artifact fixtures run locally and are skipped in CI. [Current CI and live results, including availability failures](docs/implementation.md#security-model-validation).
 
 The [live Pi harness](scripts/live-pi.ts) sends capped synthetic prompts using an isolated credential store:
 
 ```sh
-PI_TINFOIL_POLICY=sdk PI_TINFOIL_ROUTE=direct-public node --env-file=/path/to/private/tinfoil.env \
-  --import tsx scripts/live-pi.ts tinfoil gemma4-31b
+PI_TEE_POLICY=public-builds,egress=metadata node --env-file=/path/to/private/tinfoil.env \
+  --import tsx scripts/live-pi.ts tinfoil deepseek-v4-1-flash --public-builds
 
-PI_NEARAI_ROUTE=direct node --env-file=/path/to/private/nearai.env \
+PI_TEE_POLICY=trust-provider-and-host,host=current node --env-file=/path/to/private/nearai.env \
   --import tsx scripts/live-pi.ts nearai z-ai/glm-5.3-flash
 ```
 

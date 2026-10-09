@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Replace policy and route environment variables with `PI_TEE_POLICY=<position>[,axis=value…]`. Four positions disclose provider/host trust; defaults, forced values and categories are validated. The shipped default is `public-builds,egress=metadata`; removed `sdk`/`approved` and provider-specific variables return migration guidance. Build reproduction and pinned/window review remain unsupported.
+- Rate actual route evidence on code, CPU, GPU and plaintext handling; admit every threshold and select by code, host, GPU, then egress. Genoa can qualify as H2 under explicit host trust while retaining publisher minima, revocation and production checks. Intel OutOfDate Tinfoil direct workers remain unavailable under every policy.
+- Check NEAR's authenticated TDX SVN and collateral-edition floors locally for H1. Below-floor or unreadable values rate H2. NEAR routes remain A3/G3/X3; optional GPU diagnostics no longer gate admission and never contact NRAS. Direct TLS supports Bun-compiled Pi.
+- Authenticate NRAS overall/per-device tokens before applying the same G checks as local appraisal. `/status` and provider status commands show position, actual trusts, every gap, observations, commitments and route choices. Dispatch cannot outlive its appraised session.
+- Validation for this model is recorded in [implementation.md](docs/implementation.md). The earlier entries below describe preceding implementations.
+
 - Validate pi-tee on Android/Termux (arm64 emulator, Node 24 and 26). Run CI on Node 26 as well, and give CLI-spawning tests more time for slow cold starts.
 
 - Run `npm run check`, both smokes, the Go helper's `gofmt`/`go vet`/`go test` and the Bun-specific tests in CI on every push to `main` and pull request.

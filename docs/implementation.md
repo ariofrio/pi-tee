@@ -1,5 +1,30 @@
 # Pi NEAR AI and Tinfoil implementation
 
+Current policy and route behavior is defined by the [security model](security-model.md). Earlier validation below describes the settings and restrictions used at the time; provider-specific policy/route variables are now removed.
+
+## Security-model validation
+
+Validated 2026-10-09 with the locked Node 24 workspace, Bun 1.3.13 and the official Bun-compiled Pi 1.0.4 macOS ARM64 binary. The new parser/route tests were run red before implementation. `npm run check` passes all 113 tests with private CPU/boot/artifact fixtures enabled, with no skips. Compiled loading/native login and isolated tarball smokes pass. Go vet/tests and the local NVIDIA authentic-evidence/collateral negative checks pass.
+
+[Core/provider CI](https://github.com/ariofrio/pi-tee/actions/runs/37919888867) passed Node 24, Node 26, Bun and Go. [Independent verifier rebuild and six desktop Node/Bun runtime jobs](https://github.com/ariofrio/pi-tee/actions/runs/37919021632) passed. The committed CPU archive was downloaded from that build; its uncompressed module and pin match the local build.
+
+| Live route / runtime | Result |
+| --- | --- |
+| NEAR GLM direct, Node | Full suite passed: native secret login, stored-key precedence, completion/usage, Unicode tools/follow-up, reasoning and RPC cancellation. Policy `trust-provider-and-host,host=current`. |
+| NEAR GLM direct, Bun-compiled Pi | Same full suite passed under the same policy. |
+| Tinfoil Gemma direct, Node | Full suite passed under `public-builds-trust-host,egress=metadata,host=outdated-firmware,gpu=verified`. This permits H2; it does not prove every selected worker was H2. |
+| Tinfoil direct, default policy, Node and Bun-compiled Pi | Repeated preflight rejections; one Bun attempt completed basic inference before a later tool-stage appraisal rejected. No full default-policy run completed. |
+| Tinfoil direct, H2 policy, Bun-compiled Pi | Preflight rejected; no full run completed. |
+| Tinfoil router, Node | Basic completion/usage and Unicode tools/follow-up passed; reasoning request failed with sanitized `TEE_REQUEST_FAILED`. |
+| Tinfoil router, Bun-compiled Pi | Preflight rejected with `TEE_POLICY_ROUTE_REJECTED`. |
+| NEAR Qwen gateway, Node | Basic completion/usage and Unicode tools/follow-up passed with H2 allowed. Reasoning returned a completion without the expected arithmetic answer, so the harness failed before cancellation. |
+
+These are observations, not claims that all live availability failures share one cause. A fresh DeepSeek worker sample returned `TEE_PLATFORM_REFERENCE_REJECTED` from both the main-branch and changed CPU helpers on identical evidence. Those authority checks were not relaxed. Candidate selection now appraises all eight reachable workers within the existing probe bound, rather than stopping after four rejects.
+
+NRAS is covered by signed overall/per-device token fixtures and the common GPU policy tests. An optional live NRAS evidence-export probe was rejected by automatic approval review and was not run. No inference credentials or payloads are retained in this validation record. Cancellation proves local abort/acknowledgement, not remote generation-stop timing.
+
+## Earlier implementation and validation
+
 Date: 2026-10-07. Author: Codex. Scope: SDK-policy extensions, live Pi validation and automatic public-release/CPU verification. Tinfoil public builds for Gemma 4 31B, DeepSeek V4.1 Flash and GLM-5.3 are enabled after review of the WebAssembly verifiers and the multi-model/SEV-SNP generalization; NEAR public builds and independently approved workloads remain gated.
 
 Repository: [ariofrio/pi-tee](https://github.com/ariofrio/pi-tee). Initial integration: `7331cfd`; model visibility: `bc2cc98`.

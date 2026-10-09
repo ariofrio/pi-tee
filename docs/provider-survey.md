@@ -1,10 +1,48 @@
-# Confidential-inference providers vs. the pi-tee `public-builds` bar
+# Confidential-inference providers vs. the pi-tee security model
 
-Survey date: 2026-10-08. Bar: requirements R1–R8 below, derived from the [serving-path requirements](design.md#serving-path-requirements) (fresh nonce-bound TDX/SEV-SNP evidence; every plaintext component measured and authorized by public signed releases or checkable reproducible builds; no post-attestation code changes; per-boot confined keys; locally verifiable per-GPU SPT/MPT evidence; connection bound to the attested key; no egress/logging/remote code; an API Pi can call). Baseline: Tinfoil direct workers for Gemma 4 31B, DeepSeek V4.1 Flash and GLM-5.3 meet it ([contract](https://github.com/ariofrio/pi-tee/blob/520f0ae/docs/tinfoil-public-profile.md)). NEAR cannot ([assessment](https://github.com/ariofrio/pi-tee/blob/520f0ae/docs/nearai-status.md)).
+Survey date: 2026-10-08; security-model ratings re-verified 2026-10-09. [Current model](security-model.md). ## Ratings under the security model
+
+Each provider is rated on the model's four axes, under its "verified only" rule: anything a client can't check counts as the worst level it could be. "Position" is the strongest pi-tee position that could admit the provider if pi-tee had an adapter for it. Every cell was re-verified on 2026-10-09 against current source at pinned commits and live probes with our own nonces ([verification report](provider-ratings-verification.md)). Cells marked † are unresolved: the value shown is the conservative one, not an observed failure.
+
+| Provider | A (code) | H (host CPU) | G (GPUs) | X (egress) | Position | Deciding facts |
+| --- | --- | --- | --- | --- | --- | --- |
+| **Tinfoil direct** (baseline) | A1 | H1 | G1 | X2 | `public-builds,egress=metadata` | The levels pi-tee's admission requires; workers below them are skipped. |
+| **Privatemode** | **A2** | H3 | G3 | X3 | `trust-provider-and-host` | The client compares the exact manifest it pinned, so code changes are visible (A2), but manifests aren't signed or publicly logged. Workers are checked by the Coordinator, not freshly by the client (H3). GPU checks stay in-guest (G3). The production manifest was byte-identical on 2026-10-09. |
+| **Confidential AI** | A3 | H1 | G3 | X3 | `trust-provider-and-host` | The operator key can exec into pods and read memory; its removal is still planned (A3). A same-connection probe verified the front door's nonce and key binding and six component receipts, all `UpToDate` and at current TDX floors (H1, for those components only). No raw GPU evidence is public (G3). |
+| **Chutes** | A3 | H3† | G3 | X3 | `trust-provider-and-host` | Chutes' own keys admit chute images at runtime (A3). Quotes are authentic and `UpToDate`, but the public response omits the key needed to check the nonce commitment, and the key endpoint returns 401 (H3†). Reported GPUs aren't shown to be the serving set (G3). |
+| **Cohere** Model Vault | A3† | H3 | G3 | X3 | `trust-provider-and-host` | Some images are referenced by tag; whether the runtime can change executable code is unresolved (A3†). The passport flow has no client nonce (H3). |
+| **Phala / RedPill** | A3 | H3 | G3 | X3 | `trust-provider-and-host` | The gateway's upstreams change at runtime through an admin API (A3). The ACI endpoint omits the client nonce, and downstream coverage is unproven (H3). GPU evidence is empty (G3). |
+| **Venice**, NEAR-backed models | A3 | H2 | G3 | X3 | `trust-provider-and-host` | Inherits NEAR's runtime deployment (A3). The sampled NEAR worker's quote is nonce-bound but `OutOfDate` (H2). |
+| **Venice**, Phala-backed models | A3 | H3 or out of scope | G3 | X3 | `trust-provider-and-host` at best | A fresh gateway quote, but no CPU or GPU evidence for the serving machine. |
+| **Nillion nilAI** | A3 | H3 | G3 | X3 | `trust-provider-and-host` | Runtime inputs aren't pinned (A3). The client's nonce never reaches the attester (H3). |
+| **Secret AI** | A3† | H3 | G3 | X3 | `trust-provider-and-host` | The verifier does reconstruct the compose from RTMR3, but the serving closure is unresolved (A3†). The CPU evidence is static, with no caller nonce (H3). |
+| **CONFSEC / OpenPCC** | A3† | H3 | G3 | X3 | `trust-provider-and-host` | Releases are signed through a private repository's workflows, and public compute code exists, but the production runtime and key closure aren't reconstructed (A3†). The TEE nonce comes from the node's own TPM quote (H3). |
+| **Prem AI** | A3 | H3† | G3 | X3 | `trust-provider-and-host` | Default image pins are empty (A3). A valid nonce probe returned 403, so freshness is unverified (H3†). NVIDIA verdicts don't show which GPUs served the request (G3). |
+| **Cocoon** | A3 | H3 | G3 | X3 | `trust-provider-and-host` | Proxies are attested but see request bodies, and runtime configuration that decides downstream authority is excluded from the measurement (A3). Quotes bind certificate keys, with no caller nonce (H3). GPUs aren't verified remotely (G3). |
+| **io.net, NanoGPT** | — | — | — | — | Out of scope | Requests reach a plaintext gateway, with no client-verifiable CPU evidence bound to the connection. |
+| **Maple, OpenGradient** | — | — | — | — | Out of scope | Real AWS Nitro attestation (Maple's carries our nonce), but Nitro is outside the model's TDX and SEV-SNP scope. |
+| **Hyperscalers, Apple, Google, others** | — | — | — | — | Out of scope | No third-party chat API with client evidence; see the [rule-outs](#ruled-out-quickly). |
+
+- **Every in-scope provider lands at `trust-provider-and-host`,** the same position as NEAR. None reaches `public-builds` or the positions in between.
+- **Within that position, Privatemode ranks first** under the code-first tie-break: it's the only A2. Confidential AI is next, as the only other provider with H1 for its checked components.
+- **What would move Privatemode up:**
+  - To A1: signed manifests published through a named public workflow.
+  - To fresh host checks: per-worker evidence reaching the client.
+  - To G1: raw per-GPU evidence bound to the worker quote, with a multi-GPU mode check.
+- **Changes from the 2026-10-08 ratings:**
+  - Chutes and Prem dropped from H1 to H3†.
+  - CONFSEC dropped from A2 to A3†.
+  - Cocoon was resolved to A3 and H3.
+  - Venice was split by upstream.
+- **Settling the † cells** needs credentialed or provider-side evidence; the verification report lists what would settle each.
+
+## Original bar: the public-build requirements
+
+Bar: requirements R1–R8 below, derived from the [serving-path requirements](design.md#serving-path-requirements) (fresh nonce-bound TDX/SEV-SNP evidence; every plaintext component measured and authorized by public signed releases or checkable reproducible builds; no post-attestation code changes; per-boot confined keys; locally verifiable per-GPU SPT/MPT evidence; connection bound to the attested key; no egress/logging/remote code; an API Pi can call). Baseline: Tinfoil direct workers for Gemma 4 31B, DeepSeek V4.1 Flash and GLM-5.3 meet it ([contract](https://github.com/ariofrio/pi-tee/blob/520f0ae/docs/tinfoil-public-profile.md)). NEAR cannot ([assessment](https://github.com/ariofrio/pi-tee/blob/520f0ae/docs/nearai-status.md)).
 
 **Result: no other provider qualifies, and none can qualify through client-side work alone.** Every provider below has at least one confirmed failure that requires a provider-side change. The four nearest misses are Privatemode, Confidential AI (formerly Lunal), Chutes and Cohere Model Vault Encrypted.
 
-## Verdict table
+### Verdict table
 
 "Confirmed" means the failure was seen in source at a pinned commit, live evidence fetched with my own nonce, or the provider's own security documentation.
 

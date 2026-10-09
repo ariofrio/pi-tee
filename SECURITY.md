@@ -4,9 +4,11 @@ This file defines what the extensions protect and what contributors must preserv
 
 ## Supported guarantees
 
-The default `public-builds` policy admits Tinfoil Gemma 4 31B, DeepSeek V4.1 Flash and GLM-5.3. Each dispatch requires fresh hardware verification, authenticated public build artifacts and the [declared serving contract](docs/tinfoil-public-profile.md). Named software publishers and build workflows may authorize compatible updates automatically. They include provider-operated authorities: this policy does not trust only hardware manufacturers or require independent review of every release.
+The default `public-builds,egress=metadata` requires Tinfoil public release, fresh current CPU evidence, fully protected and covered GPUs, and metadata-only handling. Its named public publishers and build workflows authorize compatible updates automatically. H2 Genoa workers require an explicit host-trusting policy; Intel `OutOfDate` Tinfoil direct workers remain unavailable under every policy.
 
-NEAR's experimental SDK route is implemented and tested. NEAR public builds cannot be established: its operator deploys serving software at runtime without a public release process. [NEAR assessment](docs/nearai-status.md). `sdk` policy explicitly accepts the selected route's weaker assumptions. `approved` is reserved for independent frozen-workload approval and currently admits no models. Verification failures never fall back to a weaker policy.
+NEAR and the Tinfoil router require a position that admits provider-controlled software and host trust. NEAR's fresh CPU evidence receives H1 only after local firmware and collateral floors pass; its incomplete GPU coverage is G3 regardless of successful optional local diagnostics. No NEAR route contacts NRAS. The router is A3/H3/G3/X3, including hidden plaintext recipients. [Security positions, thresholds and migration](docs/security-model.md).
+
+Every candidate is admitted against the same policy; failures never relax it. Selection compares code, host, GPU and egress. `sdk` and `approved`, and provider-specific policy/route environment variables, are removed with migration errors. Stronger build reproduction and pinned/window review are not yet supported.
 
 Successful public dispatches report `publicBuildVerification: profile-established` and `closedTrustSet: profile-declared`. These mean the named profile's checks passed under its declared trust contract. They do not certify an independently proven complete software inventory. `independentApproval` and `protectedSession` remain `not-established`.
 

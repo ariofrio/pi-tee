@@ -1,5 +1,7 @@
 # Portable local verification
 
+Current policy and route behavior is defined by the [security model](security-model.md). Earlier validation below describes the settings and restrictions used at the time; provider-specific policy/route variables are now removed.
+
 Local verification runs on every Pi platform with no setup. NVIDIA's verifier ships inside `pi-tee-core` and Tinfoil's CPU/release verifier inside `pi-tinfoil`, both as WebAssembly, and the inference transport uses only `node:tls`. There is no Docker, compiler, platform binary or download step. [Build recipe and runtime boundary](../tools/nvidia-verifier/README.md).
 
 ## Scope

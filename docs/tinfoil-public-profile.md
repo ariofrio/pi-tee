@@ -1,10 +1,12 @@
 # Tinfoil public-build serving contract
 
+The [security model](security-model.md) now makes code, CPU, GPU and handling thresholds explicit. This contract describes the strongest direct profile; permitted H2/G2/G3 gaps are reported per request. The shipped policy is `public-builds,egress=metadata`. Genoa H2 keeps publisher minima, signatures/revocation and production restrictions. Intel `OutOfDate` TDX workers remain unavailable under every policy.
+
 This contract covers direct Tinfoil workers serving the models below with the `tinfoil-vllm-v1` runtime profile. It accepts software updates from the named public publishers. It does not require reviewing or rebuilding each release independently. [Appraisal](../packages/tinfoil/src/worker-appraisal.ts), [session](../packages/tinfoil/src/public-session.ts), [review requirements](../CONTRIBUTING.md).
 
 | Model | Workload publisher | Observed deployment (2026-10-07) |
 | --- | --- | --- |
-| `gemma4-31b` | `tinfoilsh/confidential-gemma4-31b` | Intel TDX, one Hopper GPU in SPT mode. Its AMD Genoa workers are rejected: their firmware lacks the AMD-SB-3020/3027 fixes. |
+| `gemma4-31b` | `tinfoilsh/confidential-gemma4-31b` | Intel TDX, one Hopper GPU in SPT mode. Its AMD Genoa workers rate H2 and require explicit host trust because their firmware is below local floors. |
 | `deepseek-v4-1-flash` | `tinfoilsh/confidential-deepseek-v4-1-flash` | Intel TDX, eight Blackwell B200 GPUs in MPT mode |
 | `glm-5-3` | `tinfoilsh/confidential-glm5-3-nvfp4` | AMD SEV-SNP, eight Blackwell B300 GPUs in MPT mode |
 
