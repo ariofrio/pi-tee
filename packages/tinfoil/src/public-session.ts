@@ -114,7 +114,7 @@ export async function openRatedPublicWorkerTransport(signal: AbortSignal, model:
   return {
     security: keys.security,
     admission: { profile: PUBLIC_BUILD_PROFILE_ID, model, authorityPolicyDigest: PUBLIC_BUILD_AUTHORITY_POLICY_DIGEST, ...admission },
-    transport: await openEncryptedWorkerTransport(signal, host, keys, "cache_salt", keys.publicBuild.expiresAt, PUBLIC_BUILD_BASE_URL),
+    transport: await openEncryptedWorkerTransport(signal, host, keys, keys.publicBuild.expiresAt, PUBLIC_BUILD_BASE_URL),
   };
 }
 
@@ -122,7 +122,7 @@ export async function openRatedPublicWorkerTransport(signal: AbortSignal, model:
 export async function openPublicWorkerTransport(signal: AbortSignal, model: string): Promise<SdkTransport> {
   if (!isPublicModel(model)) throw new TeeError("TEE_MODEL_UNAVAILABLE");
   const { host, keys } = await selectPublicWorker(model, signal);
-  return openEncryptedWorkerTransport(signal, host, keys, "cache_salt", keys.publicBuild.expiresAt, PUBLIC_BUILD_BASE_URL);
+  return openEncryptedWorkerTransport(signal, host, keys, keys.publicBuild.expiresAt, PUBLIC_BUILD_BASE_URL);
 }
 
 export const PUBLIC_BUILD_PROFILE: PublicBuildProfile = Object.freeze({
@@ -147,7 +147,7 @@ export const PUBLIC_BUILD_PROFILE: PublicBuildProfile = Object.freeze({
     const { platform: _platform, gpus: _gpus, ...admission } = keys.publicBuild;
     return {
       admission: { profile: PUBLIC_BUILD_PROFILE_ID, model: model.id, authorityPolicyDigest: PUBLIC_BUILD_AUTHORITY_POLICY_DIGEST, ...admission },
-      transport: await openEncryptedWorkerTransport(signal, host, keys, "cache_salt", keys.publicBuild.expiresAt, PUBLIC_BUILD_BASE_URL),
+      transport: await openEncryptedWorkerTransport(signal, host, keys, keys.publicBuild.expiresAt, PUBLIC_BUILD_BASE_URL),
     };
   },
 });

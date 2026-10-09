@@ -99,7 +99,7 @@ test("a direct encrypted worker error cannot resend credentials or ciphertext", 
     await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
     const address = server.address();
     assert.ok(address && typeof address === "object");
-    const transport = await openEncryptedWorkerTransport(AbortSignal.timeout(10000), `127.0.0.1:${address.port}`, { tls: fingerprint, hpke: await identity.getPublicKeyHex() }, "cache_salt");
+    const transport = await openEncryptedWorkerTransport(AbortSignal.timeout(10000), `127.0.0.1:${address.port}`, { tls: fingerprint, hpke: await identity.getPublicKeyHex() });
     const request = new Request(`${transport.baseUrl}/chat/completions`, { method: "POST", headers: { authorization: "Bearer synthetic-key", "content-type": "application/json" }, body: JSON.stringify({ messages: [{ role: "user", content: "synthetic plaintext" }] }) });
     await assert.rejects(transport.fetch(request.clone()), /TEE_RESPONSE_REJECTED/);
     assert.equal(sends, 1);

@@ -30,6 +30,7 @@
 ### Removed
 
 - `sdk`/`approved` policy names and provider-specific policy/route environment variables: migration errors replace aliases. Old native/Docker setup commands and the retired platform authority are not current options.
+- The unreachable hand-pinned Gemma Tinfoil worker transport and its profile. The `direct` route option already selects the public-build direct route.
 
 ## Earlier development history
 
