@@ -17,6 +17,7 @@
     "smoke:workers": "node --import tsx scripts/live-tinfoil-workers.ts",
     "smoke:attestation": "node --import tsx scripts/live-tinfoil-attestation.ts",
     "smoke:pi": "node --import tsx scripts/live-pi.ts",
+    "smoke:near-gpu": "node --import tsx scripts/live-near-gpu.ts",
     "check:nvidia": "node --import tsx scripts/check-nvidia-verifier.ts",
     "build:wasm": "node scripts/build-wasm-verifiers.mjs"
   },

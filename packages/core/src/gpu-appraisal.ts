@@ -10,6 +10,22 @@ import { TeeError } from "./policy.js";
 export type GpuPolicy = Readonly<{ arch: string; driver: string; vbios: string; maxGpus: number; multiGpuMode?: "mpt" | "ppcie" }>;
 export type GpuPolicyTable = Readonly<Record<string, GpuPolicy>>;
 
+// Version floors supplement manufacturer signatures, reference matching and
+// revocation; NVIDIA revokes references for vulnerable firmware through OCSP.
+// Each floor is the oldest version seen with signed, unrevoked references when
+// the model was qualified (2026-10-07). They are not a firmware security rank.
+// Each NVIDIA hardware model has its own VBIOS numbering; the protected mode
+// required depends on how many GPUs the CVM uses.
+/** The default GPU policy, qualified for Tinfoil's public profile. Providers fail closed on anything it does not admit. */
+export const GPU_POLICIES = Object.freeze({
+  // Hopper multi-GPU confidential computing (PPCIe) also needs NVSwitch
+  // attestation, which neither provider's evidence carries.
+  "GH100 A01 GSP BROM": Object.freeze({ arch: "HOPPER", driver: "595.71.05", vbios: "96.00.D0.00.03", maxGpus: 1 }),
+  // Blackwell MPT protects CPU-GPU transfers and peer NVLink for up to eight
+  // GPUs; NVSwitches are outside its trusted computing base.
+  "GB100 A01 GSP BROM": Object.freeze({ arch: "BLACKWELL", driver: "595.71.05", vbios: "97.00.D9.00.35", maxGpus: 8 }),
+  "GB110 A01 GSP BROM": Object.freeze({ arch: "BLACKWELL", driver: "595.71.05", vbios: "97.10.64.00.0C", maxGpus: 8 }),
+});
 export const REQUIRED_CLAIMS = Object.freeze([
   "x-nvidia-gpu-arch-check", "x-nvidia-gpu-attestation-report-parsed", "x-nvidia-gpu-attestation-report-cert-chain-fwid-match",
   "x-nvidia-gpu-driver-rim-fetched", "x-nvidia-gpu-driver-rim-measurements-available", "x-nvidia-gpu-driver-rim-signature-verified",

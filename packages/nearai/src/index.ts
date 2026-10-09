@@ -1,6 +1,6 @@
 import {
   authenticateResponse, createTeeProvider, limitResponseBody, MAX_ENCRYPTED_RESPONSE_BYTES, resolveModelVisibility, resolvePolicy, TeeError, withAbort,
-  type ModelVisibility, type PolicyMode, type ProviderDefinition,
+  type GpuPolicyTable, type ModelVisibility, type PolicyMode, type ProviderDefinition,
 } from "pi-tee-core";
 import { NEAR_BASE_URL } from "./catalog.js";
 import { loadNearCatalog } from "./discovery.js";
@@ -24,6 +24,8 @@ export function assertNearRuntime(route: "gateway" | "direct") {
 export function createNearProvider(options: {
   policy?: PolicyMode;
   route?: "gateway" | "direct";
+  /** Direct route only: the GPU policy table; defaults to the shared table, which fails closed. */
+  gpuPolicy?: GpuPolicyTable;
   modelVisibility?: ModelVisibility;
   catalogFetch?: typeof globalThis.fetch;
   openSdkTransport?: ProviderDefinition["openSdkTransport"];
@@ -32,7 +34,8 @@ export function createNearProvider(options: {
   if (route !== "gateway" && route !== "direct") throw new TeeError("TEE_ROUTE_INVALID");
   const assumptions = route === "direct" ? [
     "Local Pi, runtime, extensions, tools and the pinned NEAR SDK are trusted.",
-    "Experimental direct mode requires UpToDate Intel evidence and NVIDIA remote GPU verdicts, with OHTTP and model field encryption.",
+    "Experimental direct mode requires UpToDate Intel evidence and GPU evidence that NVIDIA's local verifier and the shared GPU policy accept, without NRAS, plus OHTTP and model field encryption.",
+    "The quote and every GPU report carry the client's fresh nonce, which shows freshness but not that those GPUs serve that CPU; the GPU count is not attested.",
     "Evidence, credentials, encrypted inference and signature retrieval use one WebPKI-authenticated TLS socket with quote-bound SPKI approval; reconnect and resend are rejected.",
     "NEAR shared TLS keys still permit evidence relay by another key holder; the shared response signer does not identify a single approved instance.",
     "Guest images, CPU–GPU channel binding, key service, runtime mutation controls and model artifacts lack independent qualification.",
@@ -45,7 +48,7 @@ export function createNearProvider(options: {
     availableModelIds: route === "direct" ? [NEAR_DIRECT_PROFILE.model] : undefined,
     openSdkTransport: options.openSdkTransport ?? (route === "direct" ? async ({ apiKey, signal }) => {
       assertNearRuntime("direct");
-      return openDirectNearTransport(apiKey, signal);
+      return openDirectNearTransport(apiKey, signal, { gpuPolicy: options.gpuPolicy });
     } : async ({ apiKey, signal }) => {
       assertNearRuntime("gateway");
       const { TLSSocket } = await import("node:tls");

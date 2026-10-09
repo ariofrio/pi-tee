@@ -59,7 +59,7 @@ Routes are selected at startup:
 | `PI_TINFOIL_ROUTE=router` | SDK policy only. The router enclave decrypts every request and checks workers more weakly (no fresh nonce, GPU evidence, freshness or firmware floors), so it protects against outsiders but not against a malicious host. Permits its SDK key-rotation resend. [Details](packages/tinfoil/README.md). |
 | `PI_TINFOIL_ROUTE=direct` | SDK policy only. Frozen AMD Gemma worker; lacks fresh v3, revocation and independent GPU appraisal. |
 | `PI_NEARAI_ROUTE=gateway` | Default NEAR SDK route. Both observed gateway instances failed the required `UpToDate` CPU check on 2026-10-07; [evidence](docs/near-gateway-evidence.json). |
-| `PI_NEARAI_ROUTE=direct` | SDK policy only. Restricts discovery to `z-ai/glm-5.3-flash` and binds inference to one attested TLS connection. |
+| `PI_NEARAI_ROUTE=direct` | SDK policy only. Restricts discovery to `z-ai/glm-5.3-flash`, binds inference to one attested TLS connection and appraises GPU evidence locally, without NRAS. NEAR's current eight-GPU Hopper hardware fails the default GPU policy, so the route fails closed. |
 
 See the [Tinfoil route details](packages/tinfoil/README.md) and [NEAR direct assessment](docs/direct-access.md#near-direct-route-and-evidence) for requirements and limitations.
 
