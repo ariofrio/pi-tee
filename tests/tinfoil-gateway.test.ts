@@ -8,6 +8,7 @@ import { KEM_DHKEM_X25519_HKDF_SHA256 } from "@panva/hpke-noble";
 import { openEncryptedGatewayTransport } from "../packages/tinfoil/src/direct.js";
 import { appraiseWorker } from "../packages/tinfoil/src/worker-appraisal.js";
 import { discoverGatewayWorkers } from "../packages/tinfoil/src/gateway.js";
+import { verifyPublicBuildArtifacts } from "../packages/tinfoil/src/public-build.js";
 
 const host = "glm-5-3-inf18.tinfoil.containers.tinfoil.dev";
 const endpoint = "https://inference-gateway.tinfoil.sh/v1/chat/completions";
@@ -143,4 +144,13 @@ test("gateway response substitution cannot expose unauthenticated text", async (
     }), /TEE_PUBLIC_BUILD_REJECTED/);
     assert.equal(calls, 1);
   }
+  const swapped = structuredClone(original);
+  const keys = JSON.parse(Buffer.from(swapped.crypto_material, "base64").toString());
+  keys.items.find((key: { id: string }) => key.id === "hpke").data = "00".repeat(32);
+  swapped.crypto_material = Buffer.from(JSON.stringify(keys)).toString("base64");
+  // Preserve the fixture's correct nonce to isolate section binding from replay rejection.
+  await assert.rejects(verifyPublicBuildArtifacts({
+    raw: JSON.stringify(swapped), nonce: original.challenge.nonce, repo: "tinfoilsh/confidential-glm5-3-nvfp4", signal: AbortSignal.timeout(30000),
+    evidenceFetch: async () => { assert.fail("Swapped CPU-bound keys must not authorize artifact discovery."); },
+  }), /TEE_PUBLIC_BUILD_REJECTED/);
 });
