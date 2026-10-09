@@ -69,7 +69,7 @@ Public-build positions trust the named public maintainers, workflows and build p
 
 The final request guard fixes model, endpoint and authentication after Pi's payload hooks, rejecting transport overrides, hosted tools, remote media and unsupported fields. Direct routes bind the actual TLS socket before credentials or ciphertext, send once and reject reconnect/resend. Pi provider retries are disabled; terminal security errors also suppress Pi 1.0.4's turn/summarization retries. The SDK router retains its disclosed rotation resend.
 
-For DeepSeek V4.1 Flash and GLM-5.3, the [Tinfoil billing gateway](docs/tinfoil-gateway.md) is tried when no direct worker qualifies, using the same worker appraisal and ratings. Its unattested WebPKI host receives the API key, model and headers; bodies remain sealed to the worker's key. `/status` discloses this boundary and the selection reason. A 412 fails without resending.
+For DeepSeek V4.1 Flash and GLM-5.3, the [Tinfoil billing gateway](docs/tinfoil-gateway.md) is tried when no direct worker qualifies, using the same worker appraisal and ratings. Its unattested WebPKI host receives the API key, model and headers; bodies remain sealed to the worker's key. `/tinfoil status` discloses this boundary and the selection reason. A 412 fails without resending.
 
 NEAR buffers bounded response bytes in memory until signature verification; Tinfoil streams authenticated encrypted responses. Ordinary logs exclude credentials, prompts, completions and quote bodies. [Security guarantees and limits](SECURITY.md).
 

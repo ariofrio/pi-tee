@@ -20,7 +20,7 @@ Direct routes check the attested key on the actual TLS socket before sending cre
 
 Catalog metadata, prices and TEE labels are provider claims, not verification. Output correctness, availability, truthful billing, traffic analysis, undocumented physical/side-channel protection and local-machine compromise are outside the guarantee.
 
-The Tinfoil billing gateway receives API credentials, model and headers over normal WebPKI TLS to an unattested host. The client freshly appraises the worker through its nonce relay and encrypts bodies to that worker's own key. Direct is preferred; the gateway is tried only when no direct worker qualifies. A 412 is terminal, with no automatic resend. This metadata recipient is disclosed in `/status` and is separate from the route's axis levels. [Gateway contract](docs/tinfoil-gateway.md).
+The Tinfoil billing gateway receives API credentials, model and headers over normal WebPKI TLS to an unattested host. The client freshly appraises the worker through its nonce relay and encrypts bodies to that worker's own key. Direct is preferred; the gateway is tried only when no direct worker qualifies. A 412 is terminal, with no automatic resend. This metadata recipient is disclosed in `/tinfoil status` and is separate from the route's axis levels. [Gateway contract](docs/tinfoil-gateway.md).
 
 ## Required closed inventory
 
