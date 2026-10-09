@@ -30,11 +30,21 @@ const cwd = join(scratch, "project");
 const agentDir = join(scratch, "agent");
 const entry = gateway ? join(scratch, "gateway.ts") : publicCandidate ? join(scratch, "public-candidate.ts") : resolve("packages", provider, "dist/extension.js");
 if (gateway) await writeFile(entry, `
+import { writeSync } from "node:fs";
 import { createTinfoilProvider } from ${JSON.stringify(resolve("packages/tinfoil/dist/index.js"))};
 export default async function(pi) {
   const integration = createTinfoilProvider({route:"gateway"});
   await integration.initializeCatalog();
   pi.registerProvider(integration.provider);
+  pi.on("message_end", async event => {
+    if (event.message.role !== "assistant") return;
+    const picked = integration.getReport().routeDecisions?.find(route => route.picked);
+    const security = picked?.security;
+    if (security) writeSync(3, JSON.stringify({type:"live_route_report",route:security.route,
+      code:security.code,host:security.host,gpu:security.gpu,egress:security.egress,
+      gatewayDisclosed:security.observed.some(value=>value.includes("unattested billing gateway")),
+    }) + "\\n");
+  });
 }
 `);
 if (publicCandidate) await writeFile(entry, `
@@ -108,6 +118,7 @@ async function runCli(model: string, prompt: string, options: { tool?: boolean; 
   let abortSent = false;
   let headersSeen = false;
   let streamSeen = false;
+  let gatewayVerified = false;
   let forceTimer: ReturnType<typeof setTimeout> | undefined;
   const terminate = () => {
     child.kill("SIGTERM");
@@ -151,6 +162,9 @@ async function runCli(model: string, prompt: string, options: { tool?: boolean; 
       const line = metadata.slice(0, newline); metadata = metadata.slice(newline + 1);
       let event: Event;
       try { event = JSON.parse(line); } catch { continue; }
+      if (event.type === "live_route_report") {
+        gatewayVerified = event.route === "tinfoil-gateway" && event.code === 1 && event.host === 1 && event.gpu === 1 && event.egress === 2 && event.gatewayDisclosed === true;
+      }
       if (event.type === "live_response_headers" && event.status === 200) {
         headersSeen = true;
         if (options.cancel && !cancelStreaming) abort();
@@ -168,6 +182,7 @@ async function runCli(model: string, prompt: string, options: { tool?: boolean; 
   assert.equal(exitCode, 0, "Pi CLI did not exit cleanly.");
   const assistants = events.filter(e => e.type === "message_end" && e.message?.role === "assistant").map(e => e.message);
   assert.ok(assistants.length > 0, "Pi produced no completed assistant message.");
+  if (gateway) assert.equal(gatewayVerified, true, "Gateway dispatch did not report A1/H1/G1/X2 and its credential boundary.");
   return { events, assistants, headersSeen, streamSeen };
 }
 

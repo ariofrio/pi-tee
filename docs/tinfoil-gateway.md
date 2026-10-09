@@ -8,6 +8,8 @@ The client reads the untrusted [gateway catalog](https://inference-gateway.tinfo
 
 TLS 1.3 terminates at the unattested gateway, authorized by normal WebPKI hostname/certificate checks. It receives the API key, model, headers and worker hostname. This differs from direct's attested-socket credential rule and is disclosed separately from the axes. The gateway has no worker HPKE private key and never receives a plaintext body. Billing truthfulness and availability are outside the model. The named public releases remain trusted to preserve the [worker key-custody contract](tinfoil-public-profile.md).
 
+Gateway admission uses a distinct profile/policy digest that includes the direct appraisal authority plus the gateway endpoint, WebPKI transport, seal, metadata recipient and send-once rules. The worker's authority and appraisal are unchanged. [Admission identity](../packages/tinfoil/src/gateway.ts).
+
 ## Protocol facts
 
 Sources were checked at tinfoil-go [`502b8e2665bf1b67921c3b1087eade39059b30dc`](https://github.com/tinfoilsh/tinfoil-go/tree/502b8e2665bf1b67921c3b1087eade39059b30dc), the head of [tinfoil-go #188](https://github.com/tinfoilsh/tinfoil-go/pull/188) (`46f9219a0e5d5cc99287c934d7cffbb0b0f8e3df`), and [tinfoil-proxy #43](https://github.com/tinfoilsh/tinfoil-proxy/pull/43) (`204a7a0229391f51a8e4991763a7b011ecf1364e`).

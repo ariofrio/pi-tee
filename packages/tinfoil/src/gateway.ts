@@ -1,10 +1,16 @@
+import { createHash } from "node:crypto";
 import { readBoundedBody, record, TeeError, type SecurityPolicy } from "pi-tee-core";
-import { openEncryptedGatewayTransport } from "./direct.js";
+import { openEncryptedGatewayTransport, TINFOIL_GATEWAY_BASE_URL } from "./direct.js";
 import { appraiseWorker, PUBLIC_MODELS, WORKER_HOST, type PublicModel } from "./worker-appraisal.js";
 import { selectPublicWorker } from "./public-session.js";
 import { PUBLIC_BUILD_AUTHORITY_POLICY_DIGEST, PUBLIC_BUILD_PROFILE_ID } from "./public-policy.js";
 
 export const GATEWAY_MODELS = Object.freeze(["deepseek-v4-1-flash", "glm-5-3"] as const);
+const gatewayAuthorityDigest = createHash("sha256").update(JSON.stringify({
+  workerAppraisal: PUBLIC_BUILD_AUTHORITY_POLICY_DIGEST, models: GATEWAY_MODELS,
+  transport: { endpoint: TINFOIL_GATEWAY_BASE_URL, tls: "TLS1.3-WebPKI", body: "worker-key-EHBP", sends: 1, rotation: "reject", seal: "X-Tinfoil-Seal: appraised worker", cache: "fresh-encrypted-cache_salt" },
+  metadataRecipient: "unattested inference-gateway.tinfoil.sh receives API key, model and headers",
+})).digest("hex");
 function gatewayModel(model: string): model is typeof GATEWAY_MODELS[number] {
   return GATEWAY_MODELS.some(allowed => model === allowed);
 }
@@ -38,7 +44,7 @@ export async function openRatedGatewayTransport(signal: AbortSignal, model: stri
       "Gateway is a fallback when no direct worker qualifies: direct exposes the key and metadata to fewer parties.",
       "A 412 means the sealed worker is unavailable; this dispatch fails without a resend. A new request performs fresh selection and appraisal.",
     ] },
-    admission: { profile: PUBLIC_BUILD_PROFILE_ID, model, authorityPolicyDigest: PUBLIC_BUILD_AUTHORITY_POLICY_DIGEST, ...admission },
+    admission: { profile: `${PUBLIC_BUILD_PROFILE_ID}-gateway`, model, authorityPolicyDigest: gatewayAuthorityDigest, ...admission },
     transport: await openEncryptedGatewayTransport(signal, host, keys, model, keys.publicBuild.expiresAt),
   };
 }
