@@ -17,7 +17,7 @@ const catalogFetch: typeof globalThis.fetch = async (input) => {
 };
 
 test("NEAR SDK discovery hides non-TEE and unknown models by default", async () => {
-  const integration = createNearProvider({ policy: "sdk", catalogFetch });
+  const integration = createNearProvider({ policy: "trust-provider-and-host", catalogFetch });
   await integration.initializeCatalog();
   assert.deepEqual(integration.provider.getModels().map((model) => model.id), ["local/tee"]);
   assert.deepEqual(integration.getDiscoveredModels().map((model) => model.id), ["local/tee"]);
@@ -25,7 +25,7 @@ test("NEAR SDK discovery hides non-TEE and unknown models by default", async () 
 
 test("show-all exposes labeled discoveries without admitting non-TEE inference or weakening Approved policy", async () => {
   let opened = false;
-  const integration = createNearProvider({ policy: "sdk", catalogFetch,
+  const integration = createNearProvider({ policy: "trust-provider-and-host", catalogFetch,
     openSdkTransport: async () => { opened = true; throw new Error("must not open for a non-TEE model"); },
   });
   await integration.initializeCatalog();
@@ -42,17 +42,17 @@ test("show-all exposes labeled discoveries without admitting non-TEE inference o
     assert.equal(result.errorMessage, "TEE_MODEL_ATTESTATION_UNAVAILABLE");
   }
   assert.equal(opened, false);
-  integration.setPolicy("approved");
+  integration.setPolicy("public-builds");
   assert.deepEqual(integration.provider.getModels(), []);
   assert.equal(integration.getReport().modelVisibility, "all");
   assert.equal(integration.getReport().declaredTeeModels, 1);
 });
 
 test("offline snapshots retain capability; older unclassified models stay hidden", async () => {
-  const online = createNearProvider({ policy: "sdk", catalogFetch });
+  const online = createNearProvider({ policy: "trust-provider-and-host", catalogFetch });
   await online.initializeCatalog();
   const tee = online.provider.getModels()[0]!;
-  const offline = createNearProvider({ policy: "sdk", catalogFetch: async () => { throw new Error("offline must not fetch"); } });
+  const offline = createNearProvider({ policy: "trust-provider-and-host", catalogFetch: async () => { throw new Error("offline must not fetch"); } });
   await offline.provider.refreshModels!({
     allowNetwork: false, signal: new AbortController().signal,
     stored: { checkedAt: Date.now(), models: [tee, { ...tee, id: "legacy/model", teeCapability: undefined } as typeof tee] },
@@ -67,7 +67,7 @@ test("offline snapshots retain capability; older unclassified models stay hidden
 });
 
 test("mismatched and malformed per-model claims cannot classify a model as TEE-capable", async () => {
-  const integration = createNearProvider({ policy: "sdk", modelVisibility: "all", catalogFetch: async (input) => {
+  const integration = createNearProvider({ policy: "trust-provider-and-host", modelVisibility: "all", catalogFetch: async (input) => {
     if (String(input).endsWith("/models")) return Response.json({ data: rawModels });
     const id = decodeURIComponent(String(input).split("/model/")[1]!);
     return Response.json({ modelId: id === "local/tee" ? "other/model" : id,
@@ -83,7 +83,7 @@ test("mismatched and malformed per-model claims cannot classify a model as TEE-c
 
 test("a Chutes TEE declaration is distinct from an unavailable NEAR SDK protocol", async () => {
   let opened = false;
-  const integration = createNearProvider({ policy: "sdk", catalogFetch: async (input) => {
+  const integration = createNearProvider({ policy: "trust-provider-and-host", catalogFetch: async (input) => {
     if (String(input).endsWith("/models")) return Response.json({ data: [{ ...rawModels[0], id: "chutes/tee" }] });
     return Response.json({ modelId: "chutes/tee", metadata: { providerType: "chutes", attestationSupported: true } });
   }, openSdkTransport: async () => { opened = true; throw new Error("Unsupported protocol must fail before SDK setup"); } });
@@ -101,7 +101,7 @@ test("a Chutes TEE declaration is distinct from an unavailable NEAR SDK protocol
   }), { apiKey: "synthetic-key" }).result();
   assert.equal(result.errorMessage, "TEE_MODEL_TRANSPORT_UNAVAILABLE");
   assert.equal(opened, false);
-  const offline = createNearProvider({ policy: "sdk", catalogFetch: async () => { throw new Error("No offline fetch"); } });
+  const offline = createNearProvider({ policy: "trust-provider-and-host", catalogFetch: async () => { throw new Error("No offline fetch"); } });
   await offline.provider.refreshModels!({
     allowNetwork: false, signal: new AbortController().signal,
     stored: { checkedAt: Date.now(), models: [model] },

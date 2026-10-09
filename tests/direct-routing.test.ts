@@ -13,7 +13,7 @@ const context = normalizeContext({ messages: [{ role: "user", content: "syntheti
 test("only transport-owned routing can select a direct worker, after canonical model preflight", async () => {
   let received: Request | undefined;
   const integration = createTeeProvider({
-    id: model.provider, name: "Test TEE", baseUrl: model.baseUrl, apiKeyEnv: "TEST_API_KEY", policy: "sdk",
+    id: model.provider, name: "Test TEE", baseUrl: model.baseUrl, apiKeyEnv: "TEST_API_KEY", policy: "trust-provider-and-host",
     parseCatalog: () => [model], catalogFetch: async () => Response.json({ data: [] }), assumptions: [],
     openSdkTransport: async ({ model: selected }) => {
       assert.equal(selected.id, model.id);
@@ -34,7 +34,7 @@ test("only transport-owned routing can select a direct worker, after canonical m
 test("a direct route hides other catalog models and rejects stale selections before attestation", async () => {
   let opened = 0;
   const integration = createTeeProvider({
-    id: model.provider, name: "Test TEE", baseUrl: model.baseUrl, apiKeyEnv: "TEST_API_KEY", policy: "sdk",
+    id: model.provider, name: "Test TEE", baseUrl: model.baseUrl, apiKeyEnv: "TEST_API_KEY", policy: "trust-provider-and-host",
     parseCatalog: () => [model, { ...model, id: "unsupported-worker" }], availableModelIds: [model.id],
     catalogFetch: async () => Response.json({ data: [] }), assumptions: [],
     openSdkTransport: async () => { opened++; throw Error("must not open"); },
@@ -51,7 +51,7 @@ test("a per-request transport releases its resources after success, rejection or
     const controller = new AbortController();
     let closed = 0;
     const integration = createTeeProvider({
-      id: model.provider, name: "Test TEE", baseUrl: model.baseUrl, apiKeyEnv: "TEST_API_KEY", policy: "sdk",
+      id: model.provider, name: "Test TEE", baseUrl: model.baseUrl, apiKeyEnv: "TEST_API_KEY", policy: "trust-provider-and-host",
       parseCatalog: () => [model], catalogFetch: async () => Response.json({}), assumptions: [],
       openSdkTransport: async () => ({ dispose: () => { closed++; }, fetch: async () => {
         if (outcome === "abort") { controller.abort(); throw controller.signal.reason; }

@@ -10,3 +10,5 @@ export * from "./gpu-mode.js";
 export * from "./gpu-appraisal.js";
 export * from "./nvidia-verifier.js";
 export { NVIDIA_ARTIFACTS } from "./nvidia-artifacts.js";
+
+export * from "./security.js";

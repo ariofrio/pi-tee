@@ -3,7 +3,8 @@ import {
   openAICompletionsApi,
   type AssistantMessageEventStream, type Model, type Provider, type SimpleStreamOptions,
 } from "@earendil-works/pi-ai/compat";
-import { resolveModelVisibility, resolvePolicy, TeeError, type ModelVisibility, type PolicyMode } from "./policy.js";
+import { parsePolicy, resolveModelVisibility, resolvePolicy, TeeError, type SecurityPolicy, type ModelVisibility, type PolicyMode } from "./policy.js";
+import { assessRoute, compareRoutes, ROUTE_AXES, type RouteSecurity, type RouteDecision } from "./security.js";
 import { guardChatFetch, readBoundedBody } from "./transport.js";
 
 export interface SdkTransport {
@@ -49,6 +50,7 @@ export interface ProviderDefinition {
   baseUrl: string;
   apiKeyEnv: string;
   policy?: PolicyMode;
+  routes?: readonly TeeRouteDefinition[];
   parseCatalog(value: unknown, context: { fetch: typeof globalThis.fetch; signal: AbortSignal }): TeeCatalogModel[] | Promise<TeeCatalogModel[]>;
   requireDeclaredTee?: boolean;
   modelVisibility?: ModelVisibility;
@@ -76,11 +78,21 @@ export interface ProviderReport {
   closedTrustSet: "not-established" | "profile-declared";
   publicBuildVerification: "not-established" | "profile-established";
   lastAdmission?: PublicBuildAdmission;
+  settings?: SecurityPolicy;
+  routeDecisions?: RouteDecision[];
+}
+
+export interface TeeRouteDefinition {
+  id: string;
+  /** Best possible levels, used only for catalog filtering and preflight eligibility. */
+  potential: RouteSecurity;
+  modelIds?: readonly string[];
+  openSession(options: { apiKey: string; signal: AbortSignal; model: TeeCatalogModel; policy: SecurityPolicy }): Promise<{ security: RouteSecurity; transport: SdkTransport; admission?: PublicBuildAdmission }>;
 }
 
 const FOUR_HOURS = 4 * 60 * 60 * 1000;
 const terminalCodes = new Set([
-  "TEE_APPROVED_DEPLOYMENT_UNAVAILABLE", "TEE_PUBLIC_BUILD_DEPLOYMENT_UNAVAILABLE", "TEE_MODEL_UNAVAILABLE", "TEE_API_KEY_REQUIRED",
+  "TEE_POLICY_ROUTE_REJECTED", "TEE_APPROVED_DEPLOYMENT_UNAVAILABLE", "TEE_PUBLIC_BUILD_DEPLOYMENT_UNAVAILABLE", "TEE_MODEL_UNAVAILABLE", "TEE_API_KEY_REQUIRED",
   "TEE_RUNTIME_UNSUPPORTED", "TEE_REQUEST_REJECTED", "TEE_RESPONSE_REJECTED", "TEE_BODY_TOO_LARGE",
   "TEE_MODEL_ATTESTATION_UNAVAILABLE", "TEE_MODEL_TRANSPORT_UNAVAILABLE", "TEE_TLS_KEY_REJECTED", "TEE_WORKLOAD_PIN_REJECTED", "TEE_ATTESTATION_REJECTED",
   "TEE_VERIFIER_ARTIFACT_REJECTED", "TEE_VERIFIER_PROCESS_REJECTED", "TEE_CPU_POLICY_REJECTED", "TEE_GPU_POLICY_REJECTED", "TEE_GPU_MODE_REJECTED", "TEE_PUBLIC_BUILD_REJECTED", "TEE_GPU_VERIFIER_LOCATION_REJECTED", "TEE_PUBLIC_SESSION_REJECTED", "TEE_PUBLIC_ARTIFACT_UNAVAILABLE",
@@ -177,7 +189,8 @@ export function createTeeProvider(definition: ProviderDefinition) {
     invoke: (model: Model<"openai-completions">, options: SimpleStreamOptions) => AssistantMessageEventStream,
   ) {
     const controller = new AbortController();
-    const requestMode = mode;
+    const requestPolicy = parsePolicy(mode);
+    const requestMode = requestPolicy.code === "public-release" ? "public-builds" : "trust-provider-and-host";
     const requestEpoch = policyEpoch;
     let admission: PublicBuildAdmission | undefined;
     let rejection: string | undefined;
@@ -188,15 +201,53 @@ export function createTeeProvider(definition: ProviderDefinition) {
     active.add(controller);
     const source = lazyStream(requested, async () => {
       signal.throwIfAborted();
-      if (requestMode === "public-builds" && publicProfiles.length === 0) throw new TeeError("TEE_PUBLIC_BUILD_DEPLOYMENT_UNAVAILABLE");
-      if (requestMode === "approved") throw new TeeError("TEE_APPROVED_DEPLOYMENT_UNAVAILABLE");
+      if (!definition.routes && requestMode === "public-builds" && publicProfiles.length === 0) throw new TeeError("TEE_PUBLIC_BUILD_DEPLOYMENT_UNAVAILABLE");
+      if (!definition.routes && requestMode === "public-builds" && requestPolicy.egress === "none") throw new TeeError("TEE_POLICY_ROUTE_REJECTED");
       const canonical = catalog.find((entry) => entry.id === requested.id);
       if (!canonical || requested.provider !== definition.id || (definition.availableModelIds && !definition.availableModelIds.includes(canonical.id))) throw new TeeError("TEE_MODEL_UNAVAILABLE");
       if (definition.requireDeclaredTee && canonical.teeCapability !== "declared") throw new TeeError("TEE_MODEL_ATTESTATION_UNAVAILABLE");
-      if (requestMode === "sdk" && canonical.sdkTransportAvailable === false) throw new TeeError("TEE_MODEL_TRANSPORT_UNAVAILABLE");
+      if (requestMode === "trust-provider-and-host" && canonical.sdkTransportAvailable === false) throw new TeeError("TEE_MODEL_TRANSPORT_UNAVAILABLE");
       if (!options?.apiKey) throw new TeeError("TEE_API_KEY_REQUIRED");
       let captured: { baseUrl?: string; fetch: typeof globalThis.fetch };
-      if (requestMode === "public-builds") {
+      if (definition.routes) {
+        const decisions: RouteDecision[] = [];
+        const sessions: { security: RouteSecurity; transport: SdkTransport; admission?: PublicBuildAdmission }[] = [];
+        try {
+          for (const route of definition.routes) {
+            if (route.modelIds && !route.modelIds.includes(canonical.id)) continue;
+            const possible = assessRoute(requestPolicy, route.potential);
+            if (!possible.accepted) {
+              decisions.push({ route: route.id, accepted: false, picked: false, reason: `Cannot qualify: ${possible.reason}`, trusts: [], gaps: [] });
+              continue;
+            }
+            try {
+              const session = await route.openSession({ apiKey: options.apiKey, signal, model: structuredClone(canonical), policy: requestPolicy });
+              const evaluated = assessRoute(requestPolicy, session.security);
+              decisions.push({ ...evaluated, picked: false });
+              if (session.security.route !== route.id || !evaluated.accepted) session.transport.dispose?.();
+              else sessions.push(session);
+            } catch (error) {
+              signal.throwIfAborted();
+              decisions.push({ route: route.id, accepted: false, picked: false, reason: error instanceof TeeError ? error.code : "TEE_ATTESTATION_REJECTED", trusts: [], gaps: [] });
+            }
+          }
+          sessions.sort((a, b) => compareRoutes(a.security, b.security));
+          const picked = sessions.shift();
+          report.routeDecisions = decisions;
+          if (!picked) throw new TeeError("TEE_POLICY_ROUTE_REJECTED");
+          transport = picked.transport;
+          admission = picked.admission;
+          captured = { baseUrl: transport.baseUrl, fetch: transport.fetch };
+          for (const decision of decisions.filter(d => d.accepted)) {
+            decision.picked = decision.route === picked.security.route;
+            const other = sessions.find(s => s.security.route === decision.route)?.security;
+            const axis = other && ROUTE_AXES.find(axis => picked.security[axis] !== other[axis]);
+            decision.reason = decision.picked
+              ? `Picked: meets all thresholds; strongest by code, then host, gpu, egress${sessions.length ? " among qualifying routes" : " (only qualifying route)"}`
+              : `Qualified; ${picked.security.route} preferred${axis ? ` on ${axis}` : " with equal levels (stable route order)"}`;
+          }
+        } finally { for (const session of sessions) session.transport.dispose?.(); }
+      } else if (requestMode === "public-builds") {
         const publicProfile = profilesByModel.get(canonical.id);
         if (!publicProfile) throw new TeeError("TEE_MODEL_UNAVAILABLE");
         const session = await publicProfile.openSession({ signal, model: structuredClone(canonical) });
@@ -275,15 +326,16 @@ export function createTeeProvider(definition: ProviderDefinition) {
   };
 
   function selectableCatalog() {
-    if (mode === "sdk") return visibleCatalog().filter(entry => visibility === "all" || entry.sdkTransportAvailable !== false);
-    if (mode === "public-builds") return visibleCatalog().filter(entry => profilesByModel.has(entry.id));
+    if (definition.routes) return visibleCatalog().filter(entry => definition.routes!.some(route => (!route.modelIds || route.modelIds.includes(entry.id)) && assessRoute(parsePolicy(mode), route.potential).accepted));
+    if (parsePolicy(mode).code !== "public-release") return visibleCatalog().filter(entry => visibility === "all" || entry.sdkTransportAvailable !== false);
+    if (parsePolicy(mode).code === "public-release") return parsePolicy(mode).egress === "none" ? [] : visibleCatalog().filter(entry => profilesByModel.has(entry.id));
     return [];
   }
 
   function visibleCatalog() {
     return catalog.filter((entry) => (!definition.availableModelIds || definition.availableModelIds.includes(entry.id)) &&
       (!definition.requireDeclaredTee || visibility === "all" || entry.teeCapability === "declared")).map((entry) => {
-      if (mode === "sdk" && entry.teeCapability === "declared" && entry.sdkTransportAvailable === false) {
+      if (parsePolicy(mode).code !== "public-release" && entry.teeCapability === "declared" && entry.sdkTransportAvailable === false) {
         return { ...entry, name: `${entry.name} [TEE declared; SDK transport unavailable]` };
       }
       if (!definition.requireDeclaredTee || entry.teeCapability === "declared") return entry;
@@ -293,7 +345,8 @@ export function createTeeProvider(definition: ProviderDefinition) {
   }
 
   function updateReport() {
-    report.assumptions = mode === "public-builds" && publicProfiles.length ?
+    report.settings = parsePolicy(mode);
+    report.assumptions = parsePolicy(mode).code === "public-release" && publicProfiles.length ?
       [...new Set(publicProfiles.flatMap(profile => profile.assumptions.map(assumption =>
         publicProfiles.length > 1 ? `[${profile.id}] ${assumption}` : assumption)))] : definition.assumptions;
     report.catalogModels = catalog.length;
@@ -332,6 +385,7 @@ export function createTeeProvider(definition: ProviderDefinition) {
       report.lastRequest = "not-run";
       report.publicBuildVerification = report.closedTrustSet = "not-established";
       delete report.lastAdmission;
+      delete report.routeDecisions;
       delete report.reason;
     },
     setModelVisibility(value: string) {
@@ -343,7 +397,7 @@ export function createTeeProvider(definition: ProviderDefinition) {
       id: entry.id, name: entry.name,
       ...(definition.requireDeclaredTee ? { teeCapability: entry.teeCapability ?? "unknown" } : {}),
       ...(entry.sdkTransportAvailable !== undefined ? { sdkTransportAvailable: entry.sdkTransportAvailable } : {}),
-      selectable: (mode !== "sdk" || entry.sdkTransportAvailable !== false) && selectableCatalog().some(model => model.id === entry.id) && (!definition.requireDeclaredTee || entry.teeCapability === "declared"),
+      selectable: (parsePolicy(mode).code === "public-release" || entry.sdkTransportAvailable !== false) && selectableCatalog().some(model => model.id === entry.id) && (!definition.requireDeclaredTee || entry.teeCapability === "declared"),
     })),
   };
 }

@@ -14,7 +14,7 @@ test("native refresh persists startup discovery, honors freshness, and retains t
   let calls = 0;
   let fail = false;
   const integration = createTeeProvider({
-    id: model.provider, name: "Catalog test", baseUrl: model.baseUrl, apiKeyEnv: "TEST_API_KEY", policy: "sdk",
+    id: model.provider, name: "Catalog test", baseUrl: model.baseUrl, apiKeyEnv: "TEST_API_KEY", policy: "trust-provider-and-host",
     parseCatalog: (value) => [{ ...model, id: String((value as { id: string }).id) }],
     catalogFetch: async () => { calls++; if (fail) throw new Error("offline"); return Response.json({ id: `model-${calls}` }); },
     openSdkTransport: async () => { throw new Error("catalog discovery must not open inference"); }, assumptions: [],
@@ -41,7 +41,7 @@ test("native refresh persists startup discovery, honors freshness, and retains t
 test("a superseded native publication cannot change the active catalog", async () => {
   let id = "first";
   const integration = createTeeProvider({
-    id: model.provider, name: "Catalog test", baseUrl: model.baseUrl, apiKeyEnv: "TEST_API_KEY", policy: "sdk",
+    id: model.provider, name: "Catalog test", baseUrl: model.baseUrl, apiKeyEnv: "TEST_API_KEY", policy: "trust-provider-and-host",
     parseCatalog: () => [{ ...model, id }], catalogFetch: async () => Response.json({}),
     openSdkTransport: async () => { throw new Error("unused"); }, assumptions: [],
   });
@@ -65,7 +65,7 @@ test("offline restoration fixes transport fields and public-build policy still h
     publish: async (publication) => { publication.update?.(); return true; },
   });
   assert.deepEqual(integration.provider.getModels(), []);
-  integration.setPolicy("sdk");
+  integration.setPolicy("trust-provider-and-host");
   assert.equal(integration.provider.getModels()[0]?.baseUrl, model.baseUrl);
   assert.equal(integration.provider.getModels()[0]?.headers, undefined);
 });

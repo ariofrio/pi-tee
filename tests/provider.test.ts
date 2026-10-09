@@ -19,7 +19,7 @@ const context = normalizeContext({
 
 async function sdkProvider(fetch: typeof globalThis.fetch) {
   const integration = createTeeProvider({
-    id: model.provider, name: "Test TEE", baseUrl: model.baseUrl, apiKeyEnv: "TEST_API_KEY", policy: "sdk",
+    id: model.provider, name: "Test TEE", baseUrl: model.baseUrl, apiKeyEnv: "TEST_API_KEY", policy: "trust-provider-and-host",
     parseCatalog: () => [model], catalogFetch: async () => Response.json({ data: [] }),
     openSdkTransport: async () => ({ fetch }), assumptions: [],
   });
@@ -48,7 +48,7 @@ test("an ambiguous transport failure cannot be replayed by either Pi retry class
 
 test("SDK preflight diagnostics cannot impersonate a retryable terminal security code", async () => {
   const integration = createTeeProvider({
-    id: model.provider, name: "Test TEE", baseUrl: model.baseUrl, apiKeyEnv: "TEST_API_KEY", policy: "sdk",
+    id: model.provider, name: "Test TEE", baseUrl: model.baseUrl, apiKeyEnv: "TEST_API_KEY", policy: "trust-provider-and-host",
     parseCatalog: () => [model], catalogFetch: async () => Response.json({ data: [] }),
     openSdkTransport: async () => { throw new Error("TEE_TIMEOUT"); }, assumptions: [],
   });
@@ -61,7 +61,7 @@ test("SDK preflight diagnostics cannot impersonate a retryable terminal security
 test("GPU mode rejection reaches Pi without retrying or opening inference", async () => {
   let attempts = 0;
   const integration = createTeeProvider({
-    id: model.provider, name: "Test TEE", baseUrl: model.baseUrl, apiKeyEnv: "TEST_API_KEY", policy: "sdk",
+    id: model.provider, name: "Test TEE", baseUrl: model.baseUrl, apiKeyEnv: "TEST_API_KEY", policy: "trust-provider-and-host",
     parseCatalog: () => [model], catalogFetch: async () => Response.json({ data: [] }),
     openSdkTransport: async () => { attempts++; throw new TeeError("TEE_GPU_MODE_REJECTED"); }, assumptions: [],
   });
@@ -108,7 +108,7 @@ test("SDK-policy key rotation can reconstruct the same guarded body without cons
   assert.equal(JSON.parse(attempts[1]!.body).messages.at(-1).content, "private prompt");
 });
 
-for (const policy of ["approved", "public-builds"]) test(`changing to ${policy} policy aborts an in-flight SDK request and hides SDK models`, async () => {
+for (const policy of ["public-builds", "public-builds"]) test(`changing to ${policy} policy aborts an in-flight SDK request and hides SDK models`, async () => {
   let started!: () => void;
   const ready = new Promise<void>((resolve) => { started = resolve; });
   const integration = await sdkProvider(async (input, init) => {
@@ -128,7 +128,7 @@ test("cancellation during attestation setup ends as an aborted request", async (
   let started!: () => void;
   const ready = new Promise<void>((resolve) => { started = resolve; });
   const integration = createTeeProvider({
-    id: model.provider, name: "Test TEE", baseUrl: model.baseUrl, apiKeyEnv: "TEST_API_KEY", policy: "sdk",
+    id: model.provider, name: "Test TEE", baseUrl: model.baseUrl, apiKeyEnv: "TEST_API_KEY", policy: "trust-provider-and-host",
     parseCatalog: () => [model], catalogFetch: async () => Response.json({ data: [] }), assumptions: [],
     openSdkTransport: ({ signal }) => {
       started();
@@ -234,7 +234,7 @@ test("default policy blocks before the SDK or inference endpoint receives a prom
   });
   const result = await integration.provider.streamSimple(model, context, { apiKey: "test-key" }).result();
   assert.equal(result.errorMessage, "TEE_PUBLIC_BUILD_DEPLOYMENT_UNAVAILABLE");
-  assert.equal(integration.getReport().policy, "public-builds");
+  assert.equal(integration.getReport().policy, "public-builds,egress=metadata");
   assert.equal(integration.getReport().lastRequest, "blocked");
   assert.equal(isRetryableAssistantError(result), false);
   assert.equal(opened, false);
@@ -245,7 +245,7 @@ export { model, context };
 test("a payload hook cannot change the attested model identity before encryption", async () => {
   let promptSends = 0;
   const integration = createTeeProvider({
-    id: model.provider, name: "Test TEE", baseUrl: model.baseUrl, apiKeyEnv: "TEST_API_KEY", policy: "sdk",
+    id: model.provider, name: "Test TEE", baseUrl: model.baseUrl, apiKeyEnv: "TEST_API_KEY", policy: "trust-provider-and-host",
     parseCatalog: () => [model],
     catalogFetch: async () => Response.json({ data: [] }),
     openSdkTransport: async () => ({ fetch: async () => {

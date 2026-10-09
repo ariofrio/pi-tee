@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { resolvePolicy } from "../packages/core/src/policy.js";
 
 test("an unconfigured provider requires verified public builds", () => {
-  assert.equal(resolvePolicy(), "public-builds");
+  assert.equal(resolvePolicy(), "public-builds,egress=metadata");
 });
 
 test("a misspelled security policy cannot silently select a weaker mode", () => {

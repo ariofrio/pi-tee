@@ -40,24 +40,24 @@ test("default public admission lists only profile models and stale selections ca
         })) }),
       });
       await integration.initializeCatalog();
-      assert.equal(integration.getReport().policy, "public-builds");
+      assert.equal(integration.getReport().policy, "public-builds,egress=metadata");
       assert.deepEqual(integration.provider.getModels().map(m => m.id), ["gemma4-31b"], "Only catalog models in the public profile are selectable.");
       assert.deepEqual(integration.getReport().assumptions, PUBLIC_BUILD_PROFILE.assumptions);
       if (route === undefined) {
         // A non-profile model selected under SDK policy cannot reach the SDK
         // after switching back; it fails before any network request.
-        integration.setPolicy("sdk");
+        integration.setPolicy("trust-provider-and-host");
         const stale = integration.provider.getModels().find(m => m.id === "gpt-oss-120b");
-        integration.setPolicy("public-builds");
+        integration.setPolicy("public-builds,egress=metadata");
         assert.ok(stale);
         const result = await integration.provider.streamSimple(stale, normalizeContext({ messages: [{ role: "user", content: "synthetic prompt", timestamp: 1 }] }), { apiKey: "synthetic-key", maxRetries: 10 }).result();
         assert.equal(result.errorMessage, "TEE_MODEL_UNAVAILABLE");
         assert.equal(sdkOpened, 0);
         assert.equal(integration.getReport().publicBuildVerification, "not-established");
       }
-      integration.setPolicy("approved");
+      integration.setPolicy("public-builds");
       assert.equal(integration.provider.getModels().length, 0);
-      integration.setPolicy("sdk");
+      integration.setPolicy("trust-provider-and-host");
       assert.deepEqual(integration.provider.getModels().map(m => m.id), route ? ["gemma4-31b"] : ["gemma4-31b", "gpt-oss-120b"]);
       if (route === undefined) assert.deepEqual(integration.getReport().assumptions, TINFOIL_ASSUMPTIONS);
       else assert.match(integration.getReport().assumptions[0]!, /^SDK-policy route running the public-build appraisal/);
@@ -119,11 +119,11 @@ test("auto preserves SDK discovery while explicit router cannot admit public wor
     id, type: "chat", tool_calling: true, endpoints: ["/v1/chat/completions"], context_window: 131072,
     pricing: { inputTokenPricePer1M: 1, outputTokenPricePer1M: 2 },
   })) });
-  const auto = createTinfoilProvider({ route: "auto", policy: "sdk", catalogFetch });
+  const auto = createTinfoilProvider({ route: "auto", policy: "trust-provider-and-host", catalogFetch });
   await auto.initializeCatalog();
   assert.deepEqual(auto.provider.getModels().map(m => m.id), ["gemma4-31b", "gpt-oss-120b"]);
   let sdkOpened = 0;
-  const router = createTinfoilProvider({ route: "router", policy: "sdk", catalogFetch,
+  const router = createTinfoilProvider({ route: "router", policy: "trust-provider-and-host", catalogFetch,
     openSdkTransport: async () => { sdkOpened++; throw Error("must not open"); },
   });
   await router.initializeCatalog();
