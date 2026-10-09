@@ -14,6 +14,8 @@ No setup is required. The CPU helper ships in this package; NVIDIA's hash-checke
 
 Direct transport checks the attested key on the actual TLS 1.3 socket before credentials or EHBP ciphertext, sends once, rejects reconnect/resend, and uses a fresh encrypted cache salt. Admission expiry and policy epoch are checked after payload hooks. Named publishers remain trusted for safe releases and correct measurements; B3/S3 supplies no independent reproduction or per-release review.
 
+Platform endorsements accept only `https://github.com/tinfoilsh/cvmimage/.github/workflows/platform-release.yml@refs/tags/platform-vMAJOR.MINOR.PATCH` on a GitHub-hosted runner. The retired `platform-endorsements/build.yml` identity is rejected. V1 classic remains valid directly; v2 requires its authenticated same-release classic companion. [Platform contract](../../docs/tinfoil-public-profile.md).
+
 ## Billing gateway
 
 When no direct worker qualifies, DeepSeek V4.1 Flash and GLM-5.3 can use `inference-gateway.tinfoil.sh`. The client fetches worker evidence through its nonce relay and runs the same direct appraisal. Successful checks establish the same A/H/G/X/B/S levels. Direct is preferred because fewer parties receive the API key and metadata. The live gateway [catalog](https://inference-gateway.tinfoil.sh/catalog) supplies routing hints, never keys or software authority; Gemma is excluded.
