@@ -1,0 +1,5 @@
+# NEAR commitment observations
+
+Preserved from the [2026-10-09 main snapshot](https://github.com/ariofrio/pi-tee/blob/fa5e1547d4a99a8f40b0279f08aa24f9bcaa03b9/docs/security-model.md#status-and-commitments). These are dated source/terms observations, not a fresh remote review or proof of deployment. Exact terms/source pins were not recorded in that paragraph; this limits independent reproduction. The [runtime/key investigation](runtime-key-custody.md) retains its own pinned evidence.
+
+C (commitments) is displayed separately from admission: NEAR's ToS/DPA do not promise contractual no-retention; inspected Responses source stores transcripts without a TTL, while the inspected Chat Completions path does not persist transcript content (deployment unverified); NEAR promises no training and lists ISO 27001, without a public SOC 2 report; the sub-processor list does not consistently cover Chutes-backed models. Tinfoil commitments have not been reviewed. These observations neither change a route level nor prove deployed handling behavior. [NEAR assessment](runtime-key-custody.md).

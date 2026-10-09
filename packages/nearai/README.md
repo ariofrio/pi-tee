@@ -1,23 +1,22 @@
 # pi-nearai
 
-NEAR AI extension for Pi 1.0.4: native `/login nearai`, `NEARAI_API_KEY`, live chat/tool discovery, reasoning, tools/usage, encrypted inference and response signatures. Build in the locked Node 24 workspace and load `dist/extension.js` with `pi -e`. It depends on `pi-tee-core` and does not load Tinfoil's SDK. Stored Pi credentials take precedence over environment keys; browser OAuth is not implemented.
+NEAR AI extension for Pi 1.0.4 with native API-key login, model discovery, streamed chat, tools, reasoning, usage and cancellation. Packages are unpublished; use the locked Node 24 [checkout/quick start](https://github.com/ariofrio/pi-tee/blob/main/docs/quick-start.md). Each extension loads its own provider dependencies and shared `pi-tee-core`.
 
-## Policy and routes
+From the checkout:
 
-Both providers use `PI_TEE_POLICY`. The shipped `public-builds,egress=metadata` admits no NEAR models: serving/runtime/key custody is provider-controlled (A3), GPU coverage is incomplete (G3), and handling limits cannot be established (X3). Use `trust-provider-and-host` to admit those gaps, or `trust-provider-and-host,host=current` to require fresh CPU evidence at pi-tee's local floors. [Positions and thresholds](../../docs/security-model.md), [NEAR assessment](../../docs/nearai-status.md).
+```sh
+npm ci --ignore-scripts
+npm run check
+PI_TEE_POLICY=trust-provider-and-host,host=current \
+  node_modules/.bin/pi -e packages/nearai/dist/extension.js
+```
 
-The adapter discovers direct endpoints for every tool-capable, attestation-declared model shared by NEAR’s catalogs and endpoint registry. Registry-only models are ignored and hostnames are strictly validated. GLM-5.3 Flash currently rates H1; Qwen3.6 35B A3B FP8 and Qwen3.8 27B rate H2 (`OutOfDate`). `host=current` rejects those Qwen instances; `trust-provider-and-host,host=outdated-firmware` admits them. [Discovery and live validation](../../docs/near-direct-discovery.md). The client appraises qualifying routes before the prompt and compares code, host, GPU and egress. H1 requires Intel `UpToDate`, TDX SVN components at least `[3,1,2]`, and verified TCB/QE collateral editions at least 20. Fresh evidence below floors, including unreadable floor values or `OutOfDate`, rates H2. Gateway rating uses its weakest checked CPU component. Signatures, revocation, nonce/key binding and SDK production restrictions remain required.
+Use `/login nearai`; Pi's stored key wins over `NEARAI_API_KEY`. `/logout` removes it. `/nearai status`, `/nearai models refresh` and `/nearai policy <setting>` use the [shared command contract](https://github.com/ariofrio/pi-tee/blob/main/docs/reference/commands-settings.md). Policy changes abort active requests and are session-only.
 
-GPU evidence is optional local status detail. Even authentic reports do not establish complete serving coverage, so NEAR remains G3 and GPU failures do not gate admission. Neither route contacts NRAS, including when a policy sets `verifier=nras`; with `gpu=unchecked` the setting warns that it has no admission effect. Status includes authenticated device/mode/firmware observations when local appraisal succeeds, and distinguishes failed diagnostics from evidence.
+A3/G3/X3; H1/H2 per request. Direct supports Node/Bun; SDK gateway is Node-only. Read the [provider guide](https://github.com/ariofrio/pi-tee/blob/main/docs/providers/nearai.md) for admitting policies, exact credentials/plaintext recipients and diagnosis; [policy](https://github.com/ariofrio/pi-tee/blob/main/docs/reference/policy.md) defines syntax/migration. Catalogs and earlier runs never authorize a new request.
 
-The [direct channel](src/direct-channel.ts) owns one WebPKI-authenticated TLS 1.3 socket for fresh evidence, OHTTP inference and signature lookup. Attested SPKI approval precedes credentials, and reconnect, repeat inference POSTs and arbitrary paths are rejected. It supports Node 24 and Bun-compiled Pi. The SDK gateway remains Node-only. Both routes retain field encryption/OHTTP and buffer bounded responses until a model-serving signature verifies; shared signing keys do not identify exclusive serving-instance custody. Decrypted bodies are capped at 8 MiB and encrypted/network bodies at 32 MiB.
+These protections cover this provider's dispatches. Local code and other Pi providers/tools can transmit conversation plaintext. [Security boundary](https://github.com/ariofrio/pi-tee/blob/main/SECURITY.md), [runtime/response limits](https://github.com/ariofrio/pi-tee/blob/main/docs/reference/support-limits.md), [qualification evidence](https://github.com/ariofrio/pi-tee/blob/main/docs/evidence/README.md).
 
-`PI_NEARAI_POLICY` and `PI_NEARAI_ROUTE` are removed with migration errors. Removed `sdk` maps to `trust-provider-and-host`; `approved` points to pinned review, which is not yet supported. `/nearai policy <position>[,axis=value…]` aborts active requests and changes only this provider in the current session. `/nearai status` shows actual levels, trust, gaps, commitments, route choices and skipped direct endpoints. Unreachable endpoints are skipped before prompt transmission. Skip notes belong to the request’s route decision, and TLS/WebPKI rejections retain their classified code separately from connection failures. Commitments are displayed without gating admission or claiming verified deployed retention behavior.
-
-## Discovery and scope
-
-Discovery defaults to TEE-only: per-model metadata must match the model and declare attestation support. Gateway support requires the `vllm` protocol; a catalog/registry direct candidate must pass the direct SDK/evidence checks before dispatch. Chutes declarations remain separate from unavailable SDK transport. `/nearai models all` or `PI_NEARAI_MODEL_VISIBILITY=all` shows labeled unsupported/unknown entries without enabling inference; `/nearai models tee` restores filtering. `/nearai models refresh` forces refresh; `PI_TEE_OFFLINE=1` skips startup network discovery and restores snapshots. Session choices do not persist. Direct availability is kept per route in memory; it does not overwrite the gateway’s catalog flag or persist offline. Offline snapshots do not restore direct endpoints; network discovery is required before selecting direct.
-
-NEAR deployment, shared-key recipients, KMS and runtime inputs remain trusted. An extra quote or matching shared signature cannot establish exclusive serving identity. These extensions protect their own requests; other providers, extensions and tools can access the conversation. [Live harness](../../README.md#validation).
+Library API: `createNearProvider()` from `pi-nearai`; `dist/extension.js` is the Pi entry point. Fresh tarballs may resolve different SDK dependencies and require separate qualification.
 
 Written by Codex.
