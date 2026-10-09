@@ -10,6 +10,7 @@ import { acceptRequest, serverStream } from "../tests/chutes-crypto-fixture.js";
 
 // Chutes' own browser test client is the conformance peer. The repository carries no
 // license, so its artifacts are fetched by commit and hash rather than vendored.
+// The glue runs with this process's full privileges: review the code before changing a pin.
 const COMMIT = "0e3543180543c0c22637efb47a243d169ff0ab24";
 const ARTIFACTS = {
   "chutes_e2ee_wasm.js": "98e68ccc42446e2a7051ecaa919e8d57a21c530cbf7e403af782a7864e404ad0",

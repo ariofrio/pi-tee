@@ -4,7 +4,7 @@ import { TINFOIL_BASE_URL } from "./catalog.js";
 import { openEncryptedWorkerTransport } from "./direct.js";
 import { verifyPublicBuildArtifacts } from "./public-build.js";
 
-/** The router behind `TINFOIL_BASE_URL`; its TLS terminates inside the attested guest. */
+/** The router behind `TINFOIL_BASE_URL`; its TLS key is the one its attestation report binds. */
 export const ROUTER_HOST = "inference.tinfoil.sh";
 export const ROUTER_REPO = "tinfoilsh/confidential-model-router";
 
