@@ -78,7 +78,7 @@ test("the artifact chain rejects substituted delivery bytes using the WebAssembl
   assert.equal((await flaky.result).codeStatementDigest, verified.codeStatementDigest);
   const attestations = `https://api.github.com/repos/tinfoilsh/cvmimage/attestations/sha256:${hash(manifest)}?per_page=100`;
   const down = await run(undefined, false, url => url === attestations);
-  await assert.rejects(down.result, /TEE_PUBLIC_ARTIFACT_UNAVAILABLE/);
+  await assert.rejects(down.result, (error: { code?: string; upstream?: unknown }) => error.code === "TEE_PUBLIC_ARTIFACT_UNAVAILABLE" && JSON.stringify(error.upstream) === '{"status":503,"class":"upstream unavailable"}');
   assert.equal(down.requests.filter(url => url === attestations).length, 3);
   // Each GitHub API lookup persists across processes once its own check
   // passes, survives unrelated failures, and is dropped when its check fails.

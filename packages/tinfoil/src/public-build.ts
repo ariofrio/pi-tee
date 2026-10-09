@@ -324,7 +324,8 @@ export async function verifyPublicBuildArtifacts(options: {
   } catch (error) {
     cache?.clear();
     signal.throwIfAborted();
-    throw new TeeError(error instanceof TeeError && error.code === "TEE_PUBLIC_ARTIFACT_UNAVAILABLE" ? error.code : "TEE_PUBLIC_BUILD_REJECTED");
+    if (error instanceof TeeError && error.code === "TEE_PUBLIC_ARTIFACT_UNAVAILABLE") throw new TeeError(error.code, undefined, error.upstream);
+    throw new TeeError("TEE_PUBLIC_BUILD_REJECTED");
   }
 }
 
