@@ -1,7 +1,7 @@
 import { authenticateResponse, TeeError, withAbort, type runNvidiaVerifier, type SdkTransport, type RouteSecurity } from "pi-tee-core";
 import { createNearCpuVerifier, type NearHostRating } from "./cpu.js";
 import { NearDirectChannel } from "./direct-channel.js";
-import { observeNearGpuEvidence } from "./gpu.js";
+import { nearModelVerification, observeNearGpuEvidence } from "./gpu.js";
 import { NEAR_DIRECT_HOST } from "./discovery.js";
 
 export interface NearDirectTarget { model: string; hostname: string }
@@ -61,7 +61,7 @@ export async function openDirectNearTransport(apiKey: string, signal: AbortSigna
   const client = new BoundInference({
     apiKey, baseUrl: `${baseUrl}/`, signingAlgo: "ed25519", e2ee: true, ohttp: true,
     attestationCacheTimeToLiveMs: 300_000, responseCacheTimeToLiveMs: 60_000,
-    modelVerification: { policy: { acceptedTcbStatuses: ["UpToDate", "OutOfDate"], gpuEvidence: "if-present" }, verifiers: { tdxQuote } },
+    modelVerification: nearModelVerification(tdxQuote),
   });
   const challengeAt = Date.now();
   try {

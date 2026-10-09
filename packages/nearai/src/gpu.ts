@@ -1,4 +1,5 @@
 import { gpuVersionsAllowed, checkGpuAppraisal, GPU_POLICIES, runNvidiaVerifier, TeeError, type GpuPolicyTable } from "pi-tee-core";
+import type { ModelAttestationPolicy, ModelAttestationVerifiers, TdxQuoteVerifier } from "@nearai/inference-sdk/node";
 
 const MAX_PAYLOAD_CHARACTERS = 2 * 1024 * 1024;
 const MAX_GPUS = 8;
@@ -59,4 +60,16 @@ export async function observeNearGpuEvidence(payload: string, nonce: string, opt
     options.signal.throwIfAborted();
     return ["Local GPU detail appraisal did not establish authenticated device details; route remains G3"];
   }
+}
+
+/**
+ * Model verification for both NEAR routes. They strip GPU payloads before SDK
+ * appraisal; the SDK's default GPU verifier would submit any that still reach
+ * it to NRAS, so this one rejects them locally instead.
+ */
+export function nearModelVerification(tdxQuote: TdxQuoteVerifier): { policy: ModelAttestationPolicy; verifiers: ModelAttestationVerifiers } {
+  return {
+    policy: { acceptedTcbStatuses: ["UpToDate", "OutOfDate"], gpuEvidence: "if-present" },
+    verifiers: { tdxQuote, gpuEvidence: () => { throw new TeeError("TEE_GPU_POLICY_REJECTED"); } },
+  };
 }

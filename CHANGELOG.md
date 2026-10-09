@@ -11,7 +11,7 @@
 ### Changed
 
 - `PI_TEE_POLICY` uses four named trust positions and explicit thresholds. The default is `public-builds,egress=metadata`; route admission checks every axis and compares code, host, GPU and handling. Build reproduction/pinned review remain unsupported. [Policy and migration](docs/reference/policy.md).
-- NEAR direct discovers matching tool-chat catalog/registry endpoints. NEAR/Chutes establish fresh H1/H2 locally while remaining A3/G3/X3; optional NEAR GPU diagnostics never gate admission or contact NRAS. Privatemode remains A2/H3/G3/X3 under exact hard-pin or explicit logged-CDN manifest admission.
+- NEAR direct discovers matching tool-chat catalog/registry endpoints. NEAR/Chutes establish fresh H1/H2 locally while remaining A3/G3/X3; optional NEAR GPU diagnostics never gate admission or contact NRAS, and GPU evidence that reaches the SDK is rejected locally instead of using its NRAS default. Privatemode remains A2/H3/G3/X3 under exact hard-pin or explicit logged-CDN manifest admission.
 - Tinfoil platform authority is the exact `cvmimage` platform-release workflow; strict v2 references require an authenticated same-release classic companion. Genoa H2 retains publisher minima/production checks; Intel OutOfDate public workers remain unavailable. NRAS authenticates device/overall tokens under the same GPU gates.
 - User guides, policy/hardware reference and maintainer procedures now have separate homes. Dated investigations/reviews keep their scopes, verdicts and compatibility links; verifier rationale lives beside code. The comment-only Go update includes a rebuilt CI artifact/pin, without changing verifier logic.
 

@@ -1,7 +1,7 @@
 import { authenticateResponse, limitResponseBody, MAX_ENCRYPTED_RESPONSE_BYTES, TeeError, withAbort, type RouteSecurity, type SdkTransport } from "pi-tee-core";
 import { NEAR_BASE_URL } from "./catalog.js";
 import { createNearCpuVerifier, type NearHostRating } from "./cpu.js";
-import { observeNearGpuEvidence } from "./gpu.js";
+import { nearModelVerification, observeNearGpuEvidence } from "./gpu.js";
 
 export async function openNearGatewayTransport(apiKey: string, signal: AbortSignal, model: string): Promise<SdkTransport & { security: RouteSecurity }> {
   if (process.versions.bun || Number(process.versions.node.split(".")[0]) < 24) throw new TeeError("TEE_RUNTIME_UNSUPPORTED");
@@ -36,7 +36,7 @@ export async function openNearGatewayTransport(apiKey: string, signal: AbortSign
     apiKey, baseUrl: `${NEAR_BASE_URL}/`, signingAlgo: "ed25519", e2ee: true, ohttp: true,
     attestationCacheTimeToLiveMs: 300_000, responseCacheTimeToLiveMs: 60_000,
     gatewayVerification: { includeSpkiFingerprint: true, policy: { acceptedTcbStatuses: ["UpToDate", "OutOfDate"] }, verifiers: { tdxQuote } },
-    modelVerification: { policy: { acceptedTcbStatuses: ["UpToDate", "OutOfDate"], gpuEvidence: "if-present" }, verifiers: { tdxQuote } },
+    modelVerification: nearModelVerification(tdxQuote),
   });
   const challengeAt = Date.now();
   await withAbort(client.verify(model), signal);

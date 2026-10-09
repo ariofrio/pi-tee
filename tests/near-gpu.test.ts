@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { readFile } from "node:fs/promises";
 import { openDirectNearTransport } from "../packages/nearai/src/direct.js";
-import { checkNearGpuEvidence } from "../packages/nearai/src/gpu.js";
+import { checkNearGpuEvidence, nearModelVerification } from "../packages/nearai/src/gpu.js";
 
 // Policy over NVIDIA's local verdict. Signature, reference and revocation
 // results come from the real verifier in the live check; these cases mutate an
@@ -118,4 +118,32 @@ test("the direct route appraises GPU evidence locally and never contacts NRAS", 
   assert.deepEqual(channelRequests, ["GET /v1/attestation/report"], "No credentials or inference without verified evidence.");
   assert.ok(gpuRuns.length >= 1, "The local NVIDIA verifier appraised the GPU evidence.");
   assert.ok(gpuRuns.every(run => run.nonce !== fixture.request_nonce && /^[a-f0-9]{64}$/.test(run.nonce)), "Each appraisal uses the client's fresh nonce.");
+});
+
+test("GPU evidence that reaches the SDK is rejected locally, never submitted to NRAS", async () => {
+  const fixture = JSON.parse(await readFile("tests/fixtures/near-glm-direct-attestation.json", "utf8"));
+  const { verifyModelAttestation } = await import("@nearai/inference-sdk/node");
+  const contacted: string[] = [];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    contacted.push(new URL(new Request(input, init).url).host);
+    throw new Error("network disabled in this test");
+  }) as typeof fetch;
+  let gpuError: unknown;
+  try {
+    // The routes strip GPU payloads before SDK appraisal. This covers an SDK
+    // path that still presents one: the model verifier must not fall back to NRAS.
+    const { policy, verifiers } = nearModelVerification(async () => { throw new Error("synthetic CPU failure"); });
+    await assert.rejects(verifyModelAttestation({
+      attestation: { nonce: fixture.request_nonce, signer: { signingAlgo: "ed25519", signingAddress: fixture.signing_address },
+        intelQuote: fixture.intel_quote, eventLog: fixture.event_log, appCompose: "", nvidiaPayload: fixture.nvidia_payload },
+      clientBinding: { nonce: fixture.request_nonce }, policy,
+      verifiers: { ...verifiers, gpuEvidence: verifiers.gpuEvidence && (async payload => {
+        try { await verifiers.gpuEvidence!(payload); } catch (error) { gpuError = error; throw error; }
+      }) },
+    }));
+    await new Promise(resolve => setTimeout(resolve, 100));
+  } finally { globalThis.fetch = realFetch; }
+  assert.deepEqual(contacted, []);
+  assert.match(String(gpuError), /TEE_GPU_POLICY_REJECTED/);
 });
