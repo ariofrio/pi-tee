@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Validate pi-tee on Android/Termux (arm64 emulator, Node 24 and 26). Run CI on Node 26 as well, and give CLI-spawning tests more time for slow cold starts.
+
 - Run `npm run check`, both smokes, the Go helper's `gofmt`/`go vet`/`go test` and the Bun-specific tests in CI on every push to `main` and pull request.
 
 - Persist each GitHub metadata lookup once its own check passes and drop only a stored lookup whose check fails, so unrelated outages or rejected workers no longer clear the cache.

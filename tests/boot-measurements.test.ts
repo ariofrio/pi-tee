@@ -4,7 +4,7 @@ import { readFile, mkdir, mkdtemp, writeFile, rm } from "node:fs/promises";
 import { resolve } from "node:path";
 import { test } from "node:test";
 
-const cli = (input: unknown) => spawnSync(process.execPath, ["--import", "tsx", "scripts/research/tinfoil-boot-measurements.ts"], { input: JSON.stringify(input), encoding: "utf8", timeout: 10000 });
+const cli = (input: unknown) => spawnSync(process.execPath, ["--import", "tsx", "scripts/research/tinfoil-boot-measurements.ts"], { input: JSON.stringify(input), encoding: "utf8", timeout: 60000 });
 
 test("the boot-measurement CLI rejects malformed artifact descriptors without authenticating a build", () => {
   const result = cli({ memoryMB: 65536, cmdline: "synthetic", kernel: "", initrd: "" });
