@@ -47,12 +47,12 @@ test("all 35 valid four-axis combinations have exactly one truthful position", (
 });
 
 test("grammar, unsupported refinements and obsolete names fail with migration guidance", () => {
-  for (const setting of ["", "typo", "public-builds,", "public-builds,unknown=x", "public-builds,code=bad", "public-builds,host=bad", "public-builds,gpu=bad", "public-builds,egress=bad", "public-builds,build=bad", "public-builds,review=bad", "public-builds,verifier=bad", "public-builds,host=current,host=current", "trust-provider,build=signed", "trust-provider-and-host,review=none"]) {
+  for (const setting of ["", "typo", "Public-Builds", " public-builds", "public-builds, egress=metadata", "public-builds,egress=metadata ", "public-builds,", "public-builds,unknown=x", "public-builds,code=bad", "public-builds,host=bad", "public-builds,gpu=bad", "public-builds,egress=bad", "public-builds,build=bad", "public-builds,review=bad", "public-builds,verifier=bad", "public-builds,host=current,host=current", "trust-provider,build=signed", "trust-provider-and-host,review=none"]) {
     assert.throws(() => parsePolicy(setting), /TEE_POLICY_INVALID/, setting);
   }
-  for (const build of ["reproduced", "reproduced-off-github"]) assert.throws(() => parsePolicy(`public-builds,build=${build}`), /not yet supported/);
+  for (const build of ["reproduced", "reproduced-off-github", "signed"]) assert.throws(() => parsePolicy(`public-builds,build=${build}`), /not yet supported/);
   for (const review of ["window", "pinned"]) assert.throws(() => parsePolicy(`public-builds,review=${review}`), /not yet supported/);
-  assert.equal(parsePolicy("public-builds,build=signed").build, "signed");
+
   assert.throws(() => parsePolicy("sdk"), /trust-provider-and-host/);
   assert.throws(() => parsePolicy("approved"), /public-builds,review=pinned.*not yet supported/);
   const ignored = parsePolicy("trust-provider-and-host,verifier=nras");

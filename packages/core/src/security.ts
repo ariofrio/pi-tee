@@ -1,4 +1,4 @@
-import { POLICY_VALUES, type SecurityPolicy } from "./policy.js";
+import { TeeError, POLICY_VALUES, type SecurityPolicy } from "./policy.js";
 
 export interface RouteSecurity {
   route: string;
@@ -12,6 +12,15 @@ export interface RouteSecurity {
   review?: 1 | 2 | 3;
   observed: readonly string[];
 }
+/** Authenticated candidate levels retained when no worker meets policy. */
+export class RouteRejection extends TeeError {
+  readonly security: RouteSecurity;
+  constructor(security: RouteSecurity) {
+    super("TEE_POLICY_ROUTE_REJECTED");
+    this.security = Object.freeze(structuredClone(security));
+  }
+}
+
 export interface RouteDecision {
   route: string;
   security?: RouteSecurity;
@@ -23,7 +32,9 @@ export interface RouteDecision {
 }
 export const ROUTE_AXES = ["code", "host", "gpu", "egress"] as const;
 
-/** Levels are claims of checks the adapter made for this request, never catalog metadata. */
+/** Verified means client-checked hardware/manufacturer signatures or output of
+ * A1-verified code. Data assembled by code below A1 is unverified. Catalog
+ * metadata and provider-assembled coverage cannot establish actual levels. */
 export function assessRoute(policy: SecurityPolicy, route: RouteSecurity): Omit<RouteDecision, "picked"> {
   const failures: string[] = [];
   if (!route.cpuVerified) failures.push("CPU evidence was not verified; route is out of scope");

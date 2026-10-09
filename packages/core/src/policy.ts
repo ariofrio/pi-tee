@@ -69,7 +69,7 @@ export function parsePolicy(value = DEFAULT_POLICY): SecurityPolicy {
   if (policy.host === "stale" && policy.gpu !== "unchecked") invalid("host=stale forces gpu=unchecked.");
   const excludesHost = policy.host === "current" && policy.gpu === "verified";
   if (excludesHost === trustsHost) invalid(`${position} requires ${trustsHost ? "host below current or gpu below verified" : "host=current,gpu=verified"}; use the matching position.`);
-  if (policy.build === "reproduced" || policy.build === "reproduced-off-github") invalid(`build=${policy.build} is not yet supported; use publisher-workflow or signed.`);
+  if (policy.build === "reproduced" || policy.build === "reproduced-off-github" || policy.build === "signed") invalid(`build=${policy.build} is not yet supported; use publisher-workflow.`);
   if (policy.review === "window" || policy.review === "pinned") invalid(`review=${policy.review} is not yet supported; use none.`);
   if (policy.verifier === "nras" && policy.gpu === "unchecked") policy.warnings = ["verifier=nras has no effect with gpu=unchecked; GPU evidence is not appraised for admission."];
   return Object.freeze(policy);

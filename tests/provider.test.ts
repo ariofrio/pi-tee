@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { normalizeContext, Type, type Model } from "@earendil-works/pi-ai/compat";
-import { createTeeProvider } from "../packages/core/src/provider.js";
+import { createRatedTestProvider as createTeeProvider } from "./rated-provider.js";
 import { isRetryableAssistantError } from "@earendil-works/pi-ai/utils/retry";
 import { authenticateResponse } from "../packages/core/src/response.js";
 import { TeeError } from "../packages/core/src/policy.js";
@@ -54,7 +54,8 @@ test("SDK preflight diagnostics cannot impersonate a retryable terminal security
   });
   await integration.initializeCatalog();
   const result = await integration.provider.streamSimple(model, context, { apiKey: "test-key" }).result();
-  assert.equal(result.errorMessage, "TEE_REQUEST_FAILED");
+  assert.equal(result.errorMessage, "TEE_POLICY_ROUTE_REJECTED");
+  assert.equal(integration.getReport().routeDecisions![0]!.reason, "TEE_ATTESTATION_REJECTED");
   assert.equal(isRetryableAssistantError(result), false);
 });
 
@@ -67,8 +68,9 @@ test("GPU mode rejection reaches Pi without retrying or opening inference", asyn
   });
   await integration.initializeCatalog();
   const result = await integration.provider.streamSimple(model, context, { apiKey: "test-key", maxRetries: 10 }).result();
-  assert.equal(result.errorMessage, "TEE_GPU_MODE_REJECTED");
-  assert.equal(integration.getReport().reason, "TEE_GPU_MODE_REJECTED");
+  assert.equal(result.errorMessage, "TEE_POLICY_ROUTE_REJECTED");
+  assert.equal(integration.getReport().reason, "TEE_POLICY_ROUTE_REJECTED");
+  assert.equal(integration.getReport().routeDecisions![0]!.reason, "TEE_GPU_MODE_REJECTED");
   assert.equal(isRetryableAssistantError(result), false);
   assert.equal(attempts, 1);
 });
@@ -108,7 +110,7 @@ test("SDK-policy key rotation can reconstruct the same guarded body without cons
   assert.equal(JSON.parse(attempts[1]!.body).messages.at(-1).content, "private prompt");
 });
 
-for (const policy of ["public-builds", "public-builds"]) test(`changing to ${policy} policy aborts an in-flight SDK request and hides SDK models`, async () => {
+for (const policy of ["public-builds", "public-builds-trust-host"]) test(`changing to ${policy} policy aborts an in-flight SDK request and hides SDK models`, async () => {
   let started!: () => void;
   const ready = new Promise<void>((resolve) => { started = resolve; });
   const integration = await sdkProvider(async (input, init) => {

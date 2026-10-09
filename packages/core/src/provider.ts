@@ -4,7 +4,7 @@ import {
   type AssistantMessageEventStream, type Model, type Provider, type SimpleStreamOptions,
 } from "@earendil-works/pi-ai/compat";
 import { parsePolicy, resolveModelVisibility, resolvePolicy, TeeError, type SecurityPolicy, type ModelVisibility, type PolicyMode } from "./policy.js";
-import { assessRoute, compareRoutes, ROUTE_AXES, type RouteSecurity, type RouteDecision } from "./security.js";
+import { assessRoute, compareRoutes, RouteRejection, ROUTE_AXES, type RouteSecurity, type RouteDecision } from "./security.js";
 import { guardChatFetch, readBoundedBody } from "./transport.js";
 
 export interface SdkTransport {
@@ -232,7 +232,8 @@ export function createTeeProvider(definition: ProviderDefinition) {
               else sessions.push(session);
             } catch (error) {
               signal.throwIfAborted();
-              decisions.push({ route: route.id, accepted: false, picked: false, reason: [error instanceof TeeError ? error.code : "TEE_ATTESTATION_REJECTED", ...(route.limitations ?? [])].join("; "), trusts: [], gaps: [] });
+              const rejected = error instanceof RouteRejection && error.security.route === route.id ? assessRoute(requestPolicy, error.security) : undefined;
+              decisions.push(rejected && !rejected.accepted ? { ...rejected, picked: false } : { route: route.id, accepted: false, picked: false, reason: [error instanceof TeeError ? error.code : "TEE_ATTESTATION_REJECTED", ...(route.limitations ?? [])].join("; "), trusts: [], gaps: [] });
             }
           }
           sessions.sort((a, b) => compareRoutes(a.security, b.security));
@@ -275,8 +276,8 @@ export function createTeeProvider(definition: ProviderDefinition) {
           admission.expiresAt <= now || admission.expiresAt > admission.checkedAt + 300000 ||
           captured.baseUrl !== publicProfile.baseUrl) throw new TeeError("TEE_PUBLIC_SESSION_REJECTED");
       } else {
-        transport = await definition.openSdkTransport({ apiKey: options.apiKey, signal, model: structuredClone(canonical) });
-        captured = { baseUrl: transport.baseUrl, fetch: transport.fetch };
+        // Non-public dispatch requires an explicitly rated route; no legacy SDK bypass.
+        throw new TeeError("TEE_POLICY_ROUTE_REJECTED");
       }
       signal.throwIfAborted();
       const baseUrl = captured.baseUrl ?? definition.baseUrl;

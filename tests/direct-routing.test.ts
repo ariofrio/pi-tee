@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { createTeeProvider } from "../packages/core/src/provider.js";
+import { createRatedTestProvider as createTeeProvider } from "./rated-provider.js";
 import { normalizeContext, type Model } from "@earendil-works/pi-ai/compat";
 const model: Model<"openai-completions"> = {
   id: "test-model", name: "Test model", provider: "test-tee", api: "openai-completions",
