@@ -10,6 +10,8 @@ const provider = process.argv[2];
 const publicCandidate = process.argv.includes("--public-builds-candidate");
 assert.ok(!publicCandidate || provider === "tinfoil", "The public-build candidate is Tinfoil only.");
 const publicProduction = process.argv.includes("--public-builds");
+const gateway = process.argv.includes("--gateway");
+assert.ok(!gateway || (provider === "tinfoil" && publicProduction), "Gateway qualification requires Tinfoil --public-builds.");
 assert.ok(!publicProduction || (provider === "tinfoil" && !publicCandidate), "Select the production Tinfoil public policy separately from candidate registration.");
 const testPolicy = process.env.PI_TEE_POLICY ?? (publicCandidate || publicProduction ? "public-builds,egress=metadata" : "trust-provider-and-host");
 const cancelStreaming = process.argv.includes("--cancel-stream");
@@ -26,7 +28,15 @@ await mkdir(".scratch/work", { recursive: true });
 const scratch = await mkdtemp(resolve(".scratch/work/pi-live-"));
 const cwd = join(scratch, "project");
 const agentDir = join(scratch, "agent");
-const entry = publicCandidate ? join(scratch, "public-candidate.ts") : resolve("packages", provider, "dist/extension.js");
+const entry = gateway ? join(scratch, "gateway.ts") : publicCandidate ? join(scratch, "public-candidate.ts") : resolve("packages", provider, "dist/extension.js");
+if (gateway) await writeFile(entry, `
+import { createTinfoilProvider } from ${JSON.stringify(resolve("packages/tinfoil/dist/index.js"))};
+export default async function(pi) {
+  const integration = createTinfoilProvider({route:"gateway"});
+  await integration.initializeCatalog();
+  pi.registerProvider(integration.provider);
+}
+`);
 if (publicCandidate) await writeFile(entry, `
 import { createTeeProvider } from ${JSON.stringify(resolve("packages/core/dist/index.js"))};
 import { parseTinfoilCatalog, TINFOIL_BASE_URL } from ${JSON.stringify(resolve("packages/tinfoil/dist/index.js"))};
@@ -186,7 +196,7 @@ try {
   const requestedModel = process.argv[3]?.startsWith("--") ? undefined : process.argv[3];
   const model = requestedModel ?? models.find(m => m.id === (provider === "nearai" ? "Qwen/Qwen3.6-35B-A3B-FP8" : "gpt-oss-120b"))?.id ?? models[0]?.id;
   assert.ok(model && models.some(m => m.id === model), "Chosen model is absent from the selected policy catalog.");
-  console.log(`PASS: ${provider} ${publicCandidate ? "compiled public-build candidate" : "compiled extension"}, native secret login, and catalog (${model}).`);
+  console.log(`PASS: ${provider} ${gateway ? "compiled gateway adapter" : publicCandidate ? "compiled public-build candidate" : "compiled extension"}, native secret login, and catalog (${model}).`);
 
   if (!cancelOnly) {
     const basic = await runCli(model, "Reply with exactly PI_TEE_OK.");

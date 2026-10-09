@@ -69,6 +69,8 @@ Public-build positions trust the named public maintainers, workflows and build p
 
 The final request guard fixes model, endpoint and authentication after Pi's payload hooks, rejecting transport overrides, hosted tools, remote media and unsupported fields. Direct routes bind the actual TLS socket before credentials or ciphertext, send once and reject reconnect/resend. Pi provider retries are disabled; terminal security errors also suppress Pi 1.0.4's turn/summarization retries. The SDK router retains its disclosed rotation resend.
 
+For DeepSeek V4.1 Flash and GLM-5.3, the [Tinfoil billing gateway](docs/tinfoil-gateway.md) is tried when no direct worker qualifies, using the same worker appraisal and ratings. Its unattested WebPKI host receives the API key, model and headers; bodies remain sealed to the worker's key. `/status` discloses this boundary and the selection reason. A 412 fails without resending.
+
 NEAR buffers bounded response bytes in memory until signature verification; Tinfoil streams authenticated encrypted responses. Ordinary logs exclude credentials, prompts, completions and quote bodies. [Security guarantees and limits](SECURITY.md).
 
 **These extensions protect their own requests, not the entire Pi conversation.** Other providers, fallback, compaction, extensions and tools can access or transmit plaintext. Local code remains trusted. The [NEAR assessment](docs/nearai-status.md) explains why NEAR public builds need NEAR server changes.
@@ -100,6 +102,8 @@ PI_TEE_POLICY=trust-provider-and-host,host=current node --env-file=/path/to/priv
 ```
 
 Live tests are opt-in and billable. Add `--cancel-stream` to test abort after a text delta; set `PI_TEE_LIVE_PI_BINARY` to an absolute Pi binary path to test a compiled Pi. Cancellation establishes local abort and acknowledgement, not remote generation-stop timing. The harness removes its temporary credential store and never prints keys or provider payloads.
+
+Add `--gateway` to a Tinfoil `--public-builds` run to qualify the production gateway adapter explicitly, including when direct access is available.
 
 The [validation record](docs/implementation.md#validation) covers the other routes, unresolved router key-mismatch errors and the recorded NEAR dependency advisory. Independent Opus 5.5 reviews of the public profile, local setup and enablement are linked in the [serving contract](docs/tinfoil-public-profile.md).
 

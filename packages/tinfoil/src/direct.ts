@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import {
   limitResponseBody, MAX_ENCRYPTED_RESPONSE_BYTES, MAX_RESPONSE_BYTES,
-  pinnedTlsFetch, readBoundedBody, TeeError, withAbort, type SdkTransport,
+  pinnedTlsFetch, webPkiTlsFetch, readBoundedBody, TeeError, withAbort, type SdkTransport,
 } from "pi-tee-core";
 import type { AttestationBundle } from "tinfoil";
 
@@ -38,12 +38,26 @@ export async function openDirectTinfoilTransport(signal: AbortSignal, attestatio
 // `logicalBaseUrl` lets a profile with discovered workers keep one canonical
 // endpoint: callers address it, and only this transport's attested host is dialed.
 export async function openEncryptedWorkerTransport(signal: AbortSignal, host: string, keys: { tls: string; hpke: string }, cacheField: "user_cache_secret" | "cache_salt", expiresAt?: number, logicalBaseUrl?: string): Promise<SdkTransport> {
-  const { Identity } = await import("ehbp");
-  const identity = await Identity.fromPublicKeyHex(keys.hpke);
   const endpoint = `https://${host}/v1/chat/completions`;
-  const baseUrl = logicalBaseUrl ?? `https://${host}/v1`;
+  return openEncryptedTransport(signal, keys.hpke, endpoint, logicalBaseUrl ?? `https://${host}/v1`, cacheField, pinnedTlsFetch(endpoint, keys.tls, expiresAt), expiresAt);
+}
+
+export const TINFOIL_GATEWAY_BASE_URL = "https://inference-gateway.tinfoil.sh/v1";
+
+/** One sealed dispatch; a 412 or any other error is terminal, with no resend. */
+export async function openEncryptedGatewayTransport(signal: AbortSignal, host: string, keys: { hpke: string }, model: string, expiresAt: number, wireFetch?: typeof globalThis.fetch): Promise<SdkTransport> {
+  if (!/^[a-z0-9-]+-inf[0-9]+(?:-[0-9]+)?\.tinfoil\.containers\.tinfoil\.dev$/.test(host) ||
+      !["deepseek-v4-1-flash", "glm-5-3"].includes(model)) throw new TeeError("TEE_REQUEST_REJECTED");
+  const endpoint = `${TINFOIL_GATEWAY_BASE_URL}/chat/completions`;
+  return openEncryptedTransport(signal, keys.hpke, endpoint, TINFOIL_GATEWAY_BASE_URL, "cache_salt", wireFetch ?? webPkiTlsFetch(endpoint, expiresAt), expiresAt, {
+    "x-tinfoil-seal": host, "x-tinfoil-model": model, "x-tinfoil-enclave-url": `https://${host}`,
+  });
+}
+
+async function openEncryptedTransport(signal: AbortSignal, hpke: string, endpoint: string, baseUrl: string, cacheField: "user_cache_secret" | "cache_salt", fetch: typeof globalThis.fetch, expiresAt?: number, routingHeaders?: Record<string, string>): Promise<SdkTransport> {
+  const { Identity } = await import("ehbp");
+  const identity = await Identity.fromPublicKeyHex(hpke);
   const addressed = `${baseUrl}/chat/completions`;
-  const fetch = pinnedTlsFetch(endpoint, keys.tls, expiresAt);
   const cacheSecret = randomBytes(32).toString("hex");
   let sent = false;
   return { baseUrl, fetch: async (input, init) => {
@@ -52,10 +66,14 @@ export async function openEncryptedWorkerTransport(signal: AbortSignal, host: st
     sent = true;
     const requestSignal = AbortSignal.any([signal, request.signal]);
     requestSignal.throwIfAborted();
+    if (expiresAt !== undefined && Date.now() >= expiresAt) throw new TeeError("TEE_PUBLIC_SESSION_REJECTED");
     // The shared provider checked the payload. Provision a generated, encrypted cache field.
     const body = { ...await request.json(), [cacheField]: cacheSecret };
+    if (routingHeaders && body.model !== routingHeaders["x-tinfoil-model"]) throw new TeeError("TEE_REQUEST_REJECTED");
+    const headers = new Headers(request.headers);
+    for (const [name, value] of Object.entries(routingHeaders ?? {})) headers.set(name, value);
     const encrypted = await identity.encryptRequestWithContext(new Request(endpoint, {
-      method: "POST", headers: request.headers, body: JSON.stringify(body), signal: requestSignal,
+      method: "POST", headers, body: JSON.stringify(body), signal: requestSignal,
     }));
     if (!encrypted.context) throw new TeeError("TEE_REQUEST_REJECTED");
     const wire = await fetch(encrypted.request);
@@ -65,7 +83,13 @@ export async function openEncryptedWorkerTransport(signal: AbortSignal, host: st
       throw new TeeError("TEE_RESPONSE_REJECTED");
     }
     const bounded = limitResponseBody(wire, { signal: requestSignal, maxBytes: MAX_ENCRYPTED_RESPONSE_BYTES });
-    const plaintext = await identity.decryptResponseWithContext(bounded, encrypted.context);
+    if (!wire.body || !wire.headers.get("ehbp-response-nonce")) {
+      await bounded.body?.cancel();
+      throw new TeeError("TEE_RESPONSE_REJECTED");
+    }
+    let plaintext: Response;
+    try { plaintext = await identity.decryptResponseWithContext(bounded, encrypted.context); }
+    catch { await bounded.body?.cancel(); throw new TeeError("TEE_RESPONSE_REJECTED"); }
     return limitResponseBody(plaintext, { signal: requestSignal, maxBytes: MAX_RESPONSE_BYTES });
   } };
 }

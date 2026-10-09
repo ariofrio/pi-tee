@@ -40,11 +40,14 @@ Code below `public-release` forces `egress=any` and prohibits `build` and `revie
 
 ## Routes and selection
 
+The [Tinfoil billing gateway](tinfoil-gateway.md) is a fallback for DeepSeek V4.1 Flash and GLM-5.3 when no direct worker qualifies. It uses the same fresh worker appraisal and verified levels; direct is preferred because fewer parties receive credentials and metadata. WebPKI TLS ends at the unattested gateway, which sees the API key, model and headers. Bodies are sealed to the appraised worker, so that metadata disclosure is separate from the axes. A 412 fails without resending; a later request starts with fresh evidence.
+
 A route must meet every threshold. Qualifying routes are compared by code, then host, then GPU, then egress. Public code can therefore outrank stronger hardware on provider-controlled code. Discovery and potential levels only filter candidates; they do not count as verified request levels. Unavailable or rejected candidates do not authorize prompt transmission.
 
 | Route | Actual levels after successful checks | Tightest admitting policy |
 | --- | --- | --- |
 | Tinfoil direct, current worker | A1 H1 G1 X2 B3 S3 | `public-builds,egress=metadata` |
+| Tinfoil billing gateway, current worker | A1 H1 G1 X2 B3 S3 | `public-builds,egress=metadata` |
 | Tinfoil Gemma Genoa worker | A1 H2 G1 X2 B3 S3 | `public-builds-trust-host,egress=metadata,host=outdated-firmware,gpu=verified` |
 | Tinfoil router | A3 H3 G3 X3 | `trust-provider-and-host` |
 | NEAR direct GLM-5.3 Flash, current instance | A3 H1 G3 X3 | `trust-provider-and-host,host=current` |

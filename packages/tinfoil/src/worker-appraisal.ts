@@ -25,6 +25,7 @@ export async function appraiseWorker(options: {
   policy?: SecurityPolicy;
   /** External authenticated verifier seam; production uses the bundled helper. */
   verifyArtifacts?: typeof verifyPublicBuildArtifacts;
+  attestationRelay?: "inference-gateway.tinfoil.sh";
 }): Promise<{ tls: string; hpke: string; security: RouteSecurity; publicBuild: {
   checkedAt: number; expiresAt: number; workloadDigest: string; platformDigest: string;
   cvmManifestDigest: string; imageDigest: string; configDigest: string; platform: "tdx" | "sev-snp"; gpus: number;
@@ -35,7 +36,10 @@ export async function appraiseWorker(options: {
   const signal = AbortSignal.any([options.signal, AbortSignal.timeout(240000)]);
   signal.throwIfAborted();
   const nonce = randomBytes(32).toString("hex");
-  const response = await (options.evidenceFetch ?? globalThis.fetch)(`https://${options.host}/.well-known/tinfoil-attestation?nonce=${nonce}`, { signal, redirect: "error" });
+  requireCondition(options.attestationRelay === undefined || options.attestationRelay === "inference-gateway.tinfoil.sh", "TEE_REQUEST_REJECTED");
+  const url = `https://${options.attestationRelay ?? options.host}/.well-known/tinfoil-attestation?nonce=${nonce}${options.attestationRelay ? `&enclave=${encodeURIComponent(options.host)}` : ""}`;
+  const response = await (options.evidenceFetch ?? globalThis.fetch)(url, { signal, redirect: "error" });
+  if (!response.ok) await response.body?.cancel();
   requireCondition(response.ok, "TEE_ATTESTATION_REJECTED");
   const raw = new TextDecoder("utf-8", { fatal: true }).decode(await readBoundedBody(response.body, 2 * 1024 * 1024, signal));
   const envelope = JSON.parse(raw);

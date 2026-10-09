@@ -14,6 +14,14 @@ No setup is required. The CPU helper ships in this package; NVIDIA's hash-checke
 
 Direct transport checks the attested key on the actual TLS 1.3 socket before credentials or EHBP ciphertext, sends once, rejects reconnect/resend, and uses a fresh encrypted cache salt. Admission expiry and policy epoch are checked after payload hooks. Named publishers remain trusted for safe releases and correct measurements; B3/S3 supplies no independent reproduction or per-release review.
 
+## Billing gateway
+
+When no direct worker qualifies, DeepSeek V4.1 Flash and GLM-5.3 can use `inference-gateway.tinfoil.sh`. The client fetches worker evidence through its nonce relay and runs the same direct appraisal. Successful checks establish the same A/H/G/X/B/S levels. Direct is preferred because fewer parties receive the API key and metadata. The live gateway [catalog](https://inference-gateway.tinfoil.sh/catalog) supplies routing hints, never keys or software authority; Gemma is excluded.
+
+Gateway TLS uses WebPKI and ends at an unattested billing host. That host receives the API key, model and headers, including the worker hostname. This is disclosed in `/status` and does not change an axis level: request and response bodies remain encrypted to the appraised worker's own HPKE key. `X-Tinfoil-Seal` names that worker; another worker cannot decrypt the body or authenticate a substituted response. [Protocol and validation](../../docs/tinfoil-gateway.md).
+
+A 412 means the sealed worker is unavailable. It fails that dispatch without re-appraisal, resend or an automatic loop. A later request performs fresh selection, appraisal and sealing under the same policy. Errors, redirects and dropped responses also fail without resending. Gateway and direct share bounded authenticated response streams and close-safe HTTP framing under Node and Bun.
+
 ## Router and reporting
 
 The router is A3/H3/G3/X3, including hidden workers and sidecars. Its own CPU evidence has no client nonce; AMD revocation and local floors are unchecked. Signed repository tags supply B4 for that component, but the client cannot establish the complete plaintext code/runtime chain. Worker GPUs are unchecked and web-search/sidecar paths can carry plaintext. It therefore needs `trust-provider-and-host`. The pinned SDK re-attests and resends the same guarded request once only on an EHBP key-configuration mismatch. A second mismatch or any other request error fails; Pi adds no retry. Router preflight currently fails in Bun-compiled Pi because the SDK cannot dynamically load its Sigstore module, also reproduced on main; standalone Bun and Node attest successfully. [Live validation](../../docs/implementation.md#security-model-validation).
