@@ -112,3 +112,14 @@ test("a Chutes TEE declaration is distinct from an unavailable NEAR SDK protocol
   assert.equal(offline.getDiscoveredModels()[0]?.sdkTransportAvailable, false);
   assert.equal(offline.getDiscoveredModels()[0]?.selectable, false);
 });
+
+test("an unrated replacement transport cannot inherit the gateway's potential H1 rating", async () => {
+  let sent = false;
+  const integration = createNearProvider({ policy: "trust-provider-and-host,host=current", catalogFetch,
+    openSdkTransport: async () => ({ fetch: async () => { sent = true; return new Response('data: {"id":"c","choices":[{"delta":{"content":"ok"},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n', { headers: { "content-type": "text/event-stream" } }); } }),
+  });
+  await integration.initializeCatalog();
+  const result = await integration.provider.streamSimple(integration.provider.getModels()[0]!, normalizeContext({ messages: [{ role: "user", content: "synthetic", timestamp: 1 }] }), { apiKey: "synthetic-key" }).result();
+  assert.equal(sent, false);
+  assert.equal(result.stopReason, "error");
+});

@@ -55,7 +55,8 @@ export function createNearProvider(options: {
       }]),
       ...(route === "direct" ? [] : [{ id: "near-gateway", potential: { ...potential, route: "near-gateway" },
         openSession: async ({ apiKey, signal, model }: { apiKey: string; signal: AbortSignal; model: { id: string } }) => {
-          const transport = options.openSdkTransport ? { ...await options.openSdkTransport({ apiKey, signal, model: model as import("pi-tee-core").TeeCatalogModel }), security: { ...potential, route: "near-gateway", observed: [] } } : await openNearGatewayTransport(apiKey, signal, model.id);
+          const transport = options.openSdkTransport ? await options.openSdkTransport({ apiKey, signal, model: model as import("pi-tee-core").TeeCatalogModel }) as import("pi-tee-core").SdkTransport & { security?: import("pi-tee-core").RouteSecurity } : await openNearGatewayTransport(apiKey, signal, model.id);
+          if (!transport.security) { transport.dispose?.(); throw new TeeError("TEE_ATTESTATION_REJECTED"); }
           return { security: transport.security, transport };
         },
       }]),

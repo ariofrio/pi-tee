@@ -50,7 +50,9 @@ export function createTinfoilProvider(options: {
             await withAbort(client.ready(), signal);
             return { fetch: client.fetch };
           })();
-          return { security: routerSecurity, transport };
+          const security = options.openSdkTransport ? (transport as import("pi-tee-core").SdkTransport & { security?: import("pi-tee-core").RouteSecurity }).security : routerSecurity;
+          if (!security) { (transport as import("pi-tee-core").SdkTransport).dispose?.(); throw new TeeError("TEE_ATTESTATION_REJECTED"); }
+          return { security, transport };
         },
       }]),
     ],
