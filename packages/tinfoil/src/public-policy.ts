@@ -34,7 +34,6 @@ const authorityPolicy = {
   publicHostedWorkflows: [
     ...Object.values(PUBLIC_MODELS).map(repo => `${repo}/.github/workflows/tinfoil-release-publish.yml@refs/tags/vMAJOR.MINOR.PATCH`),
     "tinfoilsh/cvmimage/.github/workflows/release.yml@refs/tags/vMAJOR.MINOR.PATCH",
-    "tinfoilsh/platform-endorsements/.github/workflows/build.yml@refs/tags/vMAJOR.MINOR.PATCH",
     "tinfoilsh/cvmimage/.github/workflows/platform-release.yml@refs/tags/platform-vMAJOR.MINOR.PATCH",
     "tinfoilsh/freshness-witness/.github/workflows/freshness.yml@refs/heads/main",
   ],

@@ -102,12 +102,6 @@ func authenticatePlatformStatement(raw []byte, repo, tag, digest string) (*platf
 
 func authenticatePlatform(raw []byte, repo, tag, digest string, classic *platformCompanion) (*provenance.PlatformEndorsements, error) {
 	reject := errors.New("TEE_PLATFORM_REFERENCE_REJECTED")
-	if repo == platformRepo {
-		if !stableTag.MatchString(tag) || requirePublicWorkflow(raw, repo, "build.yml", "refs/tags/"+tag) != nil {
-			return nil, reject
-		}
-		return provenance.AuthenticatePlatformEndorsements(raw, repo, tag, digest)
-	}
 	statement, ext, err := authenticatePlatformStatement(raw, repo, tag, digest)
 	if err != nil {
 		return nil, reject
@@ -148,22 +142,42 @@ func mergePlatformV2(runtime, classic []byte) (*policy.Artifact, error) {
 		return nil, reject
 	}
 	var expected, actual map[string]any
-	if json.Unmarshal(classic, &expected) != nil || json.Unmarshal(runtime, &actual) != nil {
+	if json.Unmarshal(classic, &expected) != nil || json.Unmarshal(runtime, &actual) != nil || expected == nil || actual == nil {
+		return nil, reject
+	}
+	policies, ok := expected["policies"].(map[string]any)
+	if !ok || policies == nil {
 		return nil, reject
 	}
 	expected["format"] = platformV2
 	delete(expected, "measurements")
 	for name, p := range artifact.Policies {
-		block := expected["policies"].(map[string]any)[name].(map[string]any)
+		block, ok := policies[name].(map[string]any)
+		if !ok || block == nil {
+			return nil, reject
+		}
 		switch p.Platform {
 		case policy.PlatformTDX:
-			delete(block["tdx"].(map[string]any), "platform_measurements")
+			tdx, ok := block["tdx"].(map[string]any)
+			if !ok || tdx == nil || p.TDX == nil {
+				return nil, reject
+			}
+			delete(tdx, "platform_measurements")
 		case policy.PlatformSEVSNP:
-			snp := block["sev_snp"].(map[string]any)
+			snp, ok := block["sev_snp"].(map[string]any)
+			if !ok || snp == nil || p.SEVSNP == nil {
+				return nil, reject
+			}
 			delete(snp, "host_data")
 			parts := strings.Split(p.SEVSNP.MinimumABIVersion, ".")
-			major, _ := strconv.Atoi(parts[0])
-			minor, _ := strconv.Atoi(parts[1])
+			if len(parts) != 2 {
+				return nil, reject
+			}
+			major, majorErr := strconv.Atoi(parts[0])
+			minor, minorErr := strconv.Atoi(parts[1])
+			if majorErr != nil || minorErr != nil || major < 0 || major > 255 || minor < 0 || minor > 255 {
+				return nil, reject
+			}
 			if major < 1 || major == 1 && minor < 51 {
 				p.SEVSNP.MinimumABIVersion = "1.51"
 			}

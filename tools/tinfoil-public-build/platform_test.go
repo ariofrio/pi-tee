@@ -30,6 +30,9 @@ func TestPlatformReleaseAuthority(t *testing.T) {
 	if err != nil || p.Artifact == nil || p.Commit == "" {
 		t.Fatalf("authentic public platform release: %v", err)
 	}
+	if p.SubjectName != "platform-endorsements-classic.json" || len(p.Artifact.Measurements) == 0 {
+		t.Fatal("standalone classic lost its authenticated boot constraints")
+	}
 	for _, tag := range []string{"v0.1.0", "platform-v01.1.0", "platform-v1.01.0", "platform-v1.0.01", "platform-v1.0.0-rc1", "platform-v1.0.0\n"} {
 		if _, err := authenticatePlatform(raw, "tinfoilsh/cvmimage", tag, "0cba58535ac96b734d02f9ebd5db6e90f51c193e9d27c4432c8fc5a363f83d64", nil); err == nil {
 			t.Fatal("accepted tag", tag)
@@ -154,5 +157,86 @@ func TestPlatformV2SchemaAndBootConstraints(t *testing.T) {
 	duplicate := append([]byte(`{"format":"https://tinfoil.sh/predicate/platform-endorsements/v2",`), runtime.Predicate[1:]...)
 	if _, err := mergePlatformV2(duplicate, classic.Predicate); err == nil {
 		t.Fatal("accepted duplicate member")
+	}
+}
+
+func TestRetiredPlatformAuthorityRejected(t *testing.T) {
+	raw, err := os.ReadFile("testdata/retired-platform-v0.0.16.bundle.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, ref := range []struct{ repo, tag string }{
+		{"tinfoilsh/platform-endorsements", "v0.0.16"},
+		{cvmRepo, "platform-v0.1.0"},
+	} {
+		if _, err := authenticatePlatform(raw, ref.repo, ref.tag, "0cba58535ac96b734d02f9ebd5db6e90f51c193e9d27c4432c8fc5a363f83d64", nil); err == nil || err.Error() != "TEE_PLATFORM_REFERENCE_REJECTED" {
+			t.Fatalf("retired identity accepted under %s@%s: %v", ref.repo, ref.tag, err)
+		}
+	}
+	v2, err := os.ReadFile("testdata/platform-v0.1.0-v2.bundle.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := authenticatePlatform(v2, cvmRepo, "platform-v0.1.0", "7fb88aa6336f6c53ee2be7b5ea074f39cc783da30aa6d296072c7bebbf59790d", &platformCompanion{Digest: "0cba58535ac96b734d02f9ebd5db6e90f51c193e9d27c4432c8fc5a363f83d64", Bundle: raw}); err == nil {
+		t.Fatal("accepted retired identity as classic companion")
+	}
+}
+
+func TestPlatformV2MalformedClassicFailsClosed(t *testing.T) {
+	raw, err := os.ReadFile("testdata/platform-v0.1.0-classic.bundle.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	classic, _, err := authenticatePlatformStatement(raw, cvmRepo, "platform-v0.1.0", "0cba58535ac96b734d02f9ebd5db6e90f51c193e9d27c4432c8fc5a363f83d64")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name   string
+		change func(map[string]any)
+	}{
+		{"null policies", func(p map[string]any) { p["policies"] = nil; p["machines"] = map[string]any{} }},
+		{"policy is array", func(p map[string]any) { p["policies"].(map[string]any)["tdx-b200-prod"] = []any{} }},
+		{"tdx is null", func(p map[string]any) { p["policies"].(map[string]any)["tdx-b200-prod"].(map[string]any)["tdx"] = nil }},
+		{"snp is null", func(p map[string]any) {
+			p["policies"].(map[string]any)["amd-genoa-prod"].(map[string]any)["sev_snp"] = nil
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var p map[string]any
+			if err := json.Unmarshal(classic.Predicate, &p); err != nil {
+				t.Fatal(err)
+			}
+			tc.change(p)
+			changed, _ := json.Marshal(p)
+			p["format"] = platformV2
+			delete(p, "measurements")
+			runtime, _ := json.Marshal(p)
+			if _, err := mergePlatformV2(runtime, changed); err == nil {
+				t.Fatal("accepted malformed classic")
+			}
+		})
+	}
+
+	v2, err := os.ReadFile("testdata/platform-v0.1.0-v2.bundle.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	runtime, _, err := authenticatePlatformStatement(v2, cvmRepo, "platform-v0.1.0", "7fb88aa6336f6c53ee2be7b5ea074f39cc783da30aa6d296072c7bebbf59790d")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, abi := range []string{"", "1", "1.51.0", "x.51", "1.x", "-1.51", "1.-1", "99999999999999999999999999999999.51"} {
+		t.Run("ABI "+abi, func(t *testing.T) {
+			var p map[string]any
+			if err := json.Unmarshal(classic.Predicate, &p); err != nil {
+				t.Fatal(err)
+			}
+			p["policies"].(map[string]any)["amd-genoa-prod"].(map[string]any)["sev_snp"].(map[string]any)["minimum_abi_version"] = abi
+			changed, _ := json.Marshal(p)
+			if _, err := mergePlatformV2(runtime.Predicate, changed); err == nil {
+				t.Fatal("accepted malformed ABI")
+			}
+		})
 	}
 }

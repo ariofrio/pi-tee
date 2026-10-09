@@ -23,7 +23,6 @@ import (
 const (
 	maxInputBytes = 2 * 1024 * 1024
 	codeWorkflow  = "tinfoil-release-publish.yml"
-	platformRepo  = "tinfoilsh/platform-endorsements"
 )
 
 // Workload publishers admitted under the runtime profile, with the model name
