@@ -192,3 +192,13 @@ test("production gateway selection uses the credential-free relay and caps each 
     assert.ok(performance.now() - started < 500, "The candidate cap must abort the relay fetch before its inner timeout.");
   } finally { globalThis.fetch = originalFetch; AbortSignal.timeout = originalTimeout; }
 });
+
+
+test("gateway-only status limits appear only when the configured route can use the gateway", () => {
+  for (const route of ["auto", "gateway", "router", "direct", "direct-public"] as const) {
+    const status = formatProviderReport(createTinfoilProvider({ route }).getReport());
+    const enabled = route === "auto" || route === "gateway";
+    assert.equal(status.includes("frame boundary"), enabled, route);
+    assert.equal(status.includes("no anti-replay"), enabled, route);
+  }
+});

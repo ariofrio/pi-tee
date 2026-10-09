@@ -15,7 +15,6 @@ export const TINFOIL_ASSUMPTIONS = [
   "Intel, AMD and NVIDIA are trusted as manufacturers. Evidence and route-wide levels are established for each request, including hidden plaintext components.",
   "Admitted public publishers are trusted for release correctness; B3 uses GitHub hosted workflows and Sigstore, without independent reproduction or per-release review.",
   "Direct transport binds keys before credentials/body and sends once. Gateway uses WebPKI TLS to an unattested billing host that receives the API key, model and headers; bodies are sealed to the appraised worker. A 412 is terminal, with no resend. Router transport follows SDK rotation/retry behavior within its provider-and-host trust position.",
-  ...GATEWAY_LIMITATIONS,
   "API credentials and authorization metadata reach Tinfoil. Whole-Pi-session protection remains unestablished.",
 ];
 
@@ -37,7 +36,7 @@ export function createTinfoilProvider(options: {
     id: "tinfoil", name: "Tinfoil", baseUrl: TINFOIL_BASE_URL, apiKeyEnv: "TINFOIL_API_KEY",
     policy: options.policy ?? resolvePolicy(process.env.PI_TEE_POLICY),
     parseCatalog: parseTinfoilCatalog, catalogFetch: options.catalogFetch,
-    assumptions: [...TINFOIL_ASSUMPTIONS, "Intel OutOfDate TDX direct workers are unavailable under every policy; the pinned verifier rejects them during authentication."],
+    assumptions: [...TINFOIL_ASSUMPTIONS, ...(PUBLIC_BUILD_PROFILE_ENABLED && (route === "auto" || route === "gateway") ? GATEWAY_LIMITATIONS : []), "Intel OutOfDate TDX direct workers are unavailable under every policy; the pinned verifier rejects them during authentication."],
     openSdkTransport: async () => { throw new TeeError("TEE_POLICY_ROUTE_REJECTED"); },
     routes: [
       ...(route === "router" || route === "gateway" || !PUBLIC_BUILD_PROFILE_ENABLED ? [] : [{ id: "tinfoil-direct", potential: publicPotential, limitations: ["Intel OutOfDate TDX workers are skipped under every policy because the pinned verifier rejects them during authentication."], modelIds: Object.keys(PUBLIC_MODELS),

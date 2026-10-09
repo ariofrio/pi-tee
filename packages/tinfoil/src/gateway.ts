@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { readBoundedBody, record, TeeError, type SecurityPolicy } from "pi-tee-core";
+import { readBoundedBody, record, RouteRejection, TeeError, type SecurityPolicy } from "pi-tee-core";
 import { GATEWAY_MODELS, openEncryptedGatewayTransport, TINFOIL_GATEWAY_BASE_URL } from "./direct.js";
 import { appraiseWorker, PUBLIC_MODELS, WORKER_HOST, type PublicModel } from "./worker-appraisal.js";
 import { selectPublicWorker } from "./public-session.js";
@@ -35,13 +35,19 @@ export async function discoverGatewayWorkers(model: string, signal: AbortSignal,
   } catch { signal.throwIfAborted(); throw new TeeError("TEE_WORKER_DISCOVERY_UNAVAILABLE"); }
 }
 
-export async function openRatedGatewayTransport(signal: AbortSignal, model: string, policy: SecurityPolicy) {
+export async function openRatedGatewayTransport(signal: AbortSignal, model: string, policy: SecurityPolicy,
+  appraise = (model: PublicModel, host: string, signal: AbortSignal) => appraiseWorker({ model, host,
+    signal: AbortSignal.any([signal, AbortSignal.timeout(120000)]), policy, attestationRelay: "inference-gateway.tinfoil.sh" }),
+) {
   if (!gatewayModel(model)) throw new TeeError("TEE_MODEL_UNAVAILABLE");
   const { host, keys } = await selectPublicWorker(model, signal, {
     discover: (model, signal) => discoverGatewayWorkers(model, signal),
     reachable: async hosts => hosts,
-    appraise: (model: PublicModel, host, signal) => appraiseWorker({ model, host, signal: AbortSignal.any([signal, AbortSignal.timeout(120000)]), policy, attestationRelay: "inference-gateway.tinfoil.sh" }),
-  }, policy);
+    appraise,
+  }, policy).catch(error => {
+    if (error instanceof RouteRejection) throw new RouteRejection({ ...error.security, route: "tinfoil-gateway" });
+    throw error;
+  });
   const { platform: _platform, gpus: _gpus, ...admission } = keys.publicBuild;
   return {
     security: { ...keys.security, route: "tinfoil-gateway", observed: [...keys.security.observed,

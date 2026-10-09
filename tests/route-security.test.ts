@@ -5,6 +5,8 @@ import { createTeeProvider } from "../packages/core/src/provider.js";
 import { RouteRejection, assessRoute, compareRoutes, weakestRoute, type RouteSecurity } from "../packages/core/src/security.js";
 import { parsePolicy } from "../packages/core/src/policy.js";
 import { TeeError } from "../packages/core/src/policy.js";
+import { createTeeProvider as createCompiledTeeProvider, formatProviderReport } from "pi-tee-core";
+import { openRatedGatewayTransport } from "../packages/tinfoil/src/gateway.js";
 
 const model: Model<"openai-completions"> = { id: "m", provider: "test", name: "M", api: "openai-completions", baseUrl: "https://test.example/v1", reasoning: false, input: ["text"], contextWindow: 8192, maxTokens: 512, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } };
 
@@ -155,4 +157,48 @@ test("authenticated rejected worker levels disclose the failing axis through nat
     assert.deepEqual(decision.security, security); assert.equal(decision.accepted, false);
     assert.match(decision.reason, new RegExp(Object.keys(changed)[0]!));
   }
+});
+
+
+test("native gateway rejection retains the strongest worker levels and failing axis in status", async () => {
+  const hosts = ["genoa-inf1.tinfoil.containers.tinfoil.dev", "current-inf2.tinfoil.containers.tinfoil.dev", "missing-inf3.tinfoil.containers.tinfoil.dev"];
+  const gatewayModel = { ...model, id: "glm-5-3" };
+  const originalFetch = globalThis.fetch;
+  let inference = 0;
+  const appraised: string[] = [];
+  globalThis.fetch = async input => {
+    if (String(input) !== "https://inference-gateway.tinfoil.sh/catalog") {
+      inference++;
+      throw new Error("A rejected gateway must not receive a prompt.");
+    }
+    return Response.json({ "glm-5-3": { repo: "tinfoilsh/confidential-glm5-3-nvfp4", hosts } });
+  };
+  try {
+    const integration = createCompiledTeeProvider({ id: "test", name: "Test", baseUrl: model.baseUrl, apiKeyEnv: "TEST_KEY", policy: "public-builds,egress=metadata",
+      parseCatalog: () => [gatewayModel], catalogFetch: async () => Response.json({}), assumptions: [], openSdkTransport: async () => { throw Error("unexpected SDK fallback"); },
+      routes: [{ id: "tinfoil-gateway", potential: { ...direct, route: "tinfoil-gateway" },
+        openSession: ({ signal, policy }) => openRatedGatewayTransport(signal, "glm-5-3", policy, async (_model, host) => {
+          appraised.push(host);
+          if (host === hosts[2]) throw new Error("unavailable");
+          // Authenticated appraisal output at the same seam as worker-selection tests.
+          return { tls: "a".repeat(64), hpke: "b".repeat(64), publicBuild: {} as any,
+            security: { ...direct, host: host === hosts[0] ? 2 : 1, gpu: host === hosts[0] ? 1 : 2, observed: [host] } };
+        }),
+      }],
+    });
+    await integration.initializeCatalog();
+    const result = await integration.provider.streamSimple(gatewayModel, normalizeContext({ messages: [{ role: "user", content: "synthetic", timestamp: 1 }] }), { apiKey: "synthetic-key" }).result();
+    assert.equal(result.errorMessage, "TEE_POLICY_ROUTE_REJECTED");
+    assert.equal(inference, 0);
+    assert.deepEqual(appraised.sort(), [...hosts].sort());
+    const report = integration.getReport();
+    const rejected = report.routeDecisions!.find(route => route.route === "tinfoil-gateway")!;
+    assert.equal(rejected.accepted, false); assert.equal(rejected.picked, false);
+    assert.deepEqual(rejected.security, { ...direct, route: "tinfoil-gateway", gpu: 2, observed: [hosts[1]!] });
+    assert.match(rejected.reason, /gpu level 2 exceeds gpu=verified/);
+    const status = formatProviderReport(report);
+    assert.match(status, /tinfoil-gateway: A1 H1 G2 X2 B3 S3/);
+    assert.match(status, /gpu level 2 exceeds gpu=verified/);
+    assert.equal(status.includes("tinfoil-direct:"), false);
+  } finally { globalThis.fetch = originalFetch; }
 });
