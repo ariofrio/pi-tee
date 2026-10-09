@@ -1,280 +1,132 @@
-# Confidential-inference providers vs. the pi-tee security model
+# Confidential-inference ecosystem survey
 
-Survey date: 2026-10-08; security-model ratings re-verified 2026-10-09. [Current model](security-model.md).
+**Evidence window: 2026-10-08–09; reconciled against merged pi-tee main fa5e154.** This is the canonical ecosystem comparison using the [security model](security-model.md). It combines preserved source investigations and scoped later adapter records; no new live probe or remote product review was performed for this restructuring. Installed behavior lives in the [provider guide](providers.md).
 
-## Ratings under the security model
+The [original survey](evidence/providers/2026-10-08-survey.md) retains its R1–R8 bar, every verdict, provider source link and rule-out. The [anonymous verification](evidence/providers/2026-10-09-anonymous-verification.md) retains pinned sources, bindings and unresolved cells. † means conservative unresolved evidence, not an observed regression. All levels concern the specified path, never an entire vendor/fleet.
 
-Each provider is rated on the model's four axes, under its "verified only" rule: anything a client can't check counts as the worst level it could be. "Tightest policy" is the strictest pi-tee policy that would admit the provider if pi-tee had an adapter for it: the position, plus every level stricter than that position's defaults. Every cell was re-verified on 2026-10-09 against current source at pinned commits and live probes with our own nonces ([verification report](provider-ratings-verification.md)). Cells marked † are unresolved: the value shown is the conservative one, not an observed failure.
+## Implemented adapters
 
-| Provider | A (code) | H (host CPU) | G (GPUs) | X (egress) | Tightest policy | Deciding facts |
-| --- | --- | --- | --- | --- | --- | --- |
-| **Tinfoil direct** (baseline) | A1 | H1 | G1 | X2 | `public-builds,egress=metadata` | The levels pi-tee's admission requires; workers below them are skipped. |
-| **Privatemode** | **A2** | H3 | G3 | X3 | `trust-provider-and-host,code=fixed-private` | Unsigned, unlogged manifest, but changes are visible (A2). Workers checked by the Coordinator, not the client (H3). GPU checks in-guest only (G3). |
-| **Confidential AI** | A3 | H1 | G3 | X3 | `trust-provider-and-host,host=current` | The operator key, or the host via an unencrypted disk, can get cluster-admin and read pod memory; fixes are planned ([threat model](https://github.com/confidential-dot-ai/confidential-inference/blob/0f4bcba628b5af3f2572ab97f8cb5a9ec7dd926b/docs/threat-model.md#L155-L197)) (A3). Nonce and key binding verified, `UpToDate` (H1). No raw GPU evidence (G3). |
-| **Chutes** | A3 | **H1** | G3 | X3 | `trust-provider-and-host,host=current` | Chutes' keys admit images at runtime (A3). With an API key: nonce and instance key bound, `UpToDate` (H1). Serving GPUs unproven (G3). |
-| **Cohere** Model Vault | A3† | H3 | G3 | X3 | `trust-provider-and-host` | Tag-referenced images; runtime closure unresolved (A3†). No client nonce (H3). |
-| **Phala / RedPill** | A3 | H3 | G3 | X3 | `trust-provider-and-host` | Upstreams change at runtime via admin API (A3). No client nonce (H3). Empty GPU evidence (G3). |
-| **Venice**, NEAR-backed models | A3 | H2 | G3 | X3 | `trust-provider-and-host,host=outdated-firmware` | Inherits NEAR's runtime deployment (A3). The sampled NEAR worker's quote is nonce-bound but `OutOfDate` (H2). |
-| **Venice**, Phala-backed models | A3 | H3 or out of scope | G3 | X3 | `trust-provider-and-host`, if in scope | A fresh gateway quote, but no CPU or GPU evidence for the serving machine. |
-| **Nillion nilAI** | A3 | H3 | G3 | X3 | `trust-provider-and-host` | Runtime inputs aren't pinned (A3). The client's nonce never reaches the attester (H3). |
-| **Secret AI** | A3† | H3 | G3 | X3 | `trust-provider-and-host` | Serving closure unresolved (A3†). Static CPU evidence, no caller nonce (H3). |
-| **CONFSEC / OpenPCC** | A3† | H3 | G3 | X3 | `trust-provider-and-host` | Runtime and key closure not reconstructed (A3†). Nonce from the node's own TPM (H3). |
-| **Prem AI** | A3 | H3† | G3 | X3 | `trust-provider-and-host` | Image pins empty by default (A3). Nonce probe refused (H3†). Serving GPUs unproven (G3). |
-| **Cocoon** | A3 | H3 | G3 | X3 | `trust-provider-and-host` | Runtime config outside the measurement (A3). No caller nonce (H3). GPUs not verified remotely (G3). |
-| **io.net, NanoGPT** | — | — | — | — | Out of scope | Requests reach a plaintext gateway, with no client-verifiable CPU evidence bound to the connection. |
-| **Maple, OpenGradient** | — | — | — | — | Out of scope | Real AWS Nitro attestation (Maple's carries our nonce), but Nitro is outside the model's TDX and SEV-SNP scope. |
-| **Hyperscalers, Apple, Google, others** | — | — | — | — | Out of scope | No third-party chat API with client evidence; see the [rule-outs](#ruled-out-quickly). |
-
-- **Every in-scope provider lands at `trust-provider-and-host`,** the same position as NEAR. None reaches `public-builds` or the positions in between.
-- **Within that position, Privatemode ranks first** under the code-first tie-break: it's the only A2. Confidential AI and Chutes come next, with H1 for their checked paths.
-- **Privatemode could reach A1 without Edgeless's help:** pin a manifest you rebuilt from `privatemode-public` under Nix. That's A1 at B1 and S1, a stronger build-integrity point than Tinfoil direct's B3, if the rebuild covers every plaintext-handling component (unverified). Its H3 and G3 remain, so the tightest policy would be `public-builds-trust-host`. The rebuild needs Linux x86-64 and Nix per release; pi-tee's CI could do it, but that's B2.
-- **What would move Privatemode up:**
-  - To A1: signed manifests published through a named public workflow.
-  - To fresh host checks: per-worker evidence reaching the client.
-  - To G1: raw per-GPU evidence bound to the worker quote, with a multi-GPU mode check.
-- **Changes from the 2026-10-08 ratings:**
-  - Prem dropped from H1 to H3†. Chutes dropped to H3† too, then was settled at H1 with an API key on 2026-10-09.
-  - CONFSEC dropped from A2 to A3†.
-  - Cocoon was resolved to A3 and H3.
-  - Venice was split by upstream.
-- **Settling the † cells** needs credentialed or provider-side evidence; the verification report lists what would settle each.
-
-## Original bar: the public-build requirements
-
-Bar: requirements R1–R8 below, derived from the [serving-path requirements](design.md#serving-path-requirements) (fresh nonce-bound TDX/SEV-SNP evidence; every plaintext component measured and authorized by public signed releases or checkable reproducible builds; no post-attestation code changes; per-boot confined keys; locally verifiable per-GPU SPT/MPT evidence; connection bound to the attested key; no egress/logging/remote code; an API Pi can call). Baseline: Tinfoil direct workers for Gemma 4 31B, DeepSeek V4.1 Flash and GLM-5.3 meet it ([contract](https://github.com/ariofrio/pi-tee/blob/520f0ae/docs/tinfoil-public-profile.md)). NEAR cannot ([assessment](https://github.com/ariofrio/pi-tee/blob/520f0ae/docs/nearai-status.md)).
-
-**Result: no other provider qualifies, and none can qualify through client-side work alone.** Every provider below has at least one confirmed failure that requires a provider-side change. The four nearest misses are Privatemode, Confidential AI (formerly Lunal), Chutes and Cohere Model Vault Encrypted.
-
-### Verdict table
-
-"Confirmed" means the failure was seen in source at a pinned commit, live evidence fetched with my own nonce, or the provider's own security documentation.
-
-| Provider (product) | TEE-served models seen | Verdict | Decisive failure(s), confirmed | Adapter effort if fixed |
-| --- | --- | --- | --- | --- |
-| **Privatemode** (Edgeless) | GLM-5.3, GLM-5.3-Flash (4×B200, TDX), gpt-oss-120b (1×H100, SNP), plus OCR/embedding/speech models | Cannot qualify. Nearest miss. | **R5**: GPU evidence is verified only inside the worker and never reaches the client. The in-guest verifier ignores the protected-PCIe and multi-GPU mode fields on the 4×B200 workers. **R2**: the manifest is fetched unsigned from Edgeless's CDN. The default proxy adopts whatever Edgeless publishes, and the only alternative is a full Nix rebuild. | M. Go/WASM SDK and Contrast verifier exist. |
-| **Confidential AI** (ex-Lunal, api.confidential.ai) | DeepSeek-V4-Flash-0731 (Blackwell, TDX) | Cannot qualify yet. Nearest miss by design. | **R3**: its own threat model says a holder of the production operator key's cluster-admin credential "can exec into a pod inside the TEE … read the workload's memory". The control-plane disk is unencrypted. **R5**: the GPU check is an in-node gate, and "raw NVIDIA evidence does not reach the relying party". | M |
-| **Chutes** (TEE + E2EE) | ~30 public "-TEE" chutes (GLM-5.x, DeepSeek V3.2/V4-Flash, Kimi K2.6/K3, Qwen3.x, Gemma-4-31B…) | Cannot qualify | **R2/R3**: the quote covers only the sek8s VM. Chute images are admitted at runtime when signed with Chutes' own cosign keys, which are fetched at boot under a root key held by an "external RSA signer". **R5**: H200 fleets run in Protected PCIe (PPCIe) mode. | M |
-| **Cohere** (Model Vault Encrypted) | Command/Embed/Rerank/Qwen3-4B vaults (1×H100, GCP TDX or Azure SNP) | Cannot qualify | **R2**: all 71 published measured policies download weights at runtime with `s5cmd cp s3://…` and no integrity check. Some pin the engine image by tag only. **R1**: the Passport model has no client nonce. **R5**: GPU evidence is appraised by Intel Trust Authority, not locally. | L |
-| **Phala Private AI / RedPill** | phala/* (GLM-5.3, Qwen3.x, Gemma-4 variants…) plus routed NEAR/Chutes/Tinfoil/SecretAI | Cannot qualify | **R6/R2**: one decrypting gateway serves all four domains. Its upstreams are replaced at runtime via an admin `PUT /v1/admin/upstreams` and pulled every 300 s from `service.redpill.ai`. **R4**: the gateway's E2EE and receipt keys are dstack-KMS app-wide keys. | n/a |
-| **Venice** (TEE/E2EE models) | e2ee-* models | Cannot qualify | Each model is backed by either NEAR or Phala's gateway. My probe of `e2ee-qwen3-5-122b-a10b` returned `tee_provider: near-ai` with a NEAR compose-manager log (**R3**) and upstream `Qwen3.6-35B-A3B-FP8`. Per teep, 10 of 13 TEE models go through Phala's gateway (**R6**). | n/a |
-| **Cocoon** (Telegram/TON) | Set by the team-run TON contract | Cannot qualify | **R5**: "GPU … Not explicitly verified by remote parties". The team-run proxy decrypts traffic, and the allowed images come from a team-managed contract. | n/a |
-| **Nillion nilAI** | nilAI models (subscription) | Cannot qualify | **R1**: the client nonce is echoed back but never sent to the attester, so the report is static. Images use `:latest` tags. | n/a |
-| **Secret AI / SecretVM** | Secret AI models; also a RedPill upstream | Cannot qualify | **R1**: `/cpu` takes no client nonce. `report_data` holds the TLS key hash and a GPU nonce the VM picks. | n/a |
-| **Confident Security CONFSEC / OpenPCC** | Small models (README example `qwen3:1.7b`) | Cannot qualify | **R1**: the TEE nonce is the hash of the node's own TPM quote, not a client challenge. **R5**: the GPU is accepted via an NRAS JWT. **R2**: releases are signed by workflows in `confidentsecurity/T`, which is not public. | n/a |
-| **Prem AI** (Confidential API) | Chat/vision/audio models | Cannot qualify | **R2**: "the shipped golden policy leaves image measurements unpinned", and no public release measurements exist. **R5**: NVIDIA token verdicts. **R6**: "does not expose a complete route-assurance profile". | n/a |
-| **io.net** (Confidential Inference) | Attestation-flagged models | Cannot qualify | **R6**: prompts are POSTed in plaintext to `api.intelligence.io.solutions` with no client encryption. CPU evidence is present only "when available". | n/a |
-| **NanoGPT** (TEE models) | TEE/* models | Cannot qualify | **R6**: TLS to NanoGPT only, with no E2EE or REPORTDATA key binding. Its docs say plaintext may exist at gateway layers. | n/a |
-| **Maple AI / OpenSecret** | Privatemode/Tinfoil backends | Cannot qualify | **R1/R6**: the decrypting hop is an AWS Nitro enclave, and backend attestation is not exposed. | n/a |
-| **OpenGradient** (tee-gateway) | OpenAI/Anthropic/Gemini/xAI | Cannot qualify | **R1/R6**: an AWS Nitro router that forwards plaintext to unattested commercial APIs. | n/a |
-| **Azure** (AI Confidential Inferencing) | Whisper only (preview) | Cannot qualify | **R8**: no chat LLM. Key release is Microsoft-operated. | n/a |
-| **AWS** (Bedrock "Mantle") | Bedrock models | Cannot qualify | **R1/R5**: NitroTPM attestation is used internally only. There is no TDX/SNP or GPU evidence for clients. | n/a |
-| **Google** (Private AI Compute) / **Apple** (PCC) | Google/Apple first-party features | Cannot qualify | **R8**: no third-party HTTP API. PCC developer access goes through the Foundation Models framework on Apple OSes. | n/a |
-| **Anthropic, OpenAI, Meta** | — | No product | Anthropic has research only. I found no OpenAI or Meta third-party confidential API. | n/a |
-| Other names checked | — | No attested inference API (see the [rule-outs](#ruled-out-quickly)) | Targon, Super Protocol, Atoma, Oasis ROFL, iExec, Marlin, Fireworks, Together, Baseten, EU clouds, Proton Lumo, Duck.ai, Brave Leo, Routstr, Lucid, ConfidentialMind, Opaque/Fortanix/Anjuna, accompio, Volcano Engine. | n/a |
-
-## What the near misses would need
-
-Each item below is a provider change unless marked as a pi-tee option.
-
-- **Privatemode.**
-  - Expose per-GPU NVIDIA evidence bound to the worker quote. Today the client attests only the Coordinator.
-  - Add a protected-mode (MPT) check to `attestation-agent`.
-  - Publish manifests through a named public signed workflow.
-  - Pi-tee options, both policy changes rather than client work: (a) accept measured in-guest GPU verification; (b) authorize manifests through a pi-tee-run reproducible rebuild workflow that signs reproduced manifest digests. Reproduction needs Linux x86-64, Nix and model-disk rebuilds, which a Pi client cannot do per release.
-  - Under those relaxations, the remaining blocker is still the unchecked multi-GPU mode on the GLM workers. gpt-oss-120b on a single H100 would be the first candidate.
-- **Confidential AI.**
-  - Remove the operator key, which they say is planned and would pin RTMR3 to zero.
-  - Encrypt the control-plane disk.
-  - Gate env vars and mounts.
-  - Expose raw per-GPU evidence in receipts.
-- **Chutes.** Bind the chute image digest (and a public build provenance) into the quote or report_data, stop runtime-fetched signing keys, and move H200 fleets off PPCIe.
-- **Cohere.** Pin model weights (dm-verity or hashes) and image digests in the measured policy, and offer a client-nonce (background-check) attestation mode with raw CPU and GPU evidence.
-
-## Per-provider evidence
-
-Every attestation probe used my own random nonce, and I sent no inference requests and no credentials.
-
-### Privatemode (Edgeless Systems)
-
-Sources: [privatemode-public@753fa3f](https://github.com/edgelesssys/privatemode-public/tree/753fa3fe1f2321c71743dda54f2ebbb160f89e14) (v1.58.0) and [contrast@2a27ac7](https://github.com/edgelesssys/contrast/tree/2a27ac7638b085e00b4061711367e9f9146cea7b) (v1.24.1, the version pinned in `go.mod`). Docs: [overview](https://docs.privatemode.ai/security/attestation/overview/), [manifest](https://docs.privatemode.ai/security/attestation/manifest/), [evidence](https://docs.privatemode.ai/security/attestation/attestation-evidence/), [encryption](https://docs.privatemode.ai/security/encryption/).
-
-How it works: the client-side proxy or SDK attests the Contrast Coordinator. The Coordinator attests every pod (secret service and workers) against a manifest. The client runs an HPKE (X25519MLKEM768) key exchange with the secret service, which releases the prompt key to manifest-admitted workers. The API gateway sees only AES-GCM ciphertext.
-
-| Req | Status | Evidence |
+| Adapter | Scope and result | Evidence |
 | --- | --- | --- |
-| R1 | Met (CONFIRMED) | 32-byte nonce in REPORT_DATA ([sdk/verify.go L151-198](https://github.com/edgelesssys/contrast/blob/2a27ac7638b085e00b4061711367e9f9146cea7b/sdk/verify.go#L151-L198)). `CheckRevocations=true` for SNP ([manifest.go L192](https://github.com/edgelesssys/contrast/blob/2a27ac7638b085e00b4061711367e9f9146cea7b/internal/manifest/manifest.go#L192)) and for TDX with collateral ([L291-292](https://github.com/edgelesssys/contrast/blob/2a27ac7638b085e00b4061711367e9f9146cea7b/internal/manifest/manifest.go#L291-L292)). Chip and PIID allow-lists apply. Only the Coordinator is attested by the client. |
-| R2 | **Fail** (CONFIRMED) | Coverage is good: the launch digest covers firmware, kernel, initrd and command line with the verity root; HOST_DATA/MRCONFIGID pins image digests and args; model disks use dm-verity roots passed as args. Authorization is the gap. `FetchManifest` GETs an unsigned `cdn.confidential.cloud/privatemode/v2/manifest.json` ([privatemode.go L204-229](https://github.com/edgelesssys/privatemode-public/blob/753fa3fe1f2321c71743dda54f2ebbb160f89e14/internal/oss/privatemode/privatemode.go#L204-L229)). The `.sig` and `.bundle` siblings return 404 (probe 2026-10-08). The repo has no `.github` workflows. In default mode the proxy "adopts the manifest currently published by Edgeless Systems" ([docs](https://docs.privatemode.ai/security/attestation/manifest/)). |
-| R3 | Met (CONFIRMED) | The proxy rejects any Coordinator whose history is not exactly one byte-equal manifest ([attest.go L68-73](https://github.com/edgelesssys/privatemode-public/blob/753fa3fe1f2321c71743dda54f2ebbb160f89e14/internal/oss/attest/attest.go#L68-L73)). A manifest change yields a new Mesh CA, and seed recovery mints a fresh random mesh key ([seedengine.go L105-108](https://github.com/edgelesssys/contrast/blob/2a27ac7638b085e00b4061711367e9f9146cea7b/internal/seedengine/seedengine.go#L105-L108)). |
-| R4 | Met at deployment granularity | The secret service's certificate must chain to the pinned Mesh CA ([secretclient.go L102-117](https://github.com/edgelesssys/privatemode-public/blob/753fa3fe1f2321c71743dda54f2ebbb160f89e14/internal/oss/secretclient/secretclient.go#L102-L117)). The prompt key is shared by all manifest-admitted workers for one hour. That is weaker than per-instance confinement, but not NEAR-style app-wide derivation. |
-| R5 | **Fail** (CONFIRMED) | GPU verification runs only in-guest ([attestation-agent/main.go L96-190](https://github.com/edgelesssys/privatemode-public/blob/753fa3fe1f2321c71743dda54f2ebbb160f89e14/attestation-agent/main.go#L96-L190)). `Verify` checks the nonce, driver and VBIOS allow-lists and the signature ([attestation.go L212-235](https://github.com/edgelesssys/privatemode-public/blob/753fa3fe1f2321c71743dda54f2ebbb160f89e14/attestation-agent/internal/attestation/attestation.go#L212-L235)). `ProtectedPcieStatus` and `SysEnableStatus` are defined ([L47](https://github.com/edgelesssys/privatemode-public/blob/753fa3fe1f2321c71743dda54f2ebbb160f89e14/attestation-agent/internal/attestation/attestation.go#L47), [L53](https://github.com/edgelesssys/privatemode-public/blob/753fa3fe1f2321c71743dda54f2ebbb160f89e14/attestation-agent/internal/attestation/attestation.go#L53)) but never read. The GLM workers use 4×B200 with TP=4 ([deployment.yaml L571](https://github.com/edgelesssys/privatemode-public/blob/753fa3fe1f2321c71743dda54f2ebbb160f89e14/deployment.yaml#L571), [L626](https://github.com/edgelesssys/privatemode-public/blob/753fa3fe1f2321c71743dda54f2ebbb160f89e14/deployment.yaml#L626)). The default OCSP policy accepts "unknown" and up to 48 h of "revoked" ([docs](https://docs.privatemode.ai/security/attestation/certificate-revocation/)); that part is client-tightenable. |
-| R6 | Met | The key is bound via the attested Mesh CA. Unencrypted request fields are model, stream, stream_options, max_tokens, max_completion_tokens and n ([docs](https://docs.privatemode.ai/security/encryption/)). |
-| R7 | Mostly met | `HF_HUB_OFFLINE=1`, a uid-based `restrict-vllm-network.py`, and no `--trust-remote-code`. Patches from unmeasured ConfigMaps are sha256-checked inside the measured command. However, inference-proxy exports OTLP traces and usage data to unattested services ([deployment.yaml L290-291](https://github.com/edgelesssys/privatemode-public/blob/753fa3fe1f2321c71743dda54f2ebbb160f89e14/deployment.yaml#L290-L291)), so their content is trusted to be metadata. |
-| R8 | Met | OpenAI-compatible plus `/v1/messages` through the local proxy or the JS/WASM SDK. Edgeless already ships a [pi devcontainer](https://github.com/edgelesssys/privatemode-demo-devcontainer). The hosted [proxyless API](https://docs.privatemode.ai/api/proxyless-api/) decrypts server-side and is excluded. |
+| Tinfoil public direct / billing relay | Conditional A1/H1/G1/X2/B3/S3 baseline; weaker authenticated hardware levels require admitting thresholds. No claim all workers pass | [Serving contract](contracts/tinfoil-public-builds.md), [client qualification](evidence/client/implementation-validation.md#security-model-validation), [gateway qualification](evidence/tinfoil/gateway-validation.md#validation) |
+| NEAR direct / SDK gateway | A3/G3/X3; H1/H2 per fresh checked recipient. Shared custody and runtime deployment remain provider-controlled | [Source/KMS investigation](evidence/nearai/runtime-key-custody.md), [credentialed multi-model discovery](near-direct-discovery.md#live-validation-2026-10-09) |
+| Chutes instance-key route | A3/G3/X3; fresh H1/H2 once credentialed key discovery allows nonce/key commitment verification. No complete serving-GPU/software closure | [Credentialed validation and retained rejected rows](chutes-validation.md), [per-runtime sanitized receipts](validation/chutes/node-attestation.json), [appraisal code](../packages/chutes/src/evidence.ts) |
+| Privatemode mesh | A2/H3/G3/X3 under exact manifest admission; fresh Coordinator does not make all workers fresh | [Credentialed SDK/source validation](evidence/providers/privatemode-validation.md), [manifest modes and custody](providers/privatemode.md) |
 
-Live manifest (2026-10-08, last-modified 2026-10-02): 8 policies (coordinator, secret-service, workloads glm-5-3, glm-5-3-flash, gpt-oss-120b, deepseek-ocr-2, whisper-qwen3-voxtral, and unstructured-api), 4 SNP chip IDs and 3 TDX PIIDs. `/privatemode/v1/attest` requires an API key (401), so I did not probe it. Pricing: [docs.privatemode.ai/pricing](https://docs.privatemode.ai/pricing/). GLM-5.3 costs €1.55 / €5.74 per million input/output tokens; gpt-oss-120b costs €0.20 / €0.65.
+Tinfoil public workers are the sole implemented public-code baseline. Other implemented paths need explicit provider/host trust. Privatemode's A2 ranks ahead of A3 under code-first route ordering, without upgrading its hardware or handling.
 
-### Confidential AI (formerly Lunal)
+## Prospective paths
 
-Source: [confidential-inference@0f4bcba](https://github.com/confidential-dot-ai/confidential-inference/tree/0f4bcba628b5af3f2572ab97f8cb5a9ec7dd926b).
+These are dated investigated paths without installed adapters. The linked record supplies exact source pins and settlement conditions. H1 below means only the returned verified CPU/key closure, not established routing to every eventual plaintext recipient.
 
-The design is close to Tinfoil's:
+| Provider / path | Dated conservative A/H/G/X | Deciding scope / evidence |
+| --- | --- | --- |
+| Confidential AI | A3 / H1* / G3 / X3 | [Operator/state-disk access and sampled front-door + six receipts](evidence/providers/2026-10-09-anonymous-verification.md#confidential-ai); actual request routing/mounts/workload use expressly unproven |
+| Cohere Model Vault | A3† / H3 / G3 / X3 | [Runtime executable/key closure unresolved; Passport lacks client nonce](evidence/providers/2026-10-09-anonymous-verification.md#cohere-model-vault) |
+| Phala / RedPill | A3 / H3 / G3 / X3 | [Mutable upstream routing and incomplete downstream evidence](evidence/providers/2026-10-09-anonymous-verification.md#phala--redpill); legacy fresh gateway quote cannot upgrade the closure |
+| Venice, NEAR sample | A3 / H2 / G3 / X3 | [Nonce-bound OutOfDate worker sample](evidence/providers/2026-10-09-anonymous-verification.md#venice); no same-connection TLS appraisal in that probe |
+| Venice, Phala sample | A3 / H3 or out of scope / G3 / X3 | [Gateway quote lacks complete serving-worker evidence](evidence/providers/2026-10-09-anonymous-verification.md#venice) |
+| Nillion nilAI | A3 / H3 / G3 / X3 | [Runtime inputs and nonce not passed to attester](evidence/providers/2026-10-09-anonymous-verification.md#nillion-nilai) |
+| Secret AI / SecretVM | A3† / H3 / G3 / X3 | [Serving closure unresolved; static CPU resource/server GPU nonce](evidence/providers/2026-10-09-anonymous-verification.md#secret-ai--secretvm) |
+| CONFSEC / OpenPCC | A3† / H3 / G3 / X3 | [Signed root exists, runtime/key closure unresolved; node TPM nonce](evidence/providers/2026-10-09-anonymous-verification.md#confsec--openpcc) |
+| Prem AI | A3 / H3† / G3 / X3 | [Empty default image pins; valid-width nonce probe 403](evidence/providers/2026-10-09-anonymous-verification.md#prem-ai); 403 is not a firmware verdict |
+| Cocoon ordinary proxy route | A3 / H3 / G3 / X3 | [Attested proxy plaintext/runtime-authority gap; key-only CPU quote](evidence/providers/2026-10-09-anonymous-verification.md#cocoon-proxy-plaintext-attestation-and-authority); optional inner encryption needs separate worker proof |
+| io.net / NanoGPT documented gateways | Out of scope | [Public plaintext gateway boundary not closed by available CPU/key evidence](evidence/providers/2026-10-09-anonymous-verification.md#out-of-scope-rows-and-the-broad-group) |
+| Maple / OpenGradient | Outside supported CPU model | [Real Nitro evidence does not supply a TDX/SNP floor; external inference closure separate](evidence/providers/2026-10-09-anonymous-verification.md#out-of-scope-rows-and-the-broad-group) |
+| Hyperscalers, Apple, Google and other rule-outs | Broad universal absence claim unresolved | [Named product evidence and limits](evidence/providers/2026-10-09-anonymous-verification.md#out-of-scope-rows-and-the-broad-group), [original bounded search](evidence/providers/2026-10-08-survey.md#ruled-out-quickly); no newly verified absence/availability/pricing claim |
 
-- Every node is a TDX CVM booted from a measured ConfOS image.
-- A static c8s allowlist is baked into that image.
-- Release bundles are Sigstore-signed by `.github/workflows/release-bundle.yml`.
-- `/attestation` receipts are nonce-bound.
-- ACME TLS keys are generated in the TEE and bound to the attestation.
-- Weights sit on a dm-verity volume.
+A3/H3/G3/X3 would require `trust-provider-and-host` if an adapter established in-scope CPU evidence. A3/H2/G3/X3 additionally admits `host=outdated-firmware`; a complete H1 path would admit `host=current`. These are hypothetical thresholds, not implemented product support.
 
-Two blockers are confirmed by the provider's own [threat model](https://github.com/confidential-dot-ai/confidential-inference/blob/0f4bcba628b5af3f2572ab97f8cb5a9ec7dd926b/docs/threat-model.md):
+## Reconciled conclusions
 
-- **R3:** "a holder of the cluster-admin credential can exec into a pod inside the TEE. That holder can then read the workload's memory" ([L170-180](https://github.com/confidential-dot-ai/confidential-inference/blob/0f4bcba628b5af3f2572ab97f8cb5a9ec7dd926b/docs/threat-model.md#L170-L180)). The production operator key can obtain that credential (`system:masters`) and write CDS secrets. The control-plane disk is plain ext4, so "a party with read access to the virtual disk can mint a cluster-admin certificate" ([L186-195](https://github.com/confidential-dot-ai/confidential-inference/blob/0f4bcba628b5af3f2572ab97f8cb5a9ec7dd926b/docs/threat-model.md#L186-L195)). The allowlist gates only image digest and argv, not env vars or mounts.
-- **R5:** "The verdict stays inside the node and raw NVIDIA evidence does not reach the relying party" ([L130-137](https://github.com/confidential-dot-ai/confidential-inference/blob/0f4bcba628b5af3f2572ab97f8cb5a9ec7dd926b/docs/threat-model.md#L130-L137)). NRAS is listed as trusted.
+- **Chutes H:** anonymous evidence lacked the ML-KEM key needed to verify `SHA256(nonce_hex + key_base64)`; the key endpoint returned 401. H3† in that record was an unresolved freshness check, not proof of a stale quote. Later credentialed adapter evidence authenticates the missing binding and locally rates each accepted instance H1/H2. The original anonymous verdict remains intact. Earlier H200/PPCIe observations do not describe the later decoded Blackwell/MPT sample; G3 remains because complete serving coverage is unproven.
+- **Privatemode reproduction:** Nix-rebuilding a subset does not establish an A1 plaintext/key closure, authenticated public release identity or review approval. A future full solution must also establish an X limit. With H3/G3 and X2, an illustrative policy would be `public-builds-trust-host,egress=metadata`; X1 cannot be assumed. B1/B2 reproduction and S1/S2 review admission are unsupported in this implementation. The earlier “could reach A1 without provider help” proposal remains historical/unverified.
+- **Remote GPU verdicts:** NRAS is an allowed explicit service-trust choice under the current model. Signed overall/device authenticity, freshness, complete serving count, CPU binding, protected mode, reference/revocation and floors still apply. A generic JWT or an in-guest-only result cannot establish those properties; using NRAS alone is not a categorical disqualification. [Current shared checks](../packages/core/src/nras.ts), [GPU rating](../packages/core/src/gpu-appraisal.ts).
+- **Model weights:** downloading unpinned data-only weights does not automatically make code A3. Executable loaders/assets, mutable configuration and key custody decide the code closure. Cohere/OpenPCC/Secret AI remain unresolved on those grounds; the original weight rationale is not retained as a current rule.
+- **Old strict bar:** its no-egress/no-log/local-only-GPU requirements and absolute “no other provider can qualify” conclusion describe the original investigation. Current graded admission permits X2 metadata and explicitly trusted hardware gaps; no stronger public-build qualification is inferred from that change.
 
-Operator-key removal is "planned". This is the provider to re-check first. API: OpenAI-compatible at `api.confidential.ai` with an API key.
+## Evidence access and maintenance
 
-### Chutes
+The anonymous record refers to private receipts without public stable receipt IDs/digests or retrieval instructions. Its pinned source links are independently inspectable; unlinked raw probes cannot be fully reproduced from the repository. No receipt IDs or verification were invented here. New records must follow the [evidence requirements](evidence/README.md#recording-and-maintaining-observations), preserve failed rows, and name exact commit/dependencies, population and authenticated versus decoded fields. Revisit applicability after adapter, authority, floor or SDK changes; use a fresh scoped record to change a qualification.
 
-Sources: [sek8s@04f628b](https://github.com/chutesai/sek8s/tree/04f628bd16c0def0fc9de10455c05cf75eaa0190), [chutes-api@3b5609f](https://github.com/chutesai/chutes-api/tree/3b5609f42f84e29dea374382ef1fa95b0fda329c), and the [E2EE post](https://chutes.ai/news/end-to-end-encrypted-ai-inference-with-post-quantum-cryptography).
+Written by Codex.
 
-Probe: `GET api.chutes.ai/chutes/<GLM-5.2-TEE>/evidence?nonce=<mine>` needs no auth and returned 4 instances × 8 Blackwell GPUs with identical MRTD and RTMRs.
+## Earlier investigation links
 
-Positive (CONFIRMED):
+Retained fragments lead to the preserved survey, without a second current specification.
 
-- Each chute generates a per-instance ML-KEM-768 key at startup.
-- The chute asks for a quote whose `report_data` is SHA-256(nonce‖pubkey) followed by the proxy TLS SPKI hash ([tdx.py L60-92](https://github.com/chutesai/sek8s/blob/04f628bd16c0def0fc9de10455c05cf75eaa0190/src/sek8s/sek8s/providers/tdx.py#L60-L92)).
-- The API relays only ciphertext.
+<a id="ratings-under-the-security-model"></a>
 
-Failures (CONFIRMED):
+- [Ratings under the security model](evidence/providers/2026-10-08-survey.md#ratings-under-the-security-model)
 
-- **R2/R3, image admission:** the measurement covers the VM, not the chute image. Images are admitted by an in-guest cosign check against Chutes' validator registry `localregistry.chutes.ai:30500` and `docker.io/parachutes/*` ([dual-cosign-keys.md L10-31](https://github.com/chutesai/sek8s/blob/04f628bd16c0def0fc9de10455c05cf75eaa0190/docs/specs/dual-cosign-keys.md#L10-L31)).
-- **R2/R3, signing keys:** since 2026-05 those keys come from `GET /servers/signing-keys`, authorized by a root key "held by an external RSA signer" ([dynamic-signing-keys.md L4-61](https://github.com/chutesai/sek8s/blob/04f628bd16c0def0fc9de10455c05cf75eaa0190/docs/specs/dynamic-signing-keys.md#L4-L61)).
-- **R2, official verifier:** it never checks MRTD or the RTMRs ([tee-verification.md](https://github.com/chutesai/chutes-api/blob/3b5609f42f84e29dea374382ef1fa95b0fda329c/docs/tee-verification.md)).
-- **R2, closed components:** Chutes states that "some core security components are closed-source".
-- **R5:** H200 deployments run "Multi-GPU Mode: Protected PCIe" ([tee-gpu-vm-guide.md L27-47](https://github.com/chutesai/sek8s/blob/04f628bd16c0def0fc9de10455c05cf75eaa0190/docs/tee-gpu-vm-guide.md#L27-L47)).
+<a id="original-bar-the-public-build-requirements"></a>
 
-This matches the independent [teep sek8s analysis](https://github.com/13rac1/teep/blob/d9f59d839eb887b50f5afd234e192eac5ec45a2d/docs/attestation_gaps/sek8s_integrity.md). Pricing: [chutes.ai/pricing](https://chutes.ai/pricing).
+- [Original bar: the public-build requirements](evidence/providers/2026-10-08-survey.md#original-bar-the-public-build-requirements)
 
-### Cohere Model Vault Encrypted
+<a id="verdict-table"></a>
 
-Docs: [attestation](https://docs.cohere.com/docs/model-vault/encrypted/attestation), [verifying deployment](https://docs.cohere.com/docs/model-vault/encrypted/verifying-deployment). Ledger: [integritee@b3b6ca9](https://github.com/cohere-ai/integritee/tree/b3b6ca981b2ad13ef0c59f00baff9504dee52850). Its `release-policy.yaml` publishes Sigstore-signed in-toto releases of Kata policies and measurements; v0.0.1a76 is dated 2026-10-08.
+- [Verdict table](evidence/providers/2026-10-08-survey.md#verdict-table)
 
-There are 71 targets: 43 on GCP `a3-highgpu-1g` (TDX) and 28 on Azure `NCC40ads_H100_v5` (SNP with a vTPM paravisor). Each VM's OHTTP key is bound in its evidence.
+<a id="what-the-near-misses-would-need"></a>
 
-- **R2:** every measured initdata runs `s5cmd cp s3://us-east-01a/cohere-baselines/<model>/* /opt/ml/model` with injected credentials ([example L2053-2059](https://github.com/cohere-ai/integritee/blob/b3b6ca981b2ad13ef0c59f00baff9504dee52850/attestation-policy/initdata/d5e0c5f08906a99e8ddcd8b99a08d5d347a066d231da4a51df3138a7e5c38e26022b913b064b8db51a263508c5bc7c05.toml#L2053-L2059)). None of the 71 files contains a checksum or verity step. Five references use the proprietary `single-serving-cohere-all:v0.21.0-07212026` engine image by tag only.
-- **R1:** "the client does not run its own nonce challenge"; freshness comes from the lifetime of the Intel Trust Authority token.
-- **R5:** GPU evidence is appraised by Intel Trust Authority, not locally.
+- [What the near misses would need](evidence/providers/2026-10-08-survey.md#what-the-near-misses-would-need)
 
-Access is through enterprise single-tenant vaults, priced via sales.
+<a id="per-provider-evidence"></a>
 
-### Phala Private AI / RedPill
+- [Per-provider evidence](evidence/providers/2026-10-08-survey.md#per-provider-evidence)
 
-I probed `inference.phala.com/v1/aci/attestation` and `api.redpill.ai/v1/attestation/report?model=phala/gpt-oss-120b` with my nonce, without auth. Both returned the same gateway keyset (`sha256:ef8a03c0…`) from a single dstack-0.5.9 app (`fdb7a14e…`) that serves `tee.redpill.ai`, `inference.phala.com`, `api.redpill.ai` and `openrouter.phala.com`. The gateway is [private-ai-gateway@8d0a666](https://github.com/Dstack-TEE/private-ai-gateway/tree/8d0a666a2418898a8c823a9af49a634edd122a64), and `image_provenance` is `null`.
+<a id="privatemode-edgeless-systems"></a>
 
-- **Upstream control (R2/R6):** the measured compose configures `upstream_pull` from `https://service.redpill.ai/api/admin/gateway-upstreams/config` every 300 s. Upstreams are "managed at runtime via PUT /v1/admin/upstreams", which is an admin route in source ([src/http/app/mod.rs L27-30](https://github.com/Dstack-TEE/private-ai-gateway/blob/8d0a666a2418898a8c823a9af49a634edd122a64/src/http/app/mod.rs#L27-L30)).
-- **Plaintext in the gateway (R6):** Phala's own docs say "Plain TLS is visible inside the attested gateway", and E2EE also decrypts in the gateway ([trust boundary](https://docs.phala.com/phala-cloud/confidential-ai/confidential-model/trust-boundary)).
-- **Weaker downstream checks (R6):** the gateway's upstream verifiers accept NEAR, Chutes and SecretAI. GPU attestation is "supplemental", and model-weight provenance is "not generally proven" ([providers](https://docs.phala.com/phala-cloud/confidential-ai/confidential-model/providers)).
-- **App-wide keys (R4):** the E2EE and receipt keys are dstack-KMS derived (`aci/e2ee/v1`), so they are shared by every CVM of the app.
+- [Privatemode (Edgeless Systems)](evidence/providers/2026-10-08-survey.md#privatemode-edgeless-systems)
 
-Phala's own upstream workers are not directly reachable by clients. Phala Cloud GPU-TEE rental is self-operated infrastructure and out of scope.
+<a id="confidential-ai-formerly-lunal"></a>
 
-### Venice
+- [Confidential AI (formerly Lunal)](evidence/providers/2026-10-08-survey.md#confidential-ai-formerly-lunal)
 
-My probe of `api.venice.ai/api/v1/tee/attestation?model=e2ee-qwen3-5-122b-a10b&nonce=<mine>` (no auth) returned:
+<a id="chutes"></a>
 
-- `tee_provider: near-ai` with a NEAR `compose_manager_attestation` actions log, which inherits NEAR's R3 failure.
-- `upstream_model: Qwen/Qwen3.6-35B-A3B-FP8`.
-- `verified: True`, computed by Venice's server.
+- [Chutes](evidence/providers/2026-10-08-survey.md#chutes)
 
-Independent verifier teep reports that 10 of 13 Venice TEE models route through Phala's gateway, with "no CPU attestation of the machine that runs the model" ([venice_aci_gateway.md](https://github.com/13rac1/teep/blob/d9f59d839eb887b50f5afd234e192eac5ec45a2d/docs/attestation_gaps/venice_aci_gateway.md)).
+<a id="cohere-model-vault-encrypted"></a>
 
-### Cocoon (Telegram, TON)
+- [Cohere Model Vault Encrypted](evidence/providers/2026-10-08-survey.md#cohere-model-vault-encrypted)
 
-Source: [cocoon@9060ce5](https://github.com/TelegramMessenger/cocoon/tree/9060ce5b4b9892b4e2ec419c9e952ca06015f774).
+<a id="phala-private-ai--redpill"></a>
 
-- **R5:** "The GPU is verified by the VM itself during boot … Not explicitly verified by remote parties" ([architecture.md L112-117](https://github.com/TelegramMessenger/cocoon/blob/9060ce5b4b9892b4e2ec419c9e952ca06015f774/docs/architecture.md#L112-L117)).
-- **R6:** proxies terminate RA-TLS and "are operated by the COCOON team" ([L39](https://github.com/TelegramMessenger/cocoon/blob/9060ce5b4b9892b4e2ec419c9e952ca06015f774/docs/architecture.md#L39)).
-- **R2:** image and model hashes come from a root contract "currently managed by the COCOON team" ([L60](https://github.com/TelegramMessenger/cocoon/blob/9060ce5b4b9892b4e2ec419c9e952ca06015f774/docs/architecture.md#L60)). Builds are reproducible.
+- [Phala Private AI / RedPill](evidence/providers/2026-10-08-survey.md#phala-private-ai--redpill)
 
-The client runner accepts OpenAI `/v1/chat/completions` locally and needs TON payment channels.
+<a id="venice"></a>
 
-### Nillion nilAI
+- [Venice](evidence/providers/2026-10-08-survey.md#venice)
 
-Source: [nilAI@dc2e9b8](https://github.com/NillionNetwork/nilAI/tree/dc2e9b8549ba4fcb00f93614bf098eff47ebb12e).
+<a id="cocoon-telegram-ton"></a>
 
-- **R1:** `get_attestation_report(nonce)` GETs `http://nilcc-attester/v2/report` without the nonce, then returns `nonce=nonce` ([attestation/\_\_init\_\_.py L5-20](https://github.com/NillionNetwork/nilAI/blob/dc2e9b8549ba4fcb00f93614bf098eff47ebb12e/nilai-api/src/nilai_api/attestation/__init__.py#L5-L20)). The endpoint needs auth ([routers/private.py L73-96](https://github.com/NillionNetwork/nilAI/blob/dc2e9b8549ba4fcb00f93614bf098eff47ebb12e/nilai-api/src/nilai_api/routers/private.py#L73-L96)).
-- **R4:** the signing key is persisted to `private_key.key` and reused.
-- **R2:** compose uses `:latest` images.
+- [Cocoon (Telegram, TON)](evidence/providers/2026-10-08-survey.md#cocoon-telegram-ton)
 
-Access is by NIL-token subscription.
+<a id="nillion-nilai"></a>
 
-### Secret AI / SecretVM
+- [Nillion nilAI](evidence/providers/2026-10-08-survey.md#nillion-nilai)
 
-Verifier: [secretvm-verify@a5d0d7c](https://github.com/scrtlabs/secretvm-verify/tree/a5d0d7c21cceef8305dbbb0589cf10dabe7a2047).
+<a id="secret-ai--secretvm"></a>
 
-- **R1:** evidence comes from `https://<vm>:29343/{cpu,gpu,docker-compose}` with no caller nonce. The first half of `report_data` is the TLS SPKI hash and the second half is a GPU nonce the VM chooses ([vm.py L20-27, L215-347](https://github.com/scrtlabs/secretvm-verify/blob/a5d0d7c21cceef8305dbbb0589cf10dabe7a2047/python/src/secretvm/verify/vm.py#L215-L347)).
-- **R5:** GPU checks go through NVIDIA's remote NRAS.
+- [Secret AI / SecretVM](evidence/providers/2026-10-08-survey.md#secret-ai--secretvm)
 
-### Confident Security CONFSEC / OpenPCC
+<a id="confident-security-confsec--openpcc"></a>
 
-Source: [openpcc@911390a](https://github.com/openpcc/openpcc/tree/911390a80afcbe6dfb48987a641ab345494b1eca). The design is PCC-like: OHTTP through a third-party relay, plus TPM-certified request keys on compute nodes.
+- [Confident Security CONFSEC / OpenPCC](evidence/providers/2026-10-08-survey.md#confident-security-confsec--openpcc)
 
-- **R1:** the TEE nonce is "the padded sha256 hash of the TPM Quote signature" ([prod.go L94-113](https://github.com/openpcc/openpcc/blob/911390a80afcbe6dfb48987a641ab345494b1eca/attestation/verify/prod.go#L94-L113)).
-- **R5:** the GPU is accepted via an NRAS JWT ([nvidia.go L29-63](https://github.com/openpcc/openpcc/blob/911390a80afcbe6dfb48987a641ab345494b1eca/attestation/verify/nvidia.go#L29-L63)).
-- **R2:** the production identity is `^https://github.com/confidentsecurity/T/.github/workflows.*` ([README L46-47](https://github.com/openpcc/openpcc/blob/911390a80afcbe6dfb48987a641ab345494b1eca/README.md?plain=1#L46-L47)), and that repository returns 404 publicly.
+<a id="prem-ai"></a>
 
-### Prem AI
+- [Prem AI](evidence/providers/2026-10-08-survey.md#prem-ai)
 
-Docs: [attestation](https://docs.prem.io/attestation.md), [security model](https://docs.prem.io/security-model.md); verifier [reticle@1608446](https://github.com/prem-research/reticle/tree/1608446bb7f0b86c50fd35bcd967134b9c26c658).
+<a id="ionet-nanogpt-maple-opengradient"></a>
 
-On the plus side, Prem uses client nonces for SNP, TDX and GPU, client-side ML-KEM-hybrid payload encryption through a local OpenAI/Anthropic-compatible proxy, and Blackwell MPT. The failures are in Prem's own words:
+- [io.net, NanoGPT, Maple, OpenGradient](evidence/providers/2026-10-08-survey.md#ionet-nanogpt-maple-opengradient)
 
-- **R2:** "the shipped golden policy leaves image measurements unpinned by default".
-- **R5:** NVIDIA token verdicts that "do not prove that those GPUs served a particular inference request".
-- **R6:** "The current public response does not expose a complete route-assurance profile".
+<a id="ruled-out-quickly"></a>
 
-### io.net, NanoGPT, Maple, OpenGradient
+- [Ruled out quickly](evidence/providers/2026-10-08-survey.md#ruled-out-quickly)
 
-- **io.net** ([quick start](https://io.net/docs/guides/confidential-inference/quick-start.md), [verification guide](https://io.net/docs/guides/confidential-inference/verification-guide.md)): requests go to `api.intelligence.io.solutions/v1/private/completions` with no client encryption, and only responses are signed (R6). CPU evidence is optional.
-- **NanoGPT:** its [docs](https://docs.nano-gpt.com/api-reference/tee-verification.md) say "plaintext may still exist at gateway/proxy layers". teep finds "no E2EE and no explicit REPORTDATA binding for the TLS key" ([README_ADVANCED.md L70-78](https://github.com/13rac1/teep/blob/d9f59d839eb887b50f5afd234e192eac5ec45a2d/README_ADVANCED.md#L70-L78)).
-- **Maple:** traffic goes through an AWS Nitro enclave proxy (`enclave.trymaple.ai`) to Privatemode or Tinfoil backends, and the backend attestation "is not exposed" ([teep plan](https://github.com/13rac1/teep/blob/d9f59d839eb887b50f5afd234e192eac5ec45a2d/docs/plans/mapleai_support.md)). Pi-tee users should call those backends directly.
-- **OpenGradient:** an AWS Nitro router to OpenAI, Anthropic, Gemini and others ([tee-gateway README@ee26d28](https://github.com/OpenGradient/tee-gateway/blob/ee26d285899973734af07b93ac62b0abe0fe35b4/README.md)).
+<a id="method-and-limits"></a>
 
-### Ruled out quickly
-
-- **Hyperscalers:**
-  - Azure confidential inferencing covers [Whisper only](https://learn.microsoft.com/en-us/azure/confidential-computing/overview-azure-products). Confidential H100 VMs are IaaS.
-  - AWS Bedrock Mantle uses [NitroTPM instance attestation internally](https://aws.amazon.com/blogs/machine-learning/exploring-the-zero-operator-access-design-of-mantle/). There is no GPU TEE or client evidence.
-  - Google [Private AI Compute](https://thehackernews.com/2025/11/google-launches-private-ai-compute.html) serves first-party features. GCP A3 confidential GPUs are IaaS.
-  - Apple [PCC](https://security.apple.com/blog/private-cloud-compute/) is reachable only through Apple OS frameworks, including the 2026 [Google Cloud expansion](https://www.macrumors.com/2026/06/08/apple-private-cloud-compute-google/).
-  - Anthropic has [research only](https://www.anthropic.com/research/confidential-inference-trusted-vms). I found no OpenAI or Meta third-party product.
-- **Inference APIs without TEEs:**
-  - Fireworks ([data security](https://fireworks.ai/docs/guides/security_compliance/data_security)), Together and Baseten: compliance only, no TEEs.
-  - IONOS ([data handling](https://docs.ionos.com/cloud/ai/ai-model-hub/data-handling)) and OVHcloud AI Endpoints: no TEEs. STACKIT's [confidential products](https://stackit.com/en/products/confidential) are CPU servers.
-  - Proton Lumo ([privacy](https://proton.me/support/lumo-privacy)): no TEE.
-  - Duck.ai: a consumer chat with no API.
-  - Routstr: a Cashu-paid proxy with no TEE.
-  - Brave Leo: [NEAR-backed](https://brave.com/blog/browser-ai-tee/) and verified browser-side.
-- **Platforms, not inference APIs:**
-  - Targon is [compute rental](https://docs.targon.com) (TDX VMs with SSH).
-  - Super Protocol is a [deployment platform](https://superprotocol.com/resources/inference-with-vllm).
-  - Oasis ROFL, iExec and Marlin Oyster are app platforms; Oyster uses Nitro.
-  - Opaque, Fortanix and Anjuna sell enterprise platforms.
-  - Lucid Computing does verification and compliance.
-  - ConfidentialMind is a self-hosted stack with no TEE.
-  - Corvex is IaaS.
-  - accompio ([press](https://silicon-saxony.de/accompio-confidential-computing-macht-ki-fuer-unternehmen-geschaeftsfaehig/)) and Deutsche Telekom MMS "Confidential GPT" (a 2025 talk): I found no public attested API.
-- **Offline or not assessable:**
-  - Atoma: on 2026-10-08, `api.atoma.network` was unreachable and `atoma.network` redirected to `atoma.ai` (404).
-  - Volcano Engine AICC / China Mobile "confidential token factory" ([report](https://regional.chinadaily.com.cn/hohhot/2026-08/21/c_1207425.htm)): I found no public attestation API documentation.
-
-## Method and limits
-
-- I read source at the pinned commits, fetched unauthenticated attestation endpoints with my own 32-byte nonces (Phala/RedPill, Chutes, Venice), and read provider security documentation.
-- I made no inference requests, used no credentials or sign-ups, and contacted no vendors.
-- Endpoints that require keys were not probed: Privatemode `/attest`, nilAI, NanoGPT, io.net and Cohere.
-- Where the decisive evidence is a provider's own security documentation (Confidential AI, Prem, Cohere's Passport freshness), the table marks it as confirmed. Those are statements against interest, but I did not reproduce them on live systems.
-- teep (an independent AGPL verifier) corroborated the Chutes, Venice and NanoGPT findings. I treated it as secondary and checked primary sources for every verdict except Maple.
-- Searches covered English, Chinese and German sources.
-
-Written by Claude
+- [Method and limits](evidence/providers/2026-10-08-survey.md#method-and-limits)
