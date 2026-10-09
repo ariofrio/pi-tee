@@ -1,11 +1,11 @@
 # WebAssembly verifiers
 
-`node scripts/build-wasm-verifiers.mjs` builds the two verifiers that ship in [`packages/tinfoil/wasm`](../../packages/tinfoil/wasm):
+`node scripts/build-wasm-verifiers.mjs` builds two verifiers:
 
-- **`nvattest.wasm.gz` and `nvattest.mjs`:** NVIDIA's local file-evidence verifier, compiled with Emscripten.
-- **`tinfoil-public-build.wasm.gz`:** the [public-build CPU and release verifier](../tinfoil-public-build/README.md), compiled as a WASI command.
+- **`nvattest.wasm.gz` and `nvattest.mjs`** in [`packages/core/wasm`](../../packages/core/wasm): NVIDIA's local file-evidence verifier, compiled with Emscripten and shared by both providers.
+- **`tinfoil-public-build.wasm.gz`** in [`packages/tinfoil/wasm`](../../packages/tinfoil/wasm): the [public-build CPU and release verifier](../tinfoil-public-build/README.md), compiled as a WASI command.
 
-Users need no compilers, containers or downloads: the extension checks each file against [`wasm-artifacts.ts`](../../packages/tinfoil/src/wasm-artifacts.ts) before compiling or importing it, and uses the checked bytes rather than reading the file again. The same bytes run on every Pi platform, under both Node and Bun.
+Users need no compilers, containers or downloads: each package checks its files against [`nvidia-artifacts.ts`](../../packages/core/src/nvidia-artifacts.ts) or [`wasm-artifacts.ts`](../../packages/tinfoil/src/wasm-artifacts.ts) before compiling or importing them, and uses the checked bytes rather than reading the file again. The same bytes run on every Pi platform, under both Node and Bun.
 
 ## Sources and changes
 
@@ -36,7 +36,7 @@ Pins cover the uncompressed modules, since gzip output varies between zlib versi
 
 The triplet removes vcpkg and Emscripten source paths from objects. A hash-locked [port patch](patches/vcpkg-openssl-fixed-paths.patch) and a triplet option fix the OpenSSL module/engine and libxml2 catalog paths that would otherwise embed the build root.
 
-Maintainers need Git, CMake, a C/C++ host toolchain, Rust 1.90.0 with the `wasm32-unknown-emscripten` target, and Go. `PI_TEE_BUILD_CARGO` selects Cargo; `PI_TEE_WASM_BUILD_DIR` selects the build directory. The build also writes [`THIRD_PARTY_LICENSES.txt`](../../packages/tinfoil/wasm/THIRD_PARTY_LICENSES.txt) covering NVIDIA, the Emscripten runtime, every vcpkg port, Rust crate and Go module linked into the modules.
+Maintainers need Git, CMake, a C/C++ host toolchain, Rust 1.90.0 with the `wasm32-unknown-emscripten` target, and Go. `PI_TEE_BUILD_CARGO` selects Cargo; `PI_TEE_WASM_BUILD_DIR` selects the build directory. The build also writes a `THIRD_PARTY_LICENSES.txt` beside each module: [NVIDIA's](../../packages/core/wasm/THIRD_PARTY_LICENSES.txt) covers NVIDIA, the Emscripten runtime, every vcpkg port and Rust crate linked into it, and [the helper's](../../packages/tinfoil/wasm/THIRD_PARTY_LICENSES.txt) every Go module.
 
 ## Checks
 

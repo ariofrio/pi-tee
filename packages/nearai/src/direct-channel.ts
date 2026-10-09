@@ -1,30 +1,27 @@
-import https, { type AgentOptions } from "node:https";
-import { createHash } from "node:crypto";
-import { Readable } from "node:stream";
-import { TLSSocket } from "node:tls";
-import { limitResponseBody, MAX_ENCRYPTED_RESPONSE_BYTES, readBoundedBody, TeeError } from "pi-tee-core";
+import { createHash, X509Certificate } from "node:crypto";
+import { isIP } from "node:net";
+import { connect, type ConnectionOptions, type TLSSocket } from "node:tls";
+import { limitResponseBody, MAX_ENCRYPTED_RESPONSE_BYTES, readBoundedBody, readHttpResponse, TeeError, withAbort, writeHttpRequest } from "pi-tee-core";
 
-/** One WebPKI-authenticated connection, then quote-bound SPKI approval before credentials. */
+/**
+ * One WebPKI-authenticated TLS 1.3 connection, then quote-bound SPKI approval before credentials.
+ * Requests take turns as HTTP/1.1 exchanges on that socket, written directly with `node:tls`
+ * because Bun's https.Agent cannot be bound to one socket. The connection is never replaced.
+ */
 export class NearDirectChannel {
-  private readonly agent: https.Agent;
   private socket?: TLSSocket;
+  private connecting?: Promise<TLSSocket>;
   private peer?: string;
   private approved = false;
-  private attempts = 0;
   private sent = false;
   private closed = false;
+  private turn: Promise<unknown> = Promise.resolve();
+  private readonly lifetime = new AbortController();
   private readonly onAbort = () => this.close();
+  // Between exchanges the peer has nothing to say; anything it sends ends the channel.
+  private readonly onIdleData = () => this.close();
 
-  constructor(private readonly origin: string, private readonly signal: AbortSignal, trust: Pick<AgentOptions, "ca"> = {}) {
-    this.agent = new https.Agent({ ...trust, keepAlive: true, maxSockets: 1, maxFreeSockets: 1, minVersion: "TLSv1.3", maxVersion: "TLSv1.3", rejectUnauthorized: true });
-    const create = this.agent.createConnection.bind(this.agent);
-    this.agent.createConnection = (options, callback) => {
-      if (++this.attempts !== 1 || this.closed) throw new TeeError("TEE_TLS_KEY_REJECTED");
-      const socket = create(options, callback);
-      if (!(socket instanceof TLSSocket)) throw new TeeError("TEE_RUNTIME_UNSUPPORTED");
-      this.socket = socket;
-      return socket;
-    };
+  constructor(private readonly origin: string, private readonly signal: AbortSignal, private readonly trust: Pick<ConnectionOptions, "ca"> = {}) {
     signal.addEventListener("abort", this.onAbort, { once: true });
   }
 
@@ -53,37 +50,88 @@ export class NearDirectChannel {
     const payload = request.body ? await readBoundedBody(request.body, 16 * 1024 * 1024, signal) : undefined;
     signal.throwIfAborted();
     if (request.method === "POST") this.sent = true;
-    return new Promise((resolve, reject) => {
-      const req = https.request(url, {
-        agent: this.agent, method: request.method, signal, rejectUnauthorized: true,
-        headers: { ...Object.fromEntries(request.headers), "accept-encoding": "identity" },
-      }, res => {
-        try {
-          const socket = res.socket;
-          if (socket !== this.socket || !(socket instanceof TLSSocket) || !socket.authorized || socket.getProtocol() !== "TLSv1.3") throw new TeeError("TEE_TLS_KEY_REJECTED");
-          // TLS 1.3 cannot renegotiate. Node may discard certificate metadata after reuse;
-          // retain the first authenticated peer and require the identical socket above.
-          if (!this.peer) {
-            const cert = socket.getPeerX509Certificate();
-            if (!cert) throw new TeeError("TEE_TLS_KEY_REJECTED");
-            this.peer = createHash("sha256").update(cert.publicKey.export({ type: "spki", format: "der" })).digest("hex");
-          }
-          const headers = new Headers();
-          for (const [name, value] of Object.entries(res.headers)) {
-            if (typeof value === "string") headers.set(name, value);
-            else if (value) for (const item of value) headers.append(name, item);
-          }
-          const response = new Response(Readable.toWeb(res) as ReadableStream<Uint8Array>, { status: res.statusCode, headers });
-          resolve({ response: limitResponseBody(response, { signal, maxBytes: MAX_ENCRYPTED_RESPONSE_BYTES, cancel: () => req.destroy() }), peerSpkiFingerprint: this.peer });
-        } catch (error) { req.destroy(); reject(error); }
-      });
-      req.once("error", reject);
-      req.once("socket", socket => { if (socket !== this.socket) req.destroy(new TeeError("TEE_TLS_KEY_REJECTED")); });
-      req.end(payload);
-    });
+    // The next request is written only after the previous response has been read to its end.
+    const previous = this.turn;
+    let done!: () => void;
+    const mine = new Promise<void>(resolve => { done = resolve; });
+    this.turn = Promise.all([previous, mine]);
+    const release = (reusable: boolean) => {
+      if (reusable && !this.closed && this.socket && !this.socket.destroyed) this.socket.on("data", this.onIdleData);
+      else this.close();
+      done();
+    };
+    const waiting = AbortSignal.any([signal, this.lifetime.signal]);
+    let written = false;
+    try {
+      await withAbort(previous, waiting);
+      const socket = await withAbort(this.open(), waiting);
+      if (this.closed || socket.destroyed) throw new TeeError("TEE_TLS_KEY_REJECTED");
+      socket.off("data", this.onIdleData);
+      const headers = new Headers(request.headers);
+      headers.set("accept-encoding", "identity");
+      written = true;
+      writeHttpRequest(socket, request.method as "GET" | "POST", url, headers, payload, "keep-alive");
+      const response = await readHttpResponse(socket, signal, release);
+      return {
+        response: limitResponseBody(response, { signal, maxBytes: MAX_ENCRYPTED_RESPONSE_BYTES, cancel: () => this.close() }),
+        peerSpkiFingerprint: this.peer!,
+      };
+    } catch (error) {
+      // A request that never reached the socket leaves the connection as it was.
+      if (written) this.close();
+      done();
+      if (signal.aborted) throw signal.reason ?? error;
+      throw this.closed && !(error instanceof TeeError) ? new TeeError("TEE_TLS_KEY_REJECTED") : error;
+    }
   }
 
   readonly fetch: typeof globalThis.fetch = async (input, init) => (await this.request(new Request(input, init))).response;
 
-  close() { this.closed = true; this.signal.removeEventListener("abort", this.onAbort); this.agent.destroy(); }
+  close() {
+    this.closed = true;
+    this.signal.removeEventListener("abort", this.onAbort);
+    this.lifetime.abort();
+    this.socket?.destroy();
+  }
+
+  // Exactly one connection attempt per channel; a failed or closed connection is never replaced.
+  private open(): Promise<TLSSocket> {
+    if (this.connecting) return this.connecting.then(socket => {
+      if (this.closed || socket.destroyed) throw new TeeError("TEE_TLS_KEY_REJECTED");
+      return socket;
+    });
+    const target = new URL(this.origin);
+    this.connecting = new Promise<TLSSocket>((resolve, reject) => {
+      const socket = connect({
+        ...this.trust, host: target.hostname, port: Number(target.port || 443),
+        servername: isIP(target.hostname) ? undefined : target.hostname,
+        rejectUnauthorized: true, minVersion: "TLSv1.3", maxVersion: "TLSv1.3", ALPNProtocols: ["http/1.1"],
+      });
+      this.socket = socket;
+      const timeout = setTimeout(() => socket.destroy(new TeeError("TEE_CONNECTION_FAILED")), 10000);
+      const fail = (error: unknown) => {
+        clearTimeout(timeout);
+        this.close();
+        const code = String((error as { code?: unknown } | undefined)?.code ?? "");
+        reject(error instanceof TeeError ? error : new TeeError(/CERT|SELF_SIGNED|UNABLE_TO|HOSTNAME|ALTNAME|TLS/.test(code) ? "TEE_TLS_KEY_REJECTED" : "TEE_CONNECTION_FAILED"));
+      };
+      socket.once("error", fail);
+      socket.once("close", () => fail(new TeeError("TEE_CONNECTION_FAILED")));
+      socket.once("secureConnect", () => {
+        clearTimeout(timeout);
+        try {
+          // Bun ignores minVersion, so check the negotiated version on every runtime.
+          if (!socket.authorized || socket.getProtocol() !== "TLSv1.3" || (socket.alpnProtocol && socket.alpnProtocol !== "http/1.1")) throw new TeeError("TEE_TLS_KEY_REJECTED");
+          const certificate = socket.getPeerCertificate().raw;
+          if (!certificate) throw new TeeError("TEE_TLS_KEY_REJECTED");
+          this.peer = createHash("sha256").update(new X509Certificate(certificate).publicKey.export({ type: "spki", format: "der" })).digest("hex");
+        } catch { return fail(new TeeError("TEE_TLS_KEY_REJECTED")); }
+        socket.off("error", fail);
+        socket.on("error", () => this.close());
+        resolve(socket);
+      });
+    });
+    this.connecting.catch(() => undefined);
+    return this.connecting;
+  }
 }

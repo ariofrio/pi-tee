@@ -1,4 +1,4 @@
-import { parseHopperGpuMode } from "../../packages/tinfoil/src/gpu-mode.js";
+import { parseHopperGpuMode } from "../../packages/core/src/gpu-mode.js";
 import { gpuVersionsAllowed } from "../../packages/tinfoil/src/gpu-policy.js";
 
 // This CLI interprets fields, without authenticating signatures or a CPU session.

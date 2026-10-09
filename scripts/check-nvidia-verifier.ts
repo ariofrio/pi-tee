@@ -6,8 +6,8 @@ import { createServer } from "node:http";
 import { readBoundedBody } from "../packages/core/src/transport.js";
 import { discoverTinfoilWorkers } from "../packages/tinfoil/src/worker-discovery.js";
 import { gpuVersionsAllowed } from "../packages/tinfoil/src/gpu-policy.js";
-import { parseHopperGpuMode } from "../packages/tinfoil/src/gpu-mode.js";
-import { runNvidiaVerifier } from "../packages/tinfoil/src/wasm-verifiers.js";
+import { parseHopperGpuMode } from "../packages/core/src/gpu-mode.js";
+import { runNvidiaVerifier } from "../packages/core/src/nvidia-verifier.js";
 import { collateralOracle, RIM_LAYOUT_CODES } from "./research/nvidia-collateral.js";
 
 // GPU verifier seam only: no CPU/workload appraisal, credentials or inference.

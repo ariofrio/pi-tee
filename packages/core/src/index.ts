@@ -6,3 +6,7 @@ export * from "./catalog.js";
 
 export * from "./pinned-tls.js";
 export * from "./wasi.js";
+export * from "./gpu-mode.js";
+export * from "./gpu-appraisal.js";
+export * from "./nvidia-verifier.js";
+export { NVIDIA_ARTIFACTS } from "./nvidia-artifacts.js";

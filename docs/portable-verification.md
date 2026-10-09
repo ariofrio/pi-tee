@@ -1,6 +1,6 @@
 # Portable local verification
 
-Local verification runs on every Pi platform with no setup. Both verifiers ship inside `pi-tinfoil` as WebAssembly, and the inference transport uses only `node:tls`. There is no Docker, compiler, platform binary or download step. [Build recipe and runtime boundary](../tools/nvidia-verifier/README.md).
+Local verification runs on every Pi platform with no setup. NVIDIA's verifier ships inside `pi-tee-core` and Tinfoil's CPU/release verifier inside `pi-tinfoil`, both as WebAssembly, and the inference transport uses only `node:tls`. There is no Docker, compiler, platform binary or download step. [Build recipe and runtime boundary](../tools/nvidia-verifier/README.md).
 
 ## Scope
 
@@ -25,7 +25,7 @@ The [workflow](../.github/workflows/wasm-verifiers.yml) rebuilds the modules and
 ## Limits
 
 - Android/Termux was validated on 2026-10-09 in an Android 15 arm64 emulator with Termux 0.118.3. Under `nodejs-lts` (Node 24.18) the build, typecheck, full test suite and both smoke checks pass; under `nodejs` (Node 26.4) the smoke checks and the NVIDIA collateral check pass, and the tests pass once CLI-spawn timeouts allow for slower cold starts. Credential-free live appraisal passed for all three public models: one GPU in about 15 s, eight GPUs in about 20 s, with peak memory of 330–365 MB. The live Pi suite has not been run on a real device or the emulator.
-- NEAR's experimental direct route still uses `https.Agent` to keep its evidence, inference and signature requests on one socket. It is untested under Bun.
+- NEAR's experimental direct route sends its evidence, inference and signature requests as sequential HTTP/1.1 exchanges on one `node:tls` socket, so it no longer depends on `https.Agent`. Its [channel tests](../tests/near-direct-channel.test.ts) pass under Node and Bun, and on 2026-10-09 the Bun-compiled Pi 1.0.4 binary reached NEAR's credential check with a synthetic key: fresh evidence, CPU and GPU verification, SPKI approval and the encrypted request on the same socket. The credentialed Pi suite has not yet run under Bun.
 - Reproducing the committed bytes requires the CI build directory; see [reproducibility](../tools/nvidia-verifier/README.md#reproducibility).
 
 Written by Claude.

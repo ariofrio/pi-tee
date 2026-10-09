@@ -2,5 +2,6 @@
 tools/nvidia-native/regorus.Cargo.lock text eol=lf
 tools/nvidia-native/openssl.cnf text eol=lf
 tools/nvidia-native/patches/*.patch text eol=lf
+packages/core/wasm/* -text
 packages/tinfoil/wasm/* -text
 tools/tinfoil-public-build/testdata/* -text

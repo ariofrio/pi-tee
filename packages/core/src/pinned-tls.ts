@@ -58,14 +58,8 @@ export function pinnedTlsFetch(endpoint: string, fingerprint: string, expiresAt?
       signal.throwIfAborted();
       if (expiresAt !== undefined && Date.now() >= expiresAt) throw new TeeError("TEE_PUBLIC_SESSION_REJECTED");
       // One request per connection: no keep-alive, pipelining or reuse.
-      const lines = [`POST ${target.pathname} HTTP/1.1`, `Host: ${target.host}`];
-      for (const [name, value] of request.headers) {
-        if (FORBIDDEN_REQUEST_HEADERS.has(name) || /[\r\n]/.test(name) || /[\r\n]/.test(value)) continue;
-        lines.push(`${name}: ${value}`);
-      }
-      lines.push(`Content-Length: ${body.length}`, "Connection: close", "", "");
-      socket.write(Buffer.concat([Buffer.from(lines.join("\r\n"), "latin1"), Buffer.from(body)]));
-      return await readResponse(socket, signal);
+      writeHttpRequest(socket, "POST", target, request.headers, body, "close");
+      return await readHttpResponse(socket, signal);
     } catch (error) {
       clearTimeout(connectionTimeout);
       signal.removeEventListener("abort", abort);
@@ -76,14 +70,35 @@ export function pinnedTlsFetch(endpoint: string, fingerprint: string, expiresAt?
   };
 }
 
-// Minimal HTTP/1.1 response reader for one Connection: close exchange. Bun's
-// https.Agent cannot adopt an externally verified socket, so the verified
-// socket carries the request directly.
-function readResponse(socket: TLSSocket, signal: AbortSignal): Promise<Response> {
+/** Writes one HTTP/1.1 request head and body on a socket the caller has already verified. */
+export function writeHttpRequest(socket: TLSSocket, method: "GET" | "POST", target: URL, headers: Headers, body: Uint8Array | undefined, connection: "close" | "keep-alive") {
+  const lines = [`${method} ${target.pathname}${target.search} HTTP/1.1`, `Host: ${target.host}`];
+  for (const [name, value] of headers) {
+    if (FORBIDDEN_REQUEST_HEADERS.has(name) || /[\r\n]/.test(name) || /[\r\n]/.test(value)) continue;
+    lines.push(`${name}: ${value}`);
+  }
+  if (body || method === "POST") lines.push(`Content-Length: ${body?.length ?? 0}`);
+  lines.push(`Connection: ${connection}`, "", "");
+  socket.write(Buffer.concat([Buffer.from(lines.join("\r\n"), "latin1"), Buffer.from(body ?? [])]));
+}
+
+/**
+ * Minimal HTTP/1.1 response reader. Bun's https.Agent cannot adopt an
+ * externally verified socket, so the verified socket carries requests directly.
+ * Without `onRelease`, the exchange owns the socket and destroys it when done.
+ * With `onRelease`, a cleanly framed response hands the socket back through
+ * `onRelease(true)` only if it may carry another request; any other outcome
+ * destroys it. Unread bytes after a response are never reused.
+ */
+export function readHttpResponse(socket: TLSSocket, signal: AbortSignal, onRelease?: (reusable: boolean) => void): Promise<Response> {
+  let released = false;
+  const release = onRelease && ((reusable: boolean) => { if (!released) { released = true; onRelease(reusable); } });
   return new Promise<Response>((resolve, reject) => {
     let buffered = Buffer.alloc(0);
     let settled = false;
-    const fail = (error: unknown) => { if (!settled) { settled = true; reject(error); } socket.destroy(); };
+    const detach = () => { socket.off("data", onData); socket.off("error", fail); socket.off("close", onClose); };
+    const fail = (error: unknown) => { detach(); if (!settled) { settled = true; reject(error); } release?.(false); socket.destroy(); };
+    const onClose = () => fail(new TeeError("TEE_CONNECTION_FAILED"));
     const onData = (chunk: Buffer) => {
       buffered = Buffer.concat([buffered, chunk]);
       for (;;) {
@@ -106,21 +121,31 @@ function readResponse(socket: TLSSocket, signal: AbortSignal): Promise<Response>
           if (colon <= 0 || !HEADER_NAME.test(name) || !HEADER_VALUE.test(value)) return fail(new TeeError("TEE_RESPONSE_REJECTED"));
           try { headers.append(name, value); } catch { return fail(new TeeError("TEE_RESPONSE_REJECTED")); }
         }
-        socket.off("data", onData);
+        const keepAlive = release && status[0]!.startsWith("HTTP/1.1 ") && !/(^|,)\s*close\s*(,|$)/i.test(headers.get("connection") ?? "")
+          ? release : undefined;
         let stream: ReadableStream<Uint8Array> | null = null;
-        try { if (![204, 205, 304].includes(code)) stream = bodyStream(socket, headers, rest, signal); } catch (error) { return fail(error); }
+        if ([204, 205, 304].includes(code)) {
+          if (keepAlive && (headers.has("transfer-encoding") || rest.length)) return fail(new TeeError("TEE_RESPONSE_REJECTED"));
+          detach();
+          if (keepAlive) keepAlive(true); else { release?.(false); socket.destroy(); }
+        } else {
+          detach();
+          try { stream = bodyStream(socket, headers, rest, signal, keepAlive); } catch (error) { return fail(error); }
+        }
         settled = true;
         resolve(new Response(stream, { status: code, headers }));
         return;
       }
     };
+    // Node may have paused a reused socket for a stalled previous reader.
+    if (CAN_PAUSE) socket.resume();
     socket.on("data", onData);
     socket.once("error", fail);
-    socket.once("close", () => fail(new TeeError("TEE_CONNECTION_FAILED")));
+    socket.once("close", onClose);
   });
 }
 
-function bodyStream(socket: TLSSocket, headers: Headers, initial: Buffer, signal: AbortSignal): ReadableStream<Uint8Array> {
+function bodyStream(socket: TLSSocket, headers: Headers, initial: Buffer, signal: AbortSignal, release?: (reusable: boolean) => void): ReadableStream<Uint8Array> {
   const encoding = headers.get("transfer-encoding")?.toLowerCase();
   const declared = headers.get("content-length");
   if (encoding !== undefined && encoding !== null && encoding !== "chunked") { socket.destroy(); throw new TeeError("TEE_RESPONSE_REJECTED"); }
@@ -129,36 +154,57 @@ function bodyStream(socket: TLSSocket, headers: Headers, initial: Buffer, signal
   if (encoding !== "chunked" && (declared === null || !/^[0-9]{1,15}$/.test(declared))) { socket.destroy(); throw new TeeError("TEE_RESPONSE_REJECTED"); }
   let remaining = encoding === "chunked" ? 0 : Number(declared);
   let pending = initial;
-  let chunkLeft = -1; // chunked: bytes left in the current chunk; -1 awaiting a size line, -2 awaiting CRLF
+  // chunked: bytes left in the current chunk; -1 awaiting a size line, -2 awaiting CRLF, -3 awaiting the trailer section's end
+  let chunkLeft = -1;
+  let trailerBytes = 0;
   let done = false;
-  const finish = () => { done = true; socket.destroy(); };
+  let detach = () => {};
+  // A released socket stays open for the owner's next request only if nothing follows the framed body.
+  const end = (clean: boolean) => {
+    done = true;
+    detach();
+    if (clean && release && !pending.length) release(true);
+    else { release?.(false); socket.destroy(); }
+  };
   return new ReadableStream<Uint8Array>({
     start(controller) {
       const enqueue = (bytes: Buffer) => {
         controller.enqueue(new Uint8Array(bytes));
         if (CAN_PAUSE && (controller.desiredSize ?? 0) <= 0) socket.pause();
       };
-      const abort = () => { if (!done) { done = true; controller.error(new TeeError("TEE_CONNECTION_FAILED")); } socket.destroy(); };
-      signal.addEventListener("abort", abort, { once: true });
+      const fail = (error: unknown) => { if (!done) { controller.error(error); end(false); } else socket.destroy(); };
+      const abort = () => fail(new TeeError("TEE_CONNECTION_FAILED"));
+      const complete = () => { end(true); controller.close(); };
       const drain = () => {
         if (encoding !== "chunked") {
           if (pending.length) {
             const take = pending.subarray(0, Math.min(pending.length, remaining));
-            remaining -= take.length; pending = Buffer.alloc(0);
+            remaining -= take.length; pending = pending.subarray(take.length);
             if (take.length) enqueue(take);
           }
-          if (remaining === 0) { finish(); signal.removeEventListener("abort", abort); controller.close(); }
+          if (remaining === 0) complete();
           return;
         }
         for (;;) {
-          if (chunkLeft === -1) {
+          if (chunkLeft === -1 || chunkLeft === -3) {
             const line = pending.indexOf("\r\n");
             if (line < 0) { if (pending.length > 1024) throw new TeeError("TEE_RESPONSE_REJECTED"); return; }
-            const size = /^([0-9a-fA-F]{1,8})(?:;.*)?$/.exec(pending.subarray(0, line).toString("latin1"));
-            if (!size) throw new TeeError("TEE_RESPONSE_REJECTED");
+            const text = pending.subarray(0, line).toString("latin1");
             pending = pending.subarray(line + 2);
+            if (chunkLeft === -3) {
+              trailerBytes += line + 2;
+              if (trailerBytes > MAX_RESPONSE_HEADER_BYTES) throw new TeeError("TEE_RESPONSE_REJECTED");
+              if (!text) return complete();
+              continue;
+            }
+            const size = /^([0-9a-fA-F]{1,8})(?:;.*)?$/.exec(text);
+            if (!size) throw new TeeError("TEE_RESPONSE_REJECTED");
             chunkLeft = Number.parseInt(size[1]!, 16);
-            if (chunkLeft === 0) { finish(); signal.removeEventListener("abort", abort); controller.close(); return; }
+            if (chunkLeft === 0) {
+              // A reused connection must also consume the trailer section; a closing one ends here.
+              if (!release) return complete();
+              chunkLeft = -3;
+            }
           } else if (chunkLeft === -2) {
             if (pending.length < 2) return;
             if (pending[0] !== 13 || pending[1] !== 10) throw new TeeError("TEE_RESPONSE_REJECTED");
@@ -176,20 +222,22 @@ function bodyStream(socket: TLSSocket, headers: Headers, initial: Buffer, signal
       const onData = (chunk: Buffer) => {
         if (done) return;
         received += chunk.length;
-        if (received > MAX_RECEIVED_RESPONSE_BYTES) { done = true; controller.error(new TeeError("TEE_RESPONSE_REJECTED")); socket.destroy(); return; }
+        if (received > MAX_RECEIVED_RESPONSE_BYTES) return fail(new TeeError("TEE_RESPONSE_REJECTED"));
         pending = pending.length ? Buffer.concat([pending, chunk]) : chunk;
-        try { drain(); } catch (error) { done = true; controller.error(error); socket.destroy(); }
+        try { drain(); } catch (error) { fail(error); }
       };
+      const onError = () => fail(new TeeError("TEE_CONNECTION_FAILED"));
+      detach = () => {
+        socket.off("data", onData); socket.off("error", onError); socket.off("close", onError);
+        signal.removeEventListener("abort", abort);
+      };
+      signal.addEventListener("abort", abort, { once: true });
       socket.on("data", onData);
-      socket.once("error", () => { if (!done) { done = true; controller.error(new TeeError("TEE_CONNECTION_FAILED")); } });
-      socket.once("close", () => {
-        if (done) return;
-        done = true;
-        controller.error(new TeeError("TEE_CONNECTION_FAILED"));
-      });
-      try { drain(); } catch (error) { done = true; controller.error(error); socket.destroy(); }
+      socket.once("error", onError);
+      socket.once("close", onError);
+      try { drain(); } catch (error) { fail(error); }
     },
     pull() { if (!done && CAN_PAUSE) socket.resume(); },
-    cancel() { done = true; socket.destroy(); },
+    cancel() { if (!done) end(false); socket.destroy(); },
   }, { highWaterMark: RESPONSE_HIGH_WATER_BYTES, size: chunk => chunk.byteLength });
 }

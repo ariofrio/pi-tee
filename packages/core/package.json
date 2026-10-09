@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "description": "Shared policy, catalog and guarded transport for Pi confidential inference providers",
   "type": "module",
-  "license": "MIT",
+  "license": "MIT AND Apache-2.0",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -12,6 +12,7 @@
   },
   "files": [
     "dist",
+    "wasm",
     "README.md",
     "LICENSE"
   ],
