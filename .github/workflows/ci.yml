@@ -31,6 +31,7 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
       - run: npm ci --ignore-scripts
+      - run: node scripts/check-markdown-links.mjs
       - run: npm run check
       - run: npm run smoke
       - run: npm run smoke:packages
