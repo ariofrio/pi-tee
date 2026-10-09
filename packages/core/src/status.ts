@@ -24,16 +24,3 @@ export function formatProviderReport(report: ProviderReport): string {
     ...report.assumptions.map(assumption => `Assumption / limitation: ${assumption}`));
   return lines.join("\n");
 }
-
-const statusReports = new Map<string, () => ProviderReport>();
-export function registerSecurityStatus(
-  register: (name: string, command: { description: string; handler: (args: string, ctx: { model?: { provider: string }; ui: { notify(message: string, type: "info"): void } }) => Promise<void> }) => void,
-  provider: string, getReport: () => ProviderReport,
-): void {
-  statusReports.set(provider, getReport);
-  register("status", { description: "Confidential inference position, actual route levels, trusts, gaps and selection reasons", handler: async (_args, ctx) => {
-    const current = ctx.model && statusReports.get(ctx.model.provider);
-    const reports = current ? [current()] : [...statusReports.values()].map(get => get());
-    ctx.ui.notify(reports.map(formatProviderReport).join("\n\n"), "info");
-  } });
-}

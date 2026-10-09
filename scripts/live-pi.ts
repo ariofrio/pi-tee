@@ -54,7 +54,7 @@ export default function(pi) {
   pi.on("before_provider_request", event => {
     const payload = event.payload;
     return { ...payload,
-      ...(Object.hasOwn(payload, "max_tokens") ? { max_tokens: 1024 } : { max_completion_tokens: 1024 }),
+      ...(Object.hasOwn(payload, "max_tokens") ? { max_tokens: process.env.PI_TEE_LIVE_THINKING === "1" ? 2048 : 1024 } : { max_completion_tokens: process.env.PI_TEE_LIVE_THINKING === "1" ? 2048 : 1024 }),
       ...(++requests > 4 ? { model: "live-test-request-limit" } : {}),
     };
   });
@@ -77,7 +77,7 @@ export default function(pi) {
 type Event = Record<string, any>;
 
 async function runCli(model: string, prompt: string, options: { tool?: boolean; thinking?: string; cancel?: boolean } = {}) {
-  const env: NodeJS.ProcessEnv = { ...process.env, PI_CODING_AGENT_DIR: agentDir, [policyName]: testPolicy, PI_NEARAI_MODEL_VISIBILITY: "tee", PI_TEE_LIVE_CANCEL: options.cancel && !cancelStreaming ? "1" : "0" };
+  const env: NodeJS.ProcessEnv = { ...process.env, PI_CODING_AGENT_DIR: agentDir, [policyName]: testPolicy, PI_NEARAI_MODEL_VISIBILITY: "tee", PI_TEE_LIVE_THINKING: options.thinking && options.thinking !== "off" ? "1" : "0", PI_TEE_LIVE_CANCEL: options.cancel && !cancelStreaming ? "1" : "0" };
   delete env.NEARAI_API_KEY;
   delete env.TINFOIL_API_KEY;
   // The real key is in Pi's isolated store: a successful call also checks stored-key precedence.

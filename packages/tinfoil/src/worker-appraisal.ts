@@ -23,6 +23,8 @@ function requireCondition(ok: unknown, code: string): asserts ok { if (!ok) thro
 export async function appraiseWorker(options: {
   model: PublicModel; host: string; signal: AbortSignal; evidenceFetch?: typeof globalThis.fetch; nvidiaCollateralOrigin?: string;
   policy?: SecurityPolicy;
+  /** External authenticated verifier seam; production uses the bundled helper. */
+  verifyArtifacts?: typeof verifyPublicBuildArtifacts;
 }): Promise<{ tls: string; hpke: string; security: RouteSecurity; publicBuild: {
   checkedAt: number; expiresAt: number; workloadDigest: string; platformDigest: string;
   cvmManifestDigest: string; imageDigest: string; configDigest: string; platform: "tdx" | "sev-snp"; gpus: number;
@@ -38,9 +40,9 @@ export async function appraiseWorker(options: {
   const raw = new TextDecoder("utf-8", { fatal: true }).decode(await readBoundedBody(response.body, 2 * 1024 * 1024, signal));
   const envelope = JSON.parse(raw);
   const policy = options.policy ?? parsePolicy();
-  const build = await verifyPublicBuildArtifacts({ raw, nonce, signal, repo, evidenceFetch: options.evidenceFetch, allowOutdated: policy.host !== "current" });
+  const build = await (options.verifyArtifacts ?? verifyPublicBuildArtifacts)({ raw, nonce, signal, repo, evidenceFetch: options.evidenceFetch, allowOutdated: policy.host !== "current" });
   requireCondition(build.repo === repo && (build.platform === "tdx" || build.platform === "sev-snp"), "TEE_PUBLIC_BUILD_REJECTED");
-  requireCondition(build.hostLevel === 1 || build.hostLevel === 2, "TEE_CPU_POLICY_REJECTED");
+  requireCondition(build.hostLevel === 1 || (build.hostLevel === 2 && policy.host !== "current"), "TEE_CPU_POLICY_REJECTED");
 
   // The helper authenticated both section byte strings through the CPU report.
   const devices = JSON.parse(Buffer.from(envelope.device_evidence, "base64").toString("utf8"));

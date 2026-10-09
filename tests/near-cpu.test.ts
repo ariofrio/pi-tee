@@ -35,3 +35,20 @@ test("a signature or collateral rejection cannot create a NEAR host rating", asy
   await assert.rejects(Promise.resolve(verifier("00")));
   assert.equal(rated, false);
 });
+
+
+test("NEAR rejects non-TD10 reports, rates short SVN H2 and propagates debug to the SDK", async () => {
+  for (const [length, debug, td10] of [[15, false, true], [16, true, true], [16, false, false]] as const) {
+    const ratings: number[] = [];
+    const verifier = createNearCpuVerifier({
+      onRating: rating => ratings.push(rating.host),
+      collateral: async () => ({ tcb_info: '{"tcbEvaluationDataNumber":20}', qe_identity: '{"tcbEvaluationDataNumber":20}' }) as Collateral,
+      verify: () => ({ status: "UpToDate", advisory_ids: [], report: { asTd10: () => td10 ? {
+        teeTcbSvn: Uint8Array.from([3, 1, 2, ...Array(length - 3).fill(0)]), tdAttributes: Uint8Array.from([debug ? 1 : 0, ...Array(7).fill(0)]),
+        reportData: new Uint8Array(64), mrConfigId: new Uint8Array(48), rtMr3: new Uint8Array(48),
+      } : null } }) as unknown as VerifiedReport,
+    });
+    if (!td10) { await assert.rejects(Promise.resolve(verifier("00")), /TEE_CPU_POLICY_REJECTED/); assert.deepEqual(ratings, []); }
+    else { const result = await verifier("00"); assert.deepEqual(ratings, [length === 16 ? 1 : 2]); assert.equal(result.debugEnabled, debug); }
+  }
+});

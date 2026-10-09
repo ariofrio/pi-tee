@@ -1,6 +1,6 @@
 import { randomInt } from "node:crypto";
 import { connect as netConnect } from "node:net";
-import { assessRoute, compareRoutes, parsePolicy, TeeError, type SecurityPolicy, type PublicBuildProfile, type SdkTransport } from "pi-tee-core";
+import { assessRoute, compareRoutes, parsePolicy, RouteRejection, TeeError, type SecurityPolicy, type PublicBuildProfile, type SdkTransport } from "pi-tee-core";
 import { openEncryptedWorkerTransport } from "./direct.js";
 import { PUBLIC_BUILD_AUTHORITY_POLICY_DIGEST, PUBLIC_BUILD_PROFILE_ID } from "./public-policy.js";
 import { appraiseWorker, PUBLIC_MODELS, type PublicModel } from "./worker-appraisal.js";
@@ -81,14 +81,18 @@ export async function selectPublicWorker(model: PublicModel, signal: AbortSignal
   let rejection: TeeError | undefined;
   let unavailable: TeeError | undefined;
   let best: { host: string; keys: WorkerKeys } | undefined;
+  let bestRejected: WorkerKeys["security"] | undefined;
   for (const host of candidates.slice(0, MAX_WORKER_ATTEMPTS)) {
     signal.throwIfAborted();
     try {
       const keys = await appraise(model, host, signal);
-      if (!assessRoute(policy, keys.security).accepted) throw new TeeError("TEE_POLICY_ROUTE_REJECTED");
+      if (!assessRoute(policy, keys.security).accepted) {
+        if (!bestRejected || compareRoutes(keys.security, bestRejected) < 0) bestRejected = keys.security;
+        throw new RouteRejection(keys.security);
+      }
       if (!best || compareRoutes(keys.security, best.keys.security) < 0) best = { host, keys };
-      // A1/H1/G1/X2 is the strongest possible direct worker under this protocol.
-      if (keys.security.host === 1 && keys.security.gpu === 1) break;
+      // G3 is the best possible reported GPU level when appraisal is unchecked.
+      if (keys.security.host === 1 && (keys.security.gpu === 1 || policy.gpu === "unchecked")) break;
     } catch (error) {
       signal.throwIfAborted();
       if (lastHealthy.get(model) === host) lastHealthy.delete(model);
@@ -98,7 +102,7 @@ export async function selectPublicWorker(model: PublicModel, signal: AbortSignal
     }
   }
   if (best) { lastHealthy.set(model, best.host); return best; }
-  throw rejection ?? unavailable ?? new TeeError("TEE_PUBLIC_BUILD_DEPLOYMENT_UNAVAILABLE");
+  throw (bestRejected && new RouteRejection(bestRejected)) ?? rejection ?? unavailable ?? new TeeError("TEE_PUBLIC_BUILD_DEPLOYMENT_UNAVAILABLE");
 }
 
 export async function openRatedPublicWorkerTransport(signal: AbortSignal, model: string, policy: SecurityPolicy) {

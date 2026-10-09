@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { TeeError, parsePolicy } from "pi-tee-core";
+import { RouteRejection, TeeError, parsePolicy } from "pi-tee-core";
 import { selectPublicWorker } from "../packages/tinfoil/src/public-session.js";
 
 const keys = (host: string, level: 1 | 2 = 1) => ({ tls: "a".repeat(64), hpke: "b".repeat(64), publicBuild: { host },
@@ -49,4 +49,29 @@ test("selection reaches a qualifying worker after four rejected candidates", asy
   });
   assert.ok(selected.keys.security.cpuVerified);
   assert.equal(attempted, 5);
+});
+
+test("gpu=unchecked stops at the strongest achievable current worker", async () => {
+  let attempts = 0;
+  await selectPublicWorker("gemma4-31b", AbortSignal.timeout(5000), {
+    discover: async () => ["unchecked-a", "unchecked-b"], reachable: async hosts => hosts,
+    appraise: async (_model, host) => { attempts++; return { ...keys(host), security: { ...keys(host).security, gpu: 3 } }; },
+  }, parsePolicy("public-builds-trust-host,egress=metadata,host=current,gpu=unchecked"));
+  assert.equal(attempts, 1);
+});
+
+
+test("selection retains the strongest authenticated rejected worker, rather than an unrated failure", async () => {
+  await assert.rejects(selectPublicWorker("gemma4-31b", AbortSignal.timeout(5000), {
+    discover: async () => ["genoa", "current-gpu-gap", "unavailable"], reachable: async hosts => hosts,
+    appraise: async (_model, host) => {
+      if (host === "unavailable") throw new TeeError("TEE_ATTESTATION_REJECTED");
+      const result = keys(host, host === "genoa" ? 2 : 1);
+      if (host === "current-gpu-gap") result.security.gpu = 2;
+      return result;
+    },
+  }, parsePolicy()), error => {
+    assert.ok(error instanceof RouteRejection); assert.equal(error.security.host, 1); assert.equal(error.security.gpu, 2);
+    assert.deepEqual(error.security.observed, ["current-gpu-gap"]); return true;
+  });
 });

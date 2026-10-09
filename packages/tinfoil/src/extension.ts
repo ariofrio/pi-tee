@@ -1,4 +1,4 @@
-import { formatProviderReport, registerSecurityStatus, TeeError } from "pi-tee-core";
+import { formatProviderReport, TeeError } from "pi-tee-core";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { createTinfoilProvider } from "./index.js";
 
@@ -6,7 +6,6 @@ export default async function tinfoil(pi: ExtensionAPI) {
   const integration = createTinfoilProvider();
   if (process.env.PI_TEE_OFFLINE !== "1") await integration.initializeCatalog().catch(() => undefined);
   pi.registerProvider(integration.provider);
-  registerSecurityStatus(pi.registerCommand.bind(pi), integration.provider.id, () => integration.getReport());
   const show = (ctx: ExtensionContext) => {
     const report = integration.getReport();
     ctx.ui.setStatus("tinfoil-policy", ctx.model?.provider === "tinfoil" ? `Tinfoil: ${report.policy} / ${report.lastRequest}` : undefined);

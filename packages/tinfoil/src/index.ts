@@ -30,7 +30,7 @@ export function createTinfoilProvider(options: {
   if (!["auto", "router", "direct", "direct-public"].includes(route)) throw new TeeError("TEE_ROUTE_INVALID");
   const publicPotential = { route: "tinfoil-direct", provider: "Tinfoil", cpuVerified: true, code: 1 as const, host: 1 as const, gpu: 1 as const, egress: 2 as const, build: 3 as const, review: 3 as const, observed: [] };
   const routerSecurity = { route: "tinfoil-router", provider: "Tinfoil", cpuVerified: true, code: 3 as const, host: 3 as const, gpu: 3 as const, egress: 3 as const,
-    observed: ["Router and hidden worker/sidecar code is not fully pinned by client checks.", "CPU evidence has no client nonce; AMD revocation and local firmware floors are unchecked.", "Worker GPU protection is unchecked; web-search and sidecar paths can carry plaintext.", "Router tags are signed, but their build workflow and runner are unchecked (B4 for the router component).", "Tinfoil handling commitments have not been reviewed."] };
+    observed: ["Router and hidden worker/sidecar code is not fully pinned by client checks.", "CPU evidence has no client nonce; AMD revocation and local firmware floors are unchecked.", "Worker GPU protection is unchecked; web-search and sidecar paths can carry plaintext.", "Router tags are signed, but their build workflow and runner are unchecked (B4 for the router component).", "Tinfoil handling commitments have not been reviewed.", "SDK re-attests and resends once only on EHBP key-configuration mismatch; other request failures are not retried."] };
   return createTeeProvider({
     id: "tinfoil", name: "Tinfoil", baseUrl: TINFOIL_BASE_URL, apiKeyEnv: "TINFOIL_API_KEY",
     policy: options.policy ?? resolvePolicy(process.env.PI_TEE_POLICY),

@@ -1,4 +1,4 @@
-import { formatProviderReport, registerSecurityStatus, TeeError } from "pi-tee-core";
+import { formatProviderReport, TeeError } from "pi-tee-core";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { createNearProvider } from "./index.js";
 
@@ -6,7 +6,6 @@ export default async function nearai(pi: ExtensionAPI) {
   const integration = createNearProvider();
   if (process.env.PI_TEE_OFFLINE !== "1") await integration.initializeCatalog().catch(() => undefined);
   pi.registerProvider(integration.provider);
-  registerSecurityStatus(pi.registerCommand.bind(pi), integration.provider.id, () => integration.getReport());
   const show = (ctx: ExtensionContext) => {
     const report = integration.getReport();
     ctx.ui.setStatus("nearai-policy", ctx.model?.provider === "nearai" ? `NEAR AI: ${report.policy} / ${report.lastRequest}` : undefined);
