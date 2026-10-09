@@ -2,158 +2,37 @@
 
 ## Unreleased
 
-- Corrected verifier documentation and source links; separated dated client/Tinfoil evidence and historical reviews from active guidance, with compatibility links and a local Markdown link check.
+### Added
 
-- Add `pi-chutes`: native login, confidential tool-capable chat discovery and `/chutes status`; fresh per-request Intel/ML-KEM/host-SPKI appraisal, shared firmware floors, A3/H1-or-H2/G3/X3 admission and send-once whole-body encryption on an owned WebPKI TLS 1.3 socket that cannot replay HTTP 421. Disclose API-key/routing metadata at ordinary WebPKI endpoints and unverified runtime/recipient closure. Verify encrypted streaming, tools, reasoning and cancellation under Node and Bun; no NRAS or plaintext fallback. [Validation](docs/chutes-validation.md).
+- Four separate Pi extensions: NEAR AI, Tinfoil, Chutes and Privatemode, with native API-key login, discovery, tools, reasoning, usage and cancellation. Packages remain unpublished. [Provider guide](docs/providers.md).
+- Tinfoil public direct workers for Gemma 4 31B, DeepSeek V4.1 Flash and GLM-5.3, plus a DeepSeek/GLM billing-relay fallback. Fresh public release/runtime/key, CPU and serving-GPU checks precede inference; direct is preferred. [Serving contract](docs/contracts/tinfoil-public-builds.md).
+- Hash-checked local WASM verifiers, isolated workers, owned TLS transport and six desktop Node/Bun host checks; no user-installed compiler/container. Android emulator results have a narrower credential-free scope. [Support](docs/reference/support-limits.md), [evidence](docs/evidence/README.md).
 
-- Share the existing TDX SVN and collateral-edition host-rating floors in core; NEAR and Tinfoil retain their thresholds and policy identities.
+### Changed
 
-- Discover NEAR direct endpoints for every matching tool-capable, attestation-declared model in both catalogs and the endpoint registry. Ignore registry-only models and invalid hostnames; appraise each candidate before the prompt, skip/report unreachable endpoints, and require report-model matching. Observed Qwen3.6 35B and Qwen3.8 27B are A3/H2/G3/X3 (`OutOfDate`): `host=current` rejects them and `host=outdated-firmware` under `trust-provider-and-host` admits them. Catalog claims never raise levels. Keep direct availability separate from the gateway’s persisted protocol flag, attach endpoint skips to each request’s route decision, and distinguish wrapped TLS/WebPKI rejections from unreachable endpoints without logging raw errors. GLM and Qwen3.6 passed the Node and compiled Bun Pi suites; [discovery, policies and live validation](docs/near-direct-discovery.md).
+- `PI_TEE_POLICY` uses four named trust positions and explicit thresholds. The default is `public-builds,egress=metadata`; route admission checks every axis and compares code, host, GPU and handling. Build reproduction/pinned review remain unsupported. [Policy and migration](docs/reference/policy.md).
+- NEAR direct discovers matching tool-chat catalog/registry endpoints. NEAR/Chutes establish fresh H1/H2 locally while remaining A3/G3/X3; optional NEAR GPU diagnostics never gate admission or contact NRAS. Privatemode remains A2/H3/G3/X3 under exact hard-pin or explicit logged-CDN manifest admission.
+- Tinfoil platform authority is the exact `cvmimage` platform-release workflow; strict v2 references require an authenticated same-release classic companion. Genoa H2 retains publisher minima/production checks; Intel OutOfDate public workers remain unavailable. NRAS authenticates device/overall tokens under the same GPU gates.
+- User guides, policy/hardware reference and maintainer procedures now have separate homes. Dated investigations/reviews keep their scopes, verdicts and compatibility links; verifier rationale lives beside code. The comment-only Go update includes a rebuilt CI artifact/pin, without changing verifier logic.
 
-- Add `pi-privatemode` with fresh nonce/mesh-key verification, exact manifest closure, full-body encrypted streaming and native Pi login, tools, reasoning and cancellation under Node and Bun. Admit A2/H3/G3/X3 only under matching provider/host-trust policies. Provide hard-pin and explicit logged-CDN manifest admission; disclose gateway credentials/metadata, readable logs and raw OTLP forwarding. Share CPU floor helpers and add real SDK encryption, policy and live tampering tests. [Design and validation](docs/privatemode.md).
+### Fixed
 
-- Retire Tinfoil’s `platform-endorsements/.github/workflows/build.yml` platform authority. Only `cvmimage/.github/workflows/platform-release.yml@refs/tags/platform-vMAJOR.MINOR.PATCH` is accepted, with exact tag and GitHub-hosted runner checks. Authenticated v1 classic statements remain accepted directly; strict v2 predicates require their independently authenticated same-release classic companion. Malformed companion schemas and ABI versions return explicit errors. Every CPU/GPU floor and machine restriction remains unchanged. Authentic old-authority rejection and new-authority acceptance are covered by offline signature tests.
-- Use only `/nearai status` and `/tinfoil status` to avoid Pi command collisions. Report actual rejected worker levels and failing axes; stop worker appraisal early when unchecked GPU evidence cannot improve. Reject unsupported `build=signed` and unrated legacy dispatch. Preserve and disclose the router SDK’s one key-rotation resend; no other retry is added.
-- Add Tinfoil's billing gateway as a fallback for DeepSeek V4.1 Flash and GLM-5.3. Each dispatch appraises fresh worker evidence and seals bodies to its own key, with the same ratings as direct. Prefer direct to limit credential/metadata recipients; disclose gateway WebPKI termination in `/tinfoil status`. A 412 fails without a resend. Disclose frame-completeness and same-worker replay limits only when gateway routing is enabled, and preserve actual rejected worker levels under the gateway route in `/tinfoil status`. Relay appraisals have the same 120-second per-candidate cap as direct. Node/Bun crypto and route tests cover wrong workers, swapped evidence, nonce mismatch, response substitution, loops and rejected gateway levels; [protocol and live validation](docs/tinfoil-gateway.md).
+- Preserve native credential selection across all four extensions; reject ambiguous Privatemode attestation-field aliases and manifest/policy mismatches before inference.
+- Guard final post-hook payload/model/endpoint/authentication; bind actual sockets/recipient keys, bound memory/time and reject forged output, reconnects and unwanted resends. Chutes' owned invocation socket cannot replay HTTP 421. The Tinfoil SDK router's single disclosed key-mismatch recovery remains the exception.
+- Correct documentation facts/links and reconcile anonymous versus credentialed provider evidence. Document Privatemode runtime-added gateway headers and the cost of Tinfoil per-request cache salts. Local Markdown links are checked in CI.
 
-- Replace policy and route environment variables with `PI_TEE_POLICY=<position>[,axis=value…]`. Four positions disclose provider/host trust; defaults, forced values and categories are validated. The shipped default is `public-builds,egress=metadata`; removed `sdk`/`approved` and provider-specific variables return migration guidance. Build reproduction and pinned/window review remain unsupported.
-- Rate actual route evidence on code, CPU, GPU and plaintext handling; admit every threshold and select by code, host, GPU, then egress. Genoa can qualify as H2 under explicit host trust while retaining publisher minima, revocation and production checks. Intel OutOfDate Tinfoil direct workers remain unavailable under every policy.
-- Check NEAR's authenticated TDX SVN and collateral-edition floors locally for H1. Below-floor or unreadable values rate H2. NEAR routes remain A3/G3/X3; optional GPU diagnostics no longer gate admission and never contact NRAS. Direct TLS supports Bun-compiled Pi.
-- Authenticate NRAS overall/per-device tokens before applying the same G checks as local appraisal. Provider-scoped status commands show position, actual trusts, every gap, observations, commitments and route choices. Dispatch cannot outlive its appraised session.
-- Validation for this model is recorded in [implementation.md](docs/implementation.md). The earlier entries below describe preceding implementations.
+### Security and limits
 
-- Validate pi-tee on Android/Termux (arm64 emulator, Node 24 and 26). Run CI on Node 26 as well, and give CLI-spawning tests more time for slow cold starts.
+- These extensions protect their own dispatches; whole-session protection and independent approval remain unestablished. Local code, named public publishers/manufacturers, and weaker routes' explicitly admitted provider/host trust remain required. [Security boundary](SECURITY.md).
+- Gateways can receive credentials/routing metadata while bodies stay encrypted. Tinfoil relay frame-boundary truncation and same-worker request replay can affect completeness/billing. Fresh per-request cache salts defeat cross-turn prompt caching and can increase prefill cost. [Exact disclosures](docs/providers.md).
+- Validation is scoped to its commit, lock, route, runtime and sampled population. Private/raw evidence and live inference are separate from ordinary CI. [Evidence index](docs/evidence/README.md).
 
-- Run `npm run check`, both smokes, the Go helper's `gofmt`/`go vet`/`go test` and the Bun-specific tests in CI on every push to `main` and pull request.
-- Appraise GPU evidence on NEAR's experimental direct route with NVIDIA's local WebAssembly verifier instead of NRAS. The SDK's NRAS verifier is replaced, so GPU evidence no longer leaves for a remote verdict; a test watches the network seam to prove it. The route applies the same per-device checks and, by default, the same GPU policy table as Tinfoil; callers may supply another table. NEAR's GLM CVMs currently serve from eight Hopper GPUs in PPCIe mode, below that table's version floors, so the route now fails closed with `TEE_GPU_POLICY_REJECTED` until a policy for that hardware is decided. `npm run smoke:near-gpu` checks NEAR's public evidence with a fresh nonce and no credentials and reports NVIDIA's verdict and the policy outcome; on 2026-10-09 NVIDIA's verifier accepted all eight GPUs under Node and Bun and the default policy rejected them.
+### Removed
 
-- Move NVIDIA's verifier, its worker and request bridge, the Hopper mode parser and table-driven GPU appraisal from `pi-tinfoil` into `pi-tee-core`, so both providers share them without depending on each other. Tinfoil's policy and authority digest are unchanged, and the module bytes are unchanged.
+- `sdk`/`approved` policy names and provider-specific policy/route environment variables: migration errors replace aliases. Old native/Docker setup commands and the retired platform authority are not current options.
 
-- Run NEAR's experimental direct route under Bun. Its channel subclassed `https.Agent`, which Bun cannot bind to one socket, and the route refused Bun outright, so the Bun-compiled Pi binary failed every request with `TEE_RUNTIME_UNSUPPORTED`. The channel now writes sequential HTTP/1.1 exchanges on one WebPKI-authenticated `node:tls` socket through the shared pinned-TLS reader, keeping evidence, inference and signature lookup on one connection that is never replaced. Unsolicited bytes between exchanges end the channel. The SDK gateway route still refuses Bun. Channel tests pass under Node and Bun; against NEAR's live endpoint, the Bun-compiled Pi 1.0.4 binary reached the credential check with a synthetic key. The credentialed Pi suite under Bun is pending.
+## Earlier development history
 
-- Persist each GitHub metadata lookup once its own check passes and drop only a stored lookup whose check fails, so unrelated outages or rejected workers no longer clear the cache.
-
-- Enable the Tinfoil public-build profile for Gemma 4 31B, DeepSeek V4.1 Flash and GLM-5.3 after independent review of the WebAssembly verifiers, the NVIDIA reference-manifest patch, the TLS client and the multi-model/SEV-SNP profile. Default `auto` routing now admits these models under the default `public-builds` policy; other catalog models stay unavailable without an SDK fallback.
-
-- Persist the two GitHub API lookups in the artifact chain on disk after a verified chain, so separate Pi processes stay within GitHub's 60-requests-per-hour unauthenticated limit; a failing chain that read them discards them. Report delivery failures as `TEE_PUBLIC_ARTIFACT_UNAVAILABLE` instead of `TEE_PUBLIC_BUILD_REJECTED`, and a missing guest-build attestation as a rejection. Ask for medium reasoning effort in the live harness, since effort-only models may skip thinking at low effort.
-
-- Harden GPU reference-manifest appraisal: require NVIDIA's exact signature layout, read manifest content only from fixed signed locations with exactly one version `Meta`, ignore manifests and allowlist reference transforms. The collateral check adds six layout negatives with specific NVIDIA codes; the rebuilt module comes from CI.
-
-- Hash-pin the Emscripten toolchain archives (LLVM, Binaryen, Emscripten, Node, Python) for Linux and macOS build hosts; emsdk itself installs them unchecked. The WebAssembly verifier workflow now also runs for changes to the verifier hosts, bridge, WASI shim, checks and lockfile, and runs the NVIDIA collateral check under Bun as well as Node. Provenance attestations now cover the committed archives, which CI checks decompress to its rebuilt modules, instead of CI's own recompressed copies.
-
-- Harden the WebAssembly verifier hosts: the WASI shim resolves only its own imports and returns `EFAULT` for buffers past the end of guest memory instead of truncating them, a cancellation that arrives while the NVIDIA verifier is loading now stops it before its worker starts, and the worker imports NVIDIA's JavaScript glue from the authenticated bytes instead of re-reading the file. Under Node, the NVIDIA worker no longer follows `NODE_USE_ENV_PROXY` proxy settings; Bun still applies `HTTP(S)_PROXY`, now documented.
-
-- Key SEV-SNP firmware floors on the report's CPU model and raise them to AMD-SB-3019/3020/3027 (Genoa SNP SPL 0x1B and microcode 0x56, Genoa-X 0x1B/0x51, Turin 0x04/0x51). Reject other CPU models and non-production machine policies on both platforms. Gemma's current Genoa workers fall below these floors and are rejected; its TDX workers still serve.
-
-- Constrain the engine image's process definition: `vllm serve`, optionally behind Tinfoil's inference-sidecar, no default arguments, user, volumes or unlisted inherited environment. Declare the sidecar and Tinfoil's usage middleware as plaintext recipients in the serving contract.
-
-- Probe which advertised Tinfoil workers accept connections before spending full appraisals on them, so unreachable hosts no longer exhaust the four attempts.
-
-- Harden the pinned TLS client: malformed response headers fail the request instead of crashing Node, a stalled reader pauses the socket, close-delimited bodies are rejected, and the negotiated TLS version is checked because Bun ignores `minVersion`.
-
-- Extend the Tinfoil public-build profile to DeepSeek V4.1 Flash and GLM-5.3, alongside Gemma 4 31B. Accept AMD SEV-SNP evidence (Genoa/Turin roots, AMD CRL, publisher TCB floors, non-debug non-migratable VMPL0 guests) as well as Intel TDX. Appraise every CPU-bound GPU: one claim per device, one supported hardware model, distinct devices, per-model firmware floors, and SPT for one GPU or Blackwell MPT for several. Replace the Gemma-only runtime profile with `tinfoil-vllm-v1`, and discover and freshly appraise workers on each dispatch instead of pinning one host. Tinfoil's remaining models are reachable only through a router that does not enforce the policy and stay excluded. Production admission stays closed pending review.
-
-- Raise weaker SEV-SNP firmware floors from the platform publisher to local backstops, matching the existing TDX floors. Current publisher floors already equal them.
-
-- Recompute the SEV-SNP launch digest from the authenticated kernel, initrd and command line with a pinned, attested OVMF, matching the existing TDX register recomputation.
-
-- Retry transient 502/503/504 responses while fetching public artifacts; every byte is still authenticated by digest or signature.
-
-- Replace the Docker-hosted NVIDIA verifier and native Go helpers with WebAssembly modules shipped in `pi-tinfoil`: NVIDIA's verifier with the reference-signer patch (Emscripten) and the public-build CPU/release verifier (WASI). Both are hash-checked before compilation and run in terminable worker threads; the CPU verifier has no file system or network, and the NVIDIA verifier reaches only NVIDIA's reference and OCSP services. No setup step remains. Remove the frozen `direct-intel` route, `pi-tinfoil-setup`, the native NVIDIA candidate and the Go TLS helper. The experimental `sdk`-policy `direct-public` route runs the full appraisal; production `public-builds` admission stays closed pending review.
-
-- Send pinned-TLS requests as one HTTP/1.1 exchange on the verified `node:tls` socket instead of through `https.Agent`, which Bun cannot bind to an existing socket. The actual Pi suite, including live-delta cancellation, passes under Node and the Bun-compiled Pi 1.0.4 binary.
-
-- Map NEAR models' Pi `maxTokens` to their context length. NEAR advertises `max_output_length` 8192 for several models but does not enforce it, and Pi already clamps requests to the remaining context.
-
-- Pause Tinfoil public-build admission until the native GPU verifier replaces the pinned Linux verifier and passes review. Admission and the Intel research route fail before collecting evidence; the default policy exposes no models.
-
-- Verify native-candidate GPU reference-manifest signatures with the certificate-chain leaf key and require whole-document references. The patch is applied to a hash-checked copy of the pinned NVIDIA source.
-
-- Restrict native-verifier builds to a toolchain environment, package a hash-checked OpenSSL configuration and strip runtime overrides. Add reference/OCSP signature negatives with authentic delivery controls to the six-target workflow. Remove source paths from application compilation and fix a Windows logging-macro collision. The native verifier remains a candidate; production admission is unchanged.
-
-- Keep the authenticated native-verifier Cargo lock in LF form on Windows, preserving its exact pinned hash across checkout settings.
-
-- Add a Docker-free native NVIDIA verifier build candidate with locked SDK, Rust and dependency inputs, disabled local collectors and six-target desktop execution checks. Test real GPU nonce, report/mode signature and certificate-signature rejection. Production verification and admission remain unchanged; packaging and full qualification are unfinished.
-
-- Retry temporary helper-file locks during cleanup and handle persistent removal failures without terminating Pi. Only the executable snapshot can remain; no request data is written there.
-
-- Strengthen the isolated expiry regression with an independent loopback IPC observer. Catch a request write before a misplaced expiry check, even when the parent subsequently returns the expected error. Production transport is unchanged.
-
-- Limit native TLS connection setup to ten seconds without cutting off admitted response streams. Bind TLS fixtures to loopback and test the parent-side expiry check independently of the Go helper's own check.
-
-- Add public Tinfoil worker discovery and an evidence-only probe covering every advertised candidate for the seven current chat workloads. Fix delivery services, compare the expected publisher repository, bound results and reject arbitrary hosts/releases; ignore claimed keys and measurements. Support worker hostname aliases independently of catalog IDs. Production routing and admission are unchanged.
-
-- Separate NEAR model TEE declarations from SDK protocol support. Declared Chutes models are no longer labeled non-TEE; discovery reports their unavailable transport, the default picker hides them, and show-all labels them accurately. SDK dispatch fails before setup; public profiles remain independent of SDK support. Preserve the distinction in offline snapshots.
-
-- Recheck public admission expiry after TLS setup before sending credentials or ciphertext, in both the native and portable transports. Pass the verified deadline from Tinfoil sessions; check it again inside the helper before its sole HTTP write. Add slow-handshake and post-readiness expiry negatives. Accepted response streams may continue past the dispatch deadline.
-
-- Add an optional owned Go TLS transport for portable Node/Bun integration. Authenticate the socket before passing credentials/body to the helper; snapshot hash-checked artifacts, stream bounded frames and close processes/sockets on cancellation. Add real socket, dropped-response/no-replay and Node/Bun tests plus a candidate Pi harness. Production routing and GPU-verifier dependencies are unchanged.
-
-- Allow separate public-build profiles for different models in one provider. Bind each admission, authority digest and expected endpoint to its canonical model; reject ambiguous profile ownership and inconsistent session endpoints before transmission. Each profile declares its own trust assumptions. Adapters sharing a URL must isolate workloads through their attested connections. Existing production coverage is unchanged.
-
-- Clarify NEAR gateway coverage: 20 fresh evidence-only checks distinguished two measured instance IDs, both `OutOfDate`. Record the evidence and avoid extrapolating to the entire fleet; verification policy is unchanged.
-
-- Enable the reviewed Tinfoil Gemma public-build profile on the documented macOS ARM64/OrbStack setup. Default auto routing now selects the owned Intel worker under public policy; router users must explicitly choose SDK policy. Add production activation/no-fallback regressions and actual compiled-extension public-policy validation. NEAR public builds, independently Approved workloads and whole-session protection remain unavailable.
-
-- Select Tinfoil routes automatically by policy: owned worker admission for public builds (still gated for final wiring review), SDK router for explicit SDK policy. Report public-profile assumptions independently of SDK route assumptions; preserve explicit router rejection under public policy. State the tested OrbStack/containerd builder scope and make the setup negative robust to Node deprecation warnings.
-
-- Package locked CPU-verifier source and add `pi-tinfoil-setup` for macOS ARM64. Authenticate NVIDIA/Ubuntu archives, reproduce the pinned GPU image without RUN network access, check its OCI tar hash before loading, and reject substituted cached dependencies. Two clean image builds are byte-identical and the image passes real local NVIDIA appraisal. Clarify declared trust closure, admission records and unsupported schema/platform limits.
-
-- Add owned public-build sessions with canonical model/endpoint, authority-policy and artifact digests, fresh admission/expiry checks, policy-change cancellation and no SDK fallback. Bind the real Intel public-build chain to that contract; keep production admission disabled pending repeatable setup and final review. Add native mismatch/expiry negatives, including expiry during a Pi payload hook, and a synthetic actual-Pi candidate harness.
-
-- Document the closed Tinfoil public-build authority/process set, plaintext/key custody, operator inputs and publisher/manufacturer channel/reset contracts.
-
-- Reject remote or unapproved Docker verification endpoints before collecting evidence; bind NVIDIA appraisal and cleanup to the checked local Docker Desktop or OrbStack Unix socket. This assumes the local OS and socket service are trusted.
-
-- Cache immutable public-build artifacts and deterministic helper results within the Pi process, with bounded memory and fresh CPU/GPU/freshness appraisal on every request. Execute private copies of verified public-build and NVIDIA helpers, and clean them after appraisal. Add warm-cache, nonce and helper-replacement regressions through the real verifier/delivery boundary.
-
-- Allow newer NVIDIA driver/VBIOS versions in `direct-public` when they satisfy explicit local floors and all existing manufacturer signature, reference, revocation, nonce and SPT checks. Preserve exact versions for the frozen Intel candidate. Evidence-CLI tests check version compatibility without claiming authentication of synthetic reports.
-
-- Bind downloaded deployment/runtime/container inputs to the CPU-accepted signed predicate and statement digest. Recompute boot registers against the quote's authenticated expectations, require unambiguous collateral selection, apply security floors to an owned policy copy, enforce public platform/freshness workflow certificates, and reject JSON parser ambiguities. Add real-verifier Node delivery-substitution tests and a public inspection test of weak/strong TDX floors. Production admission remains gated.
-
-- Recompute RTMR1/RTMR2 in the shared dynamic build chain using a bounded, attributed TypeScript port of the release measurement algorithm. Reject unsupported PE layouts; test real release registers, code/command substitutions and malformed layouts without claiming build authentication. The full actual Pi suite passes with the new boot gate; the package includes the component's Apache license.
-
-- Add the SDK-policy `direct-public` Intel candidate: authenticate fresh dynamic release/guest/OCI/source/runtime evidence before local NVIDIA appraisal and send-once encrypted inference. Share the artifact chain with the evidence probe, reject untrusted local helpers through native Pi, and retain the default production gate. All 44 provider tests, package loader checks, the full actual Pi suite and separate live-delta cancellation pass.
-
-- Enforce a Gemma runtime configuration contract after authenticating the named public release: bind VM shape, guest/config boot hashes, dynamic image/model roots, literal environment, engine flags, routes and health checks. Reject host access, unknown environment, remote code, logging and ambiguous YAML/arguments. Connect it to the evidence-only live chain; standalone and combined results still deny inference qualification.
-
-- Test signed GPU-mode coverage at the real NVIDIA verifier boundary: changing only SPT to MPT returns signature-error result `508`, alongside forged-signature and wrong-nonce negatives. Require SPT in the Intel research probe as well as the native candidate; the evidence-only run passes with zero inference.
-
-- Validate automatic guest-build updates with real signed CVM `v0.11.0` and `v0.14.13` artifacts under the unchanged verifier/workflow/root policy. Record both offline fixtures; this proves the guest-build stage, not a second qualified inference deployment.
-
-- Follow the authenticated Tinfoil release into its dynamic OCI image/config/provenance digests and public build-source/Dockerfile checks. Treat embedded BuildKit metadata as publisher-endorsed claims, explicitly without independent builder-signature verification. Add offline real-signature/artifact substitutions, including rehashed metadata; the combined live evidence probe passes without inference.
-
-- Require the Intel candidate's signed Hopper report to declare SPT mode after local NVIDIA verification. Correct for the inspected C++ mode enum/JSON limitations using NVIDIA's Python field interpretation, reject ambiguous records, and preserve terminal mode diagnostics without retries. Add evidence-CLI and native-provider regressions; public-build inference qualification remains separate.
-
-- Authenticate Tinfoil guest builds through the exact public CVM release workflow, source commit and signed manifest/kernel/initrd/disk subjects. Derive guest versions dynamically, check downloaded kernel/initrd bytes and the verity/config-bound boot command, and recompute RTMR2 in the live public-build probe. Add offline real-signature substitution tests; inference qualification remains separate.
-
-- Select `public-builds` as the default policy target: authenticated updates from named public release/build authorities, without maintained deployment pins. Keep inference blocked until a complete serving profile qualifies; preserve explicit SDK routes and optional Approved semantics. Add a separate automatic Tinfoil public-release/CPU verifier and live artifact/source probe, with exact workflow identities, signed freshness, local hardware floors and real-evidence rejection tests. Fresh locked install, build/types, 40 provider tests, compiled/isolated package login checks, Go tests/vet and the live public-artifact probe pass; no inference is sent by the probe.
-
-- Trace the Intel candidate's boot artifacts to the fixed configuration/root hash, recompute RTMR1/RTMR2, and add an offline RTMR2/artifact check with real-artifact mutation validation. Document checked runtime source paths and the remaining workload qualification work.
-
-- Add an opt-in Intel direct Gemma candidate with fresh locally pinned TDX policy, local NVIDIA appraisal of CPU-bound evidence, helper/library/image hash checks, exact TLS/HPKE binding and encrypted vLLM cache salt. Its full actual Pi suite and separate live streaming cancellation pass. Record the closed hardware/local-artifact inventory, combined real GPU negatives and remaining independent workload/runtime gates; production Approved defaults are unchanged.
-
-- Add an experimental native GLM direct route for NEAR SDK policy. Require fresh UpToDate CPU evidence, GPU evidence, quote-bound SPKI on one TLS socket, OHTTP and model-response signatures. Reject reconnect/resend, limit the route to GLM and dispose owned transports after terminal results. Add real TLS and native-provider cleanup regressions.
-
-- Add locked, offline CPU qualification tooling with local AMD/Intel workload and security pins. Fresh Intel appraisal and real-evidence binding negatives pass without provider reference/freshness collateral; the sampled AMD worker fails manufacturer-based firmware floors. Probe reachable alternatives and record separate Intel GPU appraisal; extension defaults and Approved gates remain unchanged.
-
-- Add an explicit pinned Gemma direct-worker route for Tinfoil SDK policy. Verify the exact artifact/tag/measurement and the attested TLS socket before transmitting credentials or EHBP ciphertext; send once and fail on rotation. The full actual Pi suite passed, including RPC cancellation; a separate streaming cancellation run passed after a live text delta without a test delay. Correct the harness's response notification path and document the response-consumption test boundary.
-
-- Add adapter-owned direct endpoint selection, route model restrictions, and TLS SPKI checks on the exact socket before HTTP transmission. Native-provider routing and real-socket rejection tests cover caller overrides, stale selections, and zero credential/body sends on a wrong TLS key.
-
-- Add evidence-only and opt-in synthetic direct-worker research probes. NEAR GLM passed strict same-TLS attestation and signed inference; Qwen remained `OutOfDate`. A Tinfoil Gemma SEV worker passed SDK verification and direct EHBP inference. Document the exact deployment artifact and remaining approval gates; registered provider routes and defaults are unchanged.
-
-- Accept Pi's text reasoning replay during tool-result follow-up; add failing-then-passing positive and structured-reasoning rejection tests. Record successful live Tinfoil completion, tools and reasoning with a corrected credential, while keeping cancellation and a complete live-suite pass unvalidated.
-
-- Preserve reusable guarded request bodies for Tinfoil SDK key-rotation recovery; add a failing-then-passing provider regression without adding Pi retries or independent approval claims.
-- Add opt-in, billable real Pi CLI/RPC validation with isolated native login, synthetic completion/tools/reasoning/cancellation checks and credential-safe diagnostics. Record current NEAR TCB-policy and Tinfoil credential failures without weakening verification policy.
-- Adopt unscoped `pi-nearai`, `pi-tinfoil` and `pi-tee-core` package names; publish the WIP source and assessment under `ariofrio/pi-tee`.
-
-- Hide NEAR models without declared serving-attestation support by default; add independent visibility settings and labeled show-all discovery without relaxing inference verification.
-- Add separately installable NEAR AI and Tinfoil Pi provider extensions with shared policy and transport enforcement.
-- Add native API-key login, public model catalogs, native stored refresh, provider-specific policy/report commands, and safe default blocking.
-- Add SDK-policy transports; hold NEAR response bytes until model signature verification completes.
-- Add payload/header/model guards, bounded buffering, cancellation and terminal retry suppression.
-- Keep independently approved production profiles and session-wide protection gated; document their remaining requirements.
+The complete [pre-release development chronology](docs/archive/changelog/pre-release-development.md) is preserved, including failures and superseded implementations. No release dates or versions have been invented. On release, freeze its section and start a fresh Unreleased; move older released sections verbatim to version/year archives with a linked index when length warrants it.
 
 Written by Codex.

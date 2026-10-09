@@ -19,3 +19,7 @@ Before enabling a production profile, document trusted parties/processes, authen
 Verifier/transport changes require independent review and tests through actual cryptographic and dispatch boundaries before production enablement. Mocked success and package loading do not qualify a deployment. The lockfile fixes the tested dependency set; fresh tarballs can resolve different SDK dependencies and need separate qualification. Follow [CONTRIBUTING](CONTRIBUTING.md).
 
 Written by Codex.
+
+<a id="supported-guarantees"></a>
+
+See the [security model](docs/security-model.md) and [provider guarantees](docs/providers.md).

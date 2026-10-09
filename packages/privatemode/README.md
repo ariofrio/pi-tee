@@ -17,6 +17,38 @@ A2/H3/G3/X3. Exact manifest pins and fresh Coordinator/mesh key checks do not es
 
 These protections cover this provider's dispatches. Local code and other Pi providers/tools can transmit conversation plaintext. [Security boundary](https://github.com/ariofrio/pi-tee/blob/main/SECURITY.md), [runtime/response limits](https://github.com/ariofrio/pi-tee/blob/main/docs/reference/support-limits.md), [qualification evidence](https://github.com/ariofrio/pi-tee/blob/main/docs/evidence/README.md).
 
-Library API: `createPrivatemodeProvider()` from `pi-privatemode`; `dist/extension.js` is the Pi entry point. Fresh tarballs may resolve different SDK dependencies and require separate qualification.
+Library API: `createPrivatemodeProvider()` from `pi-privatemode`; `dist/extension.js` is the Pi entry point. Manifest API: `ManifestAdmissionPolicy.admit(signal)`, `createPinnedManifestPolicy()`, `createRecordedCdnManifestPolicy()` and `manifestRecorder()` are exported. Returned bytes are rehashed/recorded before bootstrap; a custom policy cannot raise A2 without a separate verified release/closure implementation. [Source](https://github.com/ariofrio/pi-tee/blob/main/packages/privatemode/src/manifest.ts).
+
+Fresh tarballs may resolve different SDK dependencies and require separate qualification.
 
 Written by Codex.
+
+## Earlier section links
+
+<a id="setup-and-policy"></a>
+
+See [Setup and policy](https://github.com/ariofrio/pi-tee/blob/main/docs/providers/privatemode.md).
+
+<a id="manifest-admission"></a>
+
+See [Manifest admission](https://github.com/ariofrio/pi-tee/blob/main/docs/providers/privatemode.md).
+
+<a id="plaintext-and-metadata"></a>
+
+See [Plaintext and metadata](https://github.com/ariofrio/pi-tee/blob/main/docs/providers/privatemode.md).
+
+<a id="models-and-validation"></a>
+
+See [Models and validation](https://github.com/ariofrio/pi-tee/blob/main/docs/providers/privatemode.md).
+
+<a id="authenticated-attestationkey-negatives-zero-inference"></a>
+
+See [Authenticated attestation/key negatives, zero inference:](https://github.com/ariofrio/pi-tee/blob/main/docs/providers/privatemode.md).
+
+<a id="capped-synthetic-completion-tools-reasoning-and-cancellation"></a>
+
+See [Capped synthetic completion, tools, reasoning and cancellation:](https://github.com/ariofrio/pi-tee/blob/main/docs/providers/privatemode.md).
+
+<a id="bun-reads-typescript-directly-use-bun---env-file-scriptslive-pits-"></a>
+
+See [Bun reads TypeScript directly; use bun --env-file=... scripts/live-pi.ts ...](https://github.com/ariofrio/pi-tee/blob/main/docs/providers/privatemode.md).

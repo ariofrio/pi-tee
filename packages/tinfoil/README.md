@@ -20,3 +20,17 @@ These protections cover this provider's dispatches. Local code and other Pi prov
 Library API: `createTinfoilProvider()` from `pi-tinfoil`; `dist/extension.js` is the Pi entry point. Fresh tarballs may resolve different SDK dependencies and require separate qualification.
 
 Written by Codex.
+
+## Earlier section links
+
+<a id="policy-and-direct-workers"></a>
+
+See [Policy and direct workers](https://github.com/ariofrio/pi-tee/blob/main/docs/providers/tinfoil.md).
+
+<a id="billing-gateway"></a>
+
+See [Billing gateway](https://github.com/ariofrio/pi-tee/blob/main/docs/providers/tinfoil.md).
+
+<a id="router-and-reporting"></a>
+
+See [Router and reporting](https://github.com/ariofrio/pi-tee/blob/main/docs/providers/tinfoil.md).

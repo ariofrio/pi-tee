@@ -27,3 +27,9 @@ See the [preserved record](evidence/nearai/runtime-key-custody.md).
 ## What still works
 
 See the [preserved record](evidence/nearai/runtime-key-custody.md).
+
+## Earlier section links
+
+<a id="why-near-public-builds-cannot-be-enabled"></a>
+
+See [Why NEAR public builds cannot be enabled](providers/nearai.md).

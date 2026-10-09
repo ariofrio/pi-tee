@@ -19,3 +19,9 @@ See the [current serving contract](contracts/tinfoil-public-builds.md).
 ## Client session and limits
 
 See the [current serving contract](contracts/tinfoil-public-builds.md).
+
+## Earlier section links
+
+<a id="tinfoil-public-build-serving-contract"></a>
+
+See [Tinfoil public-build serving contract](contracts/tinfoil-public-builds.md).

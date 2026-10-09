@@ -11,9 +11,9 @@ Set `PI_TEE_POLICY=<position>[,axis=value…]` for all extensions. Provider-scop
 | `trust-provider` | provider-controlled | current | verified | any | Provider |
 | `trust-provider-and-host` | provider-controlled | stale | unchecked | any | Provider and host |
 
-Public-build positions also default to `build=publisher-workflow,review=none`. All positions default to `verifier=local`. Values within each axis are ordered strongest to weakest:
+Public-build positions also default to `build=publisher-workflow,review=none`. All positions default to `verifier=local`. Security-axis values below run strongest to weakest; verifier values are alternative appraisal choices.
 
-| Axis | Accepted values |
+| Axis | Recognized values |
 | --- | --- |
 | code | `public-release`, `fixed-private`, `provider-controlled` |
 | host | `current`, `outdated-firmware`, `stale` |
@@ -29,7 +29,7 @@ Only `build=publisher-workflow` and `review=none` are implemented. Other build/r
 
 Code below `public-release` forces `egress=any` and prohibits `build` and `review`. `host=stale` forces `gpu=unchecked`. The name must match both categories: public-build names require public code; provider-trust names require private or provider-controlled code. Host-excluding names require `host=current,gpu=verified`; host-trusting names require at least one weaker value. Contradictions, unknown values, duplicate axes and malformed settings are rejected with an explanation. These rules leave 35 combinations of the four axes.
 
-`verifier=local` is the default. `verifier=nras` authenticates NVIDIA's signed overall and per-device verdicts, then applies the same GPU mode, coverage, count, freshness, certificate/reference and firmware checks. It adds trust in NRAS's service keys, insiders and appraisal policy, discloses attestation timing and GPU identity to NVIDIA, and depends on service availability. With `gpu=unchecked`, it warns that NRAS has no effect. NEAR remains G3 and uses local GPU details only; its routes never contact NRAS.
+With `gpu=unchecked`, `verifier=nras` warns that it has no admission effect. NEAR, Chutes and Privatemode remain G3 and never contact NRAS. Opt-in NRAS for Tinfoil uses the [same GPU gates and added service trust](../security-model.md#admission-and-selection).
 
 ## Examples
 

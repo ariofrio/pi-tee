@@ -39,3 +39,9 @@ See the [preserved record](evidence/nearai/direct-access.md).
 ## to abort after a live text delta without the test consumption barrier.
 
 See the [preserved record](evidence/nearai/direct-access.md).
+
+## Earlier section links
+
+<a id="direct-worker-assessment"></a>
+
+See [Direct-worker assessment](evidence/nearai/direct-access.md).

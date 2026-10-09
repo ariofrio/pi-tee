@@ -1,3 +1,5 @@
+<a id="confidential-inference-providers-vs-the-pi-tee-security-model"></a>
+
 # Confidential-inference ecosystem survey
 
 **Evidence window: 2026-10-08–09; reconciled against merged pi-tee main fa5e154.** This is the canonical ecosystem comparison using the [security model](security-model.md). It combines preserved source investigations and scoped later adapter records; no new live probe or remote product review was performed for this restructuring. Installed behavior lives in the [provider guide](providers.md).

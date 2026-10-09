@@ -20,3 +20,17 @@ These protections cover this provider's dispatches. Local code and other Pi prov
 Library API: `createChutesProvider()` from `pi-chutes`; `dist/extension.js` is the Pi entry point. Fresh tarballs may resolve different SDK dependencies and require separate qualification.
 
 Written by Codex.
+
+## Earlier section links
+
+<a id="admission"></a>
+
+See [Admission](https://github.com/ariofrio/pi-tee/blob/main/docs/providers/chutes.md).
+
+<a id="content-and-metadata"></a>
+
+See [Content and metadata](https://github.com/ariofrio/pi-tee/blob/main/docs/providers/chutes.md).
+
+<a id="validation"></a>
+
+See [Validation](https://github.com/ariofrio/pi-tee/blob/main/docs/providers/chutes.md).

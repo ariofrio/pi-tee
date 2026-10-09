@@ -20,3 +20,13 @@ These protections cover this provider's dispatches. Local code and other Pi prov
 Library API: `createNearProvider()` from `pi-nearai`; `dist/extension.js` is the Pi entry point. Fresh tarballs may resolve different SDK dependencies and require separate qualification.
 
 Written by Codex.
+
+## Earlier section links
+
+<a id="policy-and-routes"></a>
+
+See [Policy and routes](https://github.com/ariofrio/pi-tee/blob/main/docs/providers/nearai.md).
+
+<a id="discovery-and-scope"></a>
+
+See [Discovery and scope](https://github.com/ariofrio/pi-tee/blob/main/docs/providers/nearai.md).

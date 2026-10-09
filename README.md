@@ -31,3 +31,25 @@ Tinfoil public requests use a fresh encrypted `cache_salt` per dispatch. This de
 Provider packages: [pi-nearai](packages/nearai/README.md), [pi-tinfoil](packages/tinfoil/README.md), [pi-chutes](packages/chutes/README.md), [pi-privatemode](packages/privatemode/README.md). [pi-tee-core](packages/core/README.md) is the shared library, not an extension. Each extension loads only its own provider dependencies.
 
 Written by Codex.
+
+## Earlier section links
+
+<a id="build-and-run"></a>
+
+See [Build and run](docs/quick-start.md).
+
+<a id="policy-and-routes"></a>
+
+See [Policy and routes](docs/providers.md).
+
+<a id="model-discovery"></a>
+
+See [Model discovery](docs/reference/commands-settings.md).
+
+<a id="security-scope"></a>
+
+See [Security scope](SECURITY.md).
+
+<a id="validation"></a>
+
+See [Validation](docs/procedures/README.md).

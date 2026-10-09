@@ -35,6 +35,24 @@ Every plaintext/key recipient counts, including routers, sidecars, KMS, secret s
 
 `/<provider> status` shows the position, thresholds, permitted trust, actual levels, computed gaps, observed details and candidate decisions. Before verification, levels are not established. Reports omit credentials, prompts, completions and quote bodies. Manufacturer authentication does not establish a complete safe software inventory or exclusive key custody.
 
-C (commitments) is displayed separately from admission. Contractual retention/training/audit statements do not prove deployed handling or raise a level. [NEAR's dated source/terms investigation](evidence/nearai/runtime-key-custody.md) and [client design snapshot](evidence/client/2026-10-09-design-assessment.md) retain the original observations; other provider commitments have not been appraised by these adapters.
+C (commitments) is displayed separately from admission. Contractual retention/training/audit statements do not prove deployed handling or raise a level. [NEAR's dated source/terms record](evidence/nearai/commitments.md) retains the original observations; other provider commitments have not been appraised by these adapters.
 
 Successful public dispatch reports `publicBuildVerification: profile-established` and `closedTrustSet: profile-declared`: checks passed under the declared contract, without an independently proven complete inventory. `independentApproval` and `protectedSession` remain `not-established`. [Protection boundary and obligations](../SECURITY.md).
+
+## Earlier section links
+
+<a id="policy-setting"></a>
+
+See [Policy setting](reference/policy.md).
+
+<a id="forced-values-and-categories"></a>
+
+See [Forced values and categories](reference/policy.md).
+
+<a id="routes-and-selection"></a>
+
+See [Routes and selection](reference/policy.md).
+
+<a id="migration"></a>
+
+See [Migration](reference/policy.md).

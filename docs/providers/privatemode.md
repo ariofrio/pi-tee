@@ -14,7 +14,7 @@ Every request uses an isolated hash-checked SDK 1.58.0 verifier, fresh nonce and
 
 Explicit `PI_PRIVATEMODE_MANIFEST_MODE=logged-cdn` instead authorizes pi-tee to fetch [the CDN manifest](https://cdn.confidential.cloud/privatemode/v2/manifest.json) for each request and adopt its exact bytes only after saving the change record. It cannot be combined with a local path. This trusts Privatemode's CDN to choose each new private-code pin; it does not establish a public release, reproduction or review approval. Fetch or recording failure blocks the request. The SDK's high-level client and its automatic mismatch re-fetch are never used in either mode.
 
-Adoptions append digest, previous digest, source and timestamp to `$XDG_STATE_HOME/pi-tee/privatemode/manifest-admissions.jsonl` (default `~/.local/state`). No credential, prompt or quote is recorded. New directories/files use modes 700/600. `ManifestAdmissionPolicy.admit(signal)` is the library seam for a reproduced pin or public-log policy; the provider rehashes returned bytes and records admission before bootstrap. `createRecordedCdnManifestPolicy`, `createPinnedManifestPolicy` and `manifestRecorder` are exported. A new policy cannot promote the baseline above A2 without a separate verified release/closure implementation.
+Adoptions append digest, previous digest, source and timestamp to `$XDG_STATE_HOME/pi-tee/privatemode/manifest-admissions.jsonl` (default `~/.local/state`). No credential, prompt or quote is recorded. New directories/files use modes 700/600.
 
 ## Plaintext and metadata
 

@@ -15,3 +15,9 @@ See the [preserved record](evidence/tinfoil/gateway-validation.md).
 ## Validation
 
 See the [preserved record](evidence/tinfoil/gateway-validation.md).
+
+## Earlier section links
+
+<a id="tinfoil-billing-gateway"></a>
+
+See [Tinfoil billing gateway](providers/tinfoil.md#billing-gateway).

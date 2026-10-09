@@ -31,3 +31,9 @@ See the [preserved record](evidence/client/2026-10-09-design-assessment.md).
 ## Validation and remaining limits
 
 See the [preserved record](evidence/client/2026-10-09-design-assessment.md).
+
+## Earlier section links
+
+<a id="confidential-providers-for-pi"></a>
+
+See [Confidential providers for Pi](design/architecture.md).

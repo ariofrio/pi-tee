@@ -8,7 +8,6 @@ These are dated observations and source investigations. A passing run qualifies 
 | --- | --- | --- |
 | [Security-model and earlier client validation](client/implementation-validation.md) | 2026-10-07–09; locked Node 24, Bun and Pi 1.0.4, direct and gateway/router suites | The security-model section records credentialed NEAR GLM suites on Node and Bun, six default Tinfoil direct suites, and the Bun router loading failure. The 126-test count and two-provider inventory precede Chutes. Earlier policies and setup remain historical. |
 | [Portable verification](client/portable-verification.md) | 2026-10-07–09; WASM/source boundaries, six desktop CI targets and Android emulator | The earlier NEAR Bun “not yet run” statement is superseded by the security-model run above. Android has credential-free appraisal, not a live Pi suite. Architecture descriptions reflect the preserved source snapshot. |
-
 | [Pre-restructure design/investigation snapshot](client/2026-10-09-design-assessment.md) | Preserved from main fa5e154, 2026-10-09 | Source investigations and old availability conclusions retain their original scope; current architecture/adapter behavior lives separately. |
 
 ## Tinfoil
@@ -20,7 +19,6 @@ These are dated observations and source investigations. A passing run qualifies 
 | [Public-profile validation metadata](tinfoil/public-profile-validation.json) | 2026-10-07; original Gemma production-enablement/setup scope | Retains native-helper/container facts and verdicts; it does not describe present WASM setup or independently qualify later policy changes. |
 | [GPU investigation](tinfoil/gpu-runtime.md) | 2026-10-07 sample and subsequent tests; Hopper SPT, Blackwell MPT, signed-field negatives and driver source | Source traces and manufacturer contracts; no physical-reset experiment, complete CUDA trace or live signed PPCIe/devtools negative. |
 | [Billing-gateway validation](tinfoil/gateway-validation.md#validation) | 2026-10-09; Node and Bun Pi suites for DeepSeek/GLM, relay appraisal and terminal 412 | Cancellation proves local acknowledgement; frame-boundary truncation and sealed-request replay remain disclosed limits. The active contract is in the provider guide; this record preserves the run. |
-
 | [Helper source and verification narrative](tinfoil/helper-investigation.md) | Preserved from main fa5e154; original run dates retained | CPU/guest/OCI/runtime stages, bounds and cache investigations; standalone success is not live serving qualification. |
 
 ## Other providers

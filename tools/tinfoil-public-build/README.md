@@ -1,3 +1,5 @@
+<a id="automatic-public-release-and-cpu-verification"></a>
+
 # Automatic public-release and CPU verifier
 
 Offline Go command and packaged WASI helper for Tinfoil CPU/release/build/runtime evidence. It sends no inference, releases no keys and appraises no GPU. Standalone success does not qualify a serving session. [Trust and serving contract](../../docs/contracts/tinfoil-public-builds.md), [source/qualification record](../../docs/evidence/tinfoil/helper-investigation.md).
@@ -39,3 +41,11 @@ Read JSON from stdin; binary fields are base64 exact bytes. Invalid or incomplet
 The TypeScript [artifact chain](../../packages/tinfoil/src/public-build.ts) composes these results with authenticated boot recomputation and source checks. The [worker appraisal](../../packages/tinfoil/src/worker-appraisal.ts) adds fresh hardware/GPUs and keys; the owned session/transport establishes dispatch. Source delivery, private fixtures and live observations have their [recorded limits](../../docs/evidence/tinfoil/helper-investigation.md).
 
 [Fixture provenance](testdata/README.md), [verifier build procedure](../../docs/procedures/verifier-builds.md), [cache/session limits](../../docs/reference/support-limits.md). No maintained vendor deployment pins or runtime root updates are authorized by this command.
+
+<a id="trusted-identities-and-processes"></a>
+
+See [accepted authorities](../../docs/contracts/tinfoil-public-builds.md#closed-authorities).
+
+<a id="shared-artifact-chain-and-cache"></a>
+
+See the [preserved source investigation](../../docs/evidence/tinfoil/helper-investigation.md) and [current cache limits](../../docs/reference/support-limits.md).

@@ -25,7 +25,7 @@ The ordinary, hostname-verified WebPKI endpoints see these fields:
 
 Invocation additionally sends `Host`, `Content-Length` and `Connection: close`; discovery and catalog requests use runtime-generated transport headers, including encoding and user-agent where applicable. Caller headers and session-affinity fields are not forwarded. The public API's TLS key is **not attested**. Invocation owns a hostname-verified WebPKI TLS 1.3 socket and sends exactly one HTTP request, including after HTTP 421; discovery and catalog use the runtime's normal WebPKI verification and minimum version without downgrade. The API can associate a chute ID with its model and account. Provider billing counters outside response encryption are not enclave-authenticated; only numeric token counters are passed through. The relay remains trusted for stream ordering, billing and availability. Chutes and its selected runtime receive decrypted content; its subsequent handling is unverified. Intel PCS sees collateral lookups and their timing.
 
-An invocation token and attestation session expire before dispatch. The transport sends once, rejects redirects and refuses resend or replacement-key recovery. Failures never use a plaintext API or weaker route. Cancellation aborts local work and network reads; it does not prove remote generation has stopped.
+Invocation-token and attestation expiry are checked before dispatch. The transport sends once, rejects redirects and refuses resend or replacement-key recovery. Failures never use a plaintext API or weaker route. Cancellation aborts local work and network reads; it does not prove remote generation has stopped.
 
 ## Discovery and diagnosis
 
