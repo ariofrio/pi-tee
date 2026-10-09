@@ -113,6 +113,52 @@ test("NEAR direct evidence and inference stay on one authenticated socket, with 
   }
 });
 
+test("the NEAR gateway channel admits only its exchanges for one model, and inference only after approval", async () => {
+  const { cert, key, remove } = await localhostCertificate();
+  const paths: string[] = [];
+  let connections = 0;
+  const server = createServer({ cert, key }, (req, res) => { paths.push(`${req.method} ${req.url}`); req.resume(); req.on("end", () => res.end("synthetic")); });
+  server.on("connection", () => connections++);
+  const channels: NearDirectChannel[] = [];
+  try {
+    await new Promise<void>(resolve => server.listen(0, "localhost", resolve));
+    const address = server.address();
+    assert.ok(address && typeof address === "object");
+    const origin = `https://localhost:${address.port}`;
+    const auth = { headers: { authorization: "Bearer synthetic" } };
+    const nonce = "22".repeat(32);
+    const metadata = `${origin}/v1/model/z-ai%2Fglm-5.3-flash`;
+    const model = (name: string) => `${origin}/v1/attestation/report?model=${encodeURIComponent(name)}&provider=near&nonce=${nonce}&include_tls_fingerprint=false&signing_algo=ed25519`;
+    const direct = new NearDirectChannel(origin, AbortSignal.timeout(10000), { ca: cert });
+    channels.push(direct);
+    await assert.rejects(direct.fetch(metadata), /TEE_REQUEST_REJECTED/, "Direct channels admit no gateway exchanges.");
+    const channel = new NearDirectChannel(origin, AbortSignal.timeout(10000), { ca: cert }, { gatewayModel: "z-ai/glm-5.3-flash" });
+    channels.push(channel);
+    const chat = () => channel.fetch(`${origin}/ohttp`, { method: "POST", body: "synthetic", ...auth });
+    await assert.rejects(chat(), /TEE_REQUEST_REJECTED/);
+    // NEAR's gateway requires the API key for its own evidence; inference still waits for approval.
+    const evidence = await channel.request(new Request(`${origin}${evidencePath}`, auth));
+    await evidence.response.text();
+    await (await channel.fetch(metadata, auth)).text();
+    await (await channel.fetch(model("z-ai/glm-5.3-flash"), auth)).text();
+    for (const outside of [`${origin}/v1/model/other`, model("other"), `${model("z-ai/glm-5.3-flash")}&signing_address=0x00`, `${origin}/v1/models`]) {
+      await assert.rejects(channel.fetch(outside, auth), /TEE_REQUEST_REJECTED/, outside);
+    }
+    await assert.rejects(chat(), /TEE_REQUEST_REJECTED/);
+    channel.approve(evidence.peerSpkiFingerprint);
+    assert.equal(await (await chat()).text(), "synthetic");
+    await assert.rejects(chat(), /TEE_REQUEST_REJECTED/);
+    await (await channel.fetch(`${origin}/v1/signature/synthetic?signing_algo=ed25519`, auth)).text();
+    assert.deepEqual(paths.map(path => path.split("?")[0]), ["GET /v1/attestation/report", "GET /v1/model/z-ai%2Fglm-5.3-flash", "GET /v1/attestation/report", "POST /ohttp", "GET /v1/signature/synthetic"]);
+    assert.equal(connections, 1);
+  } finally {
+    for (const channel of channels) channel.close();
+    server.closeAllConnections();
+    await new Promise<void>(resolve => server.close(() => resolve()));
+    await remove();
+  }
+});
+
 test("a peer without WebPKI trust receives no HTTP and is never retried", async () => {
   const peer = await scriptedPeer(["HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok"]);
   const channel = new NearDirectChannel(peer.origin, AbortSignal.timeout(10000));
@@ -169,8 +215,6 @@ test("unsolicited, malformed or unframed responses end the channel", async () =>
   }
 });
 
-test("the direct route runs under Node and Bun; the SDK gateway route stays Node-only", () => {
-  assert.doesNotThrow(() => assertNearRuntime("direct"));
-  if (process.versions.bun) assert.throws(() => assertNearRuntime("gateway"), /TEE_RUNTIME_UNSUPPORTED/);
-  else assert.doesNotThrow(() => assertNearRuntime("gateway"));
+test("both NEAR routes run under Node and Bun", () => {
+  assert.doesNotThrow(() => assertNearRuntime());
 });

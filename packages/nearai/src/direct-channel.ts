@@ -7,6 +7,8 @@ import { limitResponseBody, MAX_ENCRYPTED_RESPONSE_BYTES, readBoundedBody, readH
  * One WebPKI-authenticated TLS 1.3 connection, then quote-bound SPKI approval before credentials.
  * Requests take turns as HTTP/1.1 exchanges on that socket, written directly with `node:tls`
  * because Bun's https.Agent cannot be bound to one socket. The connection is never replaced.
+ * The gateway scope admits the NEAR gateway's model metadata and model evidence for one model;
+ * the gateway requires the API key for its evidence, so only inference waits for approval there.
  */
 export class NearDirectChannel {
   private socket?: TLSSocket;
@@ -21,7 +23,8 @@ export class NearDirectChannel {
   // Between exchanges the peer has nothing to say; anything it sends ends the channel.
   private readonly onIdleData = () => this.close();
 
-  constructor(private readonly origin: string, private readonly signal: AbortSignal, private readonly trust: Pick<ConnectionOptions, "ca"> = {}) {
+  constructor(private readonly origin: string, private readonly signal: AbortSignal, private readonly trust: Pick<ConnectionOptions, "ca"> = {},
+    private readonly scope: { gatewayModel?: string } = {}) {
     signal.addEventListener("abort", this.onAbort, { once: true });
   }
 
@@ -44,8 +47,13 @@ export class NearDirectChannel {
     const signature = request.method === "GET" && /^\/v1\/signature\/[^/]+$/.test(url.pathname) &&
       (url.search === "" || ([...params].length === 1 && params.get("signing_algo") === "ed25519"));
     const inference = request.method === "POST" && url.pathname === "/ohttp" && !url.search;
-    if (url.origin !== this.origin || url.username || url.password || url.hash || !(evidence || signature || inference)) throw new TeeError("TEE_REQUEST_REJECTED");
-    if ((request.method !== "GET" || request.headers.has("authorization")) && !this.approved) throw new TeeError("TEE_REQUEST_REJECTED");
+    const model = this.scope.gatewayModel;
+    const metadata = model !== undefined && request.method === "GET" && url.pathname === `/v1/model/${encodeURIComponent(model)}` && !url.search;
+    const modelEvidence = model !== undefined && request.method === "GET" && url.pathname === "/v1/attestation/report" &&
+      params.get("model") === model && params.get("provider") === "near" && /^[a-f0-9]{64}$/.test(params.get("nonce") ?? "") &&
+      params.get("include_tls_fingerprint") === "false" && params.get("signing_algo") === "ed25519" && [...params].length === 5;
+    if (url.origin !== this.origin || url.username || url.password || url.hash || !(evidence || signature || inference || metadata || modelEvidence)) throw new TeeError("TEE_REQUEST_REJECTED");
+    if ((request.method !== "GET" || (model === undefined && request.headers.has("authorization"))) && !this.approved) throw new TeeError("TEE_REQUEST_REJECTED");
     if (inference && this.sent) throw new TeeError("TEE_REQUEST_REJECTED");
     const payload = request.body ? await readBoundedBody(request.body, 16 * 1024 * 1024, signal) : undefined;
     signal.throwIfAborted();

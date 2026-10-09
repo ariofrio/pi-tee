@@ -3,7 +3,7 @@ import {
   type ModelVisibility, type PolicyMode, type ProviderDefinition, type RouteSecurity, type SecurityPolicy,
 } from "pi-tee-core";
 import { NEAR_BASE_URL } from "./catalog.js";
-import { openNearGatewayTransport } from "./gateway.js";
+import { openNearGatewayTransport, type NearGatewaySeams } from "./gateway.js";
 import { discoverNearDirectEndpoints, loadNearCatalog } from "./discovery.js";
 import { openDirectNearTransport, type NearDirectTarget } from "./direct.js";
 export { NEAR_BASE_URL, parseNearCatalog } from "./catalog.js";
@@ -12,7 +12,7 @@ export const NEAR_ASSUMPTIONS = [
   "Local Pi, runtime, extensions, tools and the pinned NEAR SDK are trusted.",
   "Intel signatures, revocation and fresh nonce/key binding are required; H1 additionally requires local TDX SVN and collateral-edition floors. GPU coverage is unknown (G3); optional details are appraised locally, never through NRAS.",
   "NEAR gateway/model release, key-service, shared-key recipient and runtime deployment authorities remain trusted under provider-trust positions.",
-  "Gateway TLS binding, OHTTP and model field encryption follow the SDK protocol; serving-instance identity is not established.",
+  "Gateway OHTTP and model field encryption follow the SDK protocol on one owned connection to the quote-bound TLS key; gateway replicas share that key, so serving-instance identity is not established.",
   "A model-signed response is required before any completion or tool call is exposed; its shared signer does not identify one approved serving instance.",
   "Model assets, runtime downloads, mutation controls and deployment provenance have no independent approval in this position.",
   "Commitments (shown, not gated): NEAR's ToS/DPA do not promise contractual no-retention; they retain data for the time period needed.",
@@ -21,9 +21,9 @@ export const NEAR_ASSUMPTIONS = [
   "Commitments (shown, not gated): the sub-processor list does not consistently cover Chutes-backed models, which introduce another processor.",
 ];
 
-// The SDK gateway route relies on node:https socket pinning; the direct route owns its node:tls socket.
-export function assertNearRuntime(route: "gateway" | "direct") {
-  if ((route === "gateway" && process.versions.bun) || Number(process.versions.node.split(".")[0]) < 24) throw new TeeError("TEE_RUNTIME_UNSUPPORTED");
+// Both routes own one node:tls socket, which Node 24+ and Bun provide.
+export function assertNearRuntime() {
+  if (Number(process.versions.node.split(".")[0]) < 24) throw new TeeError("TEE_RUNTIME_UNSUPPORTED");
 }
 
 function directFailureReason(error: unknown, timedOut: boolean): string {
@@ -51,6 +51,7 @@ export function createNearProvider(options: {
   modelVisibility?: ModelVisibility;
   catalogFetch?: typeof globalThis.fetch;
   directSeams?: (target: NearDirectTarget) => Parameters<typeof openDirectNearTransport>[3];
+  gatewaySeams?: NearGatewaySeams;
   openSdkTransport?: ProviderDefinition["openSdkTransport"];
 } = {}) {
   for (const variable of ["PI_NEARAI_POLICY", "PI_NEARAI_ROUTE"]) {
@@ -83,7 +84,7 @@ export function createNearProvider(options: {
     routes: [
       ...(route === "gateway" ? [] : [{ id: "near-direct", potential: { ...potential, route: "near-direct" }, modelIds: directModelIds, available: () => true,
         openSession: async ({ apiKey, signal, model, policy }: { apiKey: string; signal: AbortSignal; model: { id: string }; policy: SecurityPolicy }) => {
-          assertNearRuntime("direct");
+          assertNearRuntime();
           const directNotes: string[] = [];
           let picked: Awaited<ReturnType<typeof openDirectNearTransport>> | undefined;
           let rejected: RouteSecurity | undefined;
@@ -119,7 +120,8 @@ export function createNearProvider(options: {
       }]),
       ...(route === "direct" ? [] : [{ id: "near-gateway", potential: { ...potential, route: "near-gateway" },
         openSession: async ({ apiKey, signal, model }: { apiKey: string; signal: AbortSignal; model: { id: string } }) => {
-          const transport = options.openSdkTransport ? await options.openSdkTransport({ apiKey, signal, model: model as import("pi-tee-core").TeeCatalogModel }) as import("pi-tee-core").SdkTransport & { security?: import("pi-tee-core").RouteSecurity } : await openNearGatewayTransport(apiKey, signal, model.id);
+          assertNearRuntime();
+          const transport = options.openSdkTransport ? await options.openSdkTransport({ apiKey, signal, model: model as import("pi-tee-core").TeeCatalogModel }) as import("pi-tee-core").SdkTransport & { security?: import("pi-tee-core").RouteSecurity } : await openNearGatewayTransport(apiKey, signal, model.id, options.gatewaySeams);
           if (!transport.security) { transport.dispose?.(); throw new TeeError("TEE_ATTESTATION_REJECTED"); }
           return { security: transport.security, transport };
         },

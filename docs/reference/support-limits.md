@@ -7,7 +7,7 @@ Use the locked Node 24 workspace and Pi 1.0.4. Local NVIDIA and Tinfoil CPU/rele
 | Desktop WASM hosts and owned TLS transport | [Verifier CI](../../.github/workflows/wasm-verifiers.yml) covers Linux/macOS/Windows, x64/ARM64, Node and Bun; these checks do not send inference |
 | Tinfoil public direct and billing gateway | Node and Bun live Pi suites are recorded for the stated models/revisions in [evidence](../evidence/README.md#tinfoil) |
 | NEAR direct, Chutes, Privatemode | Node/Bun adapter checks and sampled live suites are in [provider evidence](../evidence/README.md#other-providers) |
-| NEAR SDK gateway | Node path; direct is the portable Node/Bun path |
+| NEAR SDK gateway | Node and Bun live inference recorded in the [gateway socket record](../evidence/nearai/gateway-socket.md); no Bun-compiled Pi suite |
 | Tinfoil router | Uses the public-direct WASM verifier and owned transport; Node live appraisal and inference recorded in the [router appraisal record](../evidence/tinfoil/router-appraisal.md). No Bun-compiled Pi router suite has been run since the SDK was removed |
 | Android/Termux | Client target; emulator credential-free appraisal recorded in [portability evidence](../evidence/client/portable-verification.md). No Android live Pi suite was established |
 
