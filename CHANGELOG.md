@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Run `npm run check`, both smokes, the Go helper's `gofmt`/`go vet`/`go test` and the Bun-specific tests in CI on every push to `main` and pull request.
+
 - Persist each GitHub metadata lookup once its own check passes and drop only a stored lookup whose check fails, so unrelated outages or rejected workers no longer clear the cache.
 
 - Enable the Tinfoil public-build profile for Gemma 4 31B, DeepSeek V4.1 Flash and GLM-5.3 after independent review of the WebAssembly verifiers, the NVIDIA reference-manifest patch, the TLS client and the multi-model/SEV-SNP profile. Default `auto` routing now admits these models under the default `public-builds` policy; other catalog models stay unavailable without an SDK fallback.
