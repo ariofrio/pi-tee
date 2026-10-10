@@ -13,6 +13,8 @@ export const PUBLIC_MODELS = Object.freeze({
 export type PublicModel = keyof typeof PUBLIC_MODELS;
 export const WORKER_HOST = /^[a-z0-9-]+-inf[0-9]+(?:-[0-9]+)?\.tinfoil\.containers\.tinfoil\.dev$/;
 
+const MAX_EARLY_GPUS = Math.max(...Object.values(GPU_POLICIES).map(rule => rule.maxGpus));
+
 function requireCondition(ok: unknown, code: string): asserts ok { if (!ok) throw new TeeError(code); }
 
 /**
@@ -26,6 +28,8 @@ export async function appraiseWorker(options: {
   /** External authenticated verifier seam; production uses the bundled helper. */
   verifyArtifacts?: typeof verifyPublicBuildArtifacts;
   attestationRelay?: "inference-gateway.tinfoil.sh";
+  /** NVIDIA local verifier seam; production uses the bundled WebAssembly verifier. */
+  verifyGpus?: typeof runNvidiaVerifier;
 }): Promise<{ tls: string; hpke: string; security: RouteSecurity; publicBuild: {
   checkedAt: number; expiresAt: number; workloadDigest: string; platformDigest: string;
   cvmManifestDigest: string; imageDigest: string; configDigest: string; platform: "tdx" | "sev-snp"; gpus: number;
@@ -42,47 +46,65 @@ export async function appraiseWorker(options: {
   const raw = new TextDecoder("utf-8", { fatal: true }).decode(await readBoundedBody(response.body, 2 * 1024 * 1024, signal));
   const envelope = JSON.parse(raw);
   const policy = options.policy ?? parsePolicy();
-  const build = await (options.verifyArtifacts ?? verifyPublicBuildArtifacts)({ raw, nonce, signal, repo, evidenceFetch: options.evidenceFetch, allowOutdated: policy.host !== "current" });
-  requireCondition(build.repo === repo && (build.platform === "tdx" || build.platform === "sev-snp"), "TEE_PUBLIC_BUILD_REJECTED");
-  requireCondition(build.hostLevel === 1 || (build.hostLevel === 2 && policy.host !== "current"), "TEE_CPU_POLICY_REJECTED");
-
-  // The helper authenticated both section byte strings through the CPU report.
-  const devices = JSON.parse(Buffer.from(envelope.device_evidence, "base64").toString("utf8"));
-  const items: any[] = Array.isArray(devices.items) ? devices.items : [];
-  const count = build.runtimeConfig.gpus;
-  requireCondition(Number.isSafeInteger(count) && count >= 1, "TEE_GPU_POLICY_REJECTED");
-  let rating: { gpu: 1 | 2 | 3; observed: string[] } = { gpu: 3, observed: ["GPU appraisal was not requested (gpu=unchecked)."] };
-  if (policy.gpu !== "unchecked") {
-    requireCondition(items.length === count, "TEE_GPU_POLICY_REJECTED");
-    items.forEach((item, index) => requireCondition(item.id === `gpu${index}` && item.kind === "gpu" && item.vendor === "nvidia" &&
-      item.format === "https://tinfoil.sh/format/nvidia-gpu-evidence/v1" && item.evidence?.nonce === nonce, "TEE_GPU_POLICY_REJECTED"));
-    const evidence = items.map(item => item.evidence);
-    const checked = policy.verifier === "nras" ? await runNrasVerifier({ evidence, nonce, signal }) :
-      await runNvidiaVerifier({ evidence, nonce, signal, collateralOrigin: options.nvidiaCollateralOrigin });
-    rating = rateGpuAppraisal(GPU_POLICIES, checked, evidence, nonce, count, { cpuFresh: true, completeCoverage: true, cpuHash: true });
+  const verifyGpus = options.verifyGpus ?? runNvidiaVerifier;
+  // NVIDIA's local verifier appraises the GPU section while the build chain
+  // authenticates it through the CPU report. Its verdict is read only after
+  // that, and the authenticated section is checked again before use. Until
+  // then the section is unauthenticated, so it may start at most as many
+  // verifiers as the largest admitted CVM has GPUs.
+  const early = new AbortController();
+  let pending: ReturnType<typeof runNvidiaVerifier> | undefined;
+  if (policy.gpu !== "unchecked" && policy.verifier === "local") {
+    let items: any[] = [];
+    try { items = JSON.parse(Buffer.from(envelope.device_evidence, "base64").toString("utf8")).items; } catch { /* Rejected after authentication. */ }
+    if (Array.isArray(items) && items.length > 0 && items.length <= MAX_EARLY_GPUS && items.every(item => item?.evidence?.nonce === nonce)) {
+      pending = verifyGpus({ evidence: items.map(item => item.evidence), nonce, signal: AbortSignal.any([signal, early.signal]), collateralOrigin: options.nvidiaCollateralOrigin });
+      pending.catch(() => {});
+    }
   }
-  signal.throwIfAborted();
-  const keys = JSON.parse(Buffer.from(envelope.crypto_material, "base64").toString("utf8")).items;
-  const tls = keys.find((k: { id: string; format: string }) => k.id === "tls" && k.format === "https://tinfoil.sh/key/spki-fp-sha256/v1");
-  const hpke = keys.find((k: { id: string; format: string }) => k.id === "hpke" && k.format === "https://tinfoil.sh/key/x25519-hpke/v1");
-  requireCondition(/^[a-f0-9]{64}$/.test(tls?.data ?? "") && /^[a-f0-9]{64}$/.test(hpke?.data ?? ""), "TEE_ATTESTATION_REJECTED");
-  const checkedAt = Date.now();
-  // A slow appraisal cannot renew its original challenge or either release
-  // witness. Handoff and TLS setup recheck this minimum before transmitting.
-  const expiresAt = Math.min(checkedAt + 60000, challengeAt + 300000,
-    Date.parse(build.codeFreshness) + 7 * 86400000, Date.parse(build.platformFreshness) + 7 * 86400000);
-  requireCondition(Number.isSafeInteger(expiresAt) && expiresAt > checkedAt, "TEE_PUBLIC_SESSION_REJECTED");
-  return { tls: tls.data, hpke: hpke.data, security: {
-    route: "tinfoil-direct", provider: "Tinfoil", cpuVerified: true, code: 1, host: build.hostLevel, gpu: rating.gpu, egress: 2, build: 3, review: 3,
-    observed: [options.host, `${build.platform}; ${count} GPUs declared by the authenticated release.`, ...rating.observed,
-      ...(build.hostLevel === 2 ? ["AMD firmware is below local floors; authenticated publisher minima and production restrictions still passed."] : []),
-      "Intel OutOfDate TDX workers are unavailable under every policy: the pinned verifier rejects them during authentication.",
-      "Tinfoil handling commitments have not been reviewed."],
-  }, publicBuild: {
-    checkedAt, expiresAt, workloadDigest: build.digest, platformDigest: build.platformDigest,
-    cvmManifestDigest: build.cvmManifestDigest, imageDigest: build.containerBuild.imageDigest, configDigest: build.runtimeConfig.configDigest,
-    platform: build.platform, gpus: count,
-  } };
+  try {
+    const build = await (options.verifyArtifacts ?? verifyPublicBuildArtifacts)({ raw, nonce, signal, repo, evidenceFetch: options.evidenceFetch, allowOutdated: policy.host !== "current" });
+    requireCondition(build.repo === repo && (build.platform === "tdx" || build.platform === "sev-snp"), "TEE_PUBLIC_BUILD_REJECTED");
+    requireCondition(build.hostLevel === 1 || (build.hostLevel === 2 && policy.host !== "current"), "TEE_CPU_POLICY_REJECTED");
+
+    // The helper authenticated both section byte strings through the CPU report.
+    const devices = JSON.parse(Buffer.from(envelope.device_evidence, "base64").toString("utf8"));
+    const items: any[] = Array.isArray(devices.items) ? devices.items : [];
+    const count = build.runtimeConfig.gpus;
+    requireCondition(Number.isSafeInteger(count) && count >= 1, "TEE_GPU_POLICY_REJECTED");
+    let rating: { gpu: 1 | 2 | 3; observed: string[] } = { gpu: 3, observed: ["GPU appraisal was not requested (gpu=unchecked)."] };
+    if (policy.gpu !== "unchecked") {
+      requireCondition(items.length === count, "TEE_GPU_POLICY_REJECTED");
+      items.forEach((item, index) => requireCondition(item.id === `gpu${index}` && item.kind === "gpu" && item.vendor === "nvidia" &&
+        item.format === "https://tinfoil.sh/format/nvidia-gpu-evidence/v1" && item.evidence?.nonce === nonce, "TEE_GPU_POLICY_REJECTED"));
+      const evidence = items.map(item => item.evidence);
+      const checked = policy.verifier === "nras" ? await runNrasVerifier({ evidence, nonce, signal }) :
+        await (pending ?? verifyGpus({ evidence, nonce, signal, collateralOrigin: options.nvidiaCollateralOrigin }));
+      rating = rateGpuAppraisal(GPU_POLICIES, checked, evidence, nonce, count, { cpuFresh: true, completeCoverage: true, cpuHash: true });
+    }
+    signal.throwIfAborted();
+    const keys = JSON.parse(Buffer.from(envelope.crypto_material, "base64").toString("utf8")).items;
+    const tls = keys.find((k: { id: string; format: string }) => k.id === "tls" && k.format === "https://tinfoil.sh/key/spki-fp-sha256/v1");
+    const hpke = keys.find((k: { id: string; format: string }) => k.id === "hpke" && k.format === "https://tinfoil.sh/key/x25519-hpke/v1");
+    requireCondition(/^[a-f0-9]{64}$/.test(tls?.data ?? "") && /^[a-f0-9]{64}$/.test(hpke?.data ?? ""), "TEE_ATTESTATION_REJECTED");
+    const checkedAt = Date.now();
+    // A slow appraisal cannot renew its original challenge or either release
+    // witness. Handoff and TLS setup recheck this minimum before transmitting.
+    const expiresAt = Math.min(checkedAt + 60000, challengeAt + 300000,
+      Date.parse(build.codeFreshness) + 7 * 86400000, Date.parse(build.platformFreshness) + 7 * 86400000);
+    requireCondition(Number.isSafeInteger(expiresAt) && expiresAt > checkedAt, "TEE_PUBLIC_SESSION_REJECTED");
+    return { tls: tls.data, hpke: hpke.data, security: {
+      route: "tinfoil-direct", provider: "Tinfoil", cpuVerified: true, code: 1, host: build.hostLevel, gpu: rating.gpu, egress: 2, build: 3, review: 3,
+      observed: [options.host, `${build.platform}; ${count} GPUs declared by the authenticated release.`, ...rating.observed,
+        ...(build.hostLevel === 2 ? ["AMD firmware is below local floors; authenticated publisher minima and production restrictions still passed."] : []),
+        "Intel OutOfDate TDX workers are unavailable under every policy: the pinned verifier rejects them during authentication.",
+        "Tinfoil handling commitments have not been reviewed."],
+    }, publicBuild: {
+      checkedAt, expiresAt, workloadDigest: build.digest, platformDigest: build.platformDigest,
+      cvmManifestDigest: build.cvmManifestDigest, imageDigest: build.containerBuild.imageDigest, configDigest: build.runtimeConfig.configDigest,
+      platform: build.platform, gpus: count,
+    } };
+  } finally { early.abort(); }
 }
 
 /** Applies Tinfoil's GPU policy to NVIDIA's local verdict for every CPU-bound report. */
