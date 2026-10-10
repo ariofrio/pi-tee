@@ -12,6 +12,14 @@ export const PUBLIC_BUILD_BASE_URL = "https://direct-worker.tinfoil.invalid/v1";
 const MAX_WORKER_ATTEMPTS = 8;
 // Untrusted ordering hint only: the last host that passed is tried first.
 const lastHealthy = new Map<string, string>();
+// appraisal=reuse only: a later request under the same route, model and policy
+// may reuse an accepted appraisal until shortly before its admission expiry.
+// Reuse never extends that expiry. An appraisal becomes reusable only after its
+// dispatch reads a response body to a clean end with every frame authenticated,
+// and is unavailable while a dispatch using it is unfinished; any other outcome
+// drops it.
+const REUSE_MARGIN_MS = 5000;
+const reusable = new Map<string, { host: string; keys: WorkerKeys }>();
 
 function isPublicModel(model: string): model is PublicModel { return Object.hasOwn(PUBLIC_MODELS, model); }
 
@@ -67,7 +75,29 @@ const defaultDeps: SelectionDeps = {
   appraise: (model, host, signal) => appraiseWorker({ model, host, signal: AbortSignal.any([signal, AbortSignal.timeout(120000)]) }),
 };
 
-export async function selectPublicWorker(model: PublicModel, signal: AbortSignal, deps: Partial<SelectionDeps> = {}, policy: SecurityPolicy = parsePolicy()) {
+/** `scope` names the route; without it, every call appraises afresh. */
+export async function selectPublicWorker(model: PublicModel, signal: AbortSignal, deps: Partial<SelectionDeps> = {}, policy: SecurityPolicy = parsePolicy(), scope?: string) {
+  const reuseKey = scope !== undefined && policy.appraisal === "reuse" ? JSON.stringify([scope, model, { ...policy, warnings: undefined }]) : undefined;
+  // The selection is leased to one dispatch. Settling it complete makes it
+  // reusable; anything else, or never settling, leaves it out of the cache.
+  const lease = (entry: { host: string; keys: WorkerKeys }) => {
+    let settled = false;
+    return (complete: boolean) => {
+      if (settled) return;
+      settled = true;
+      if (complete && reuseKey !== undefined) reusable.set(reuseKey, entry);
+    };
+  };
+  for (const [key, entry] of reusable) if (Date.now() >= entry.keys.publicBuild.expiresAt - REUSE_MARGIN_MS) reusable.delete(key);
+  const stored = reuseKey === undefined ? undefined : reusable.get(reuseKey);
+  if (stored) {
+    signal.throwIfAborted();
+    reusable.delete(reuseKey!);
+    const checkedAt = new Date(stored.keys.publicBuild.checkedAt).toISOString();
+    const keys = { ...stored.keys, security: { ...stored.keys.security, observed: [...stored.keys.security.observed,
+      `Reused the appraisal checked at ${checkedAt} (appraisal=reuse): this request sent no fresh challenge and rechecked no CPU, GPU, revocation, key or freshness evidence.`] } };
+    return { host: stored.host, keys, settle: lease(stored) };
+  }
   const { discover, reachable } = { ...defaultDeps, ...deps };
   const appraise = deps.appraise ?? ((model: PublicModel, host: string, signal: AbortSignal) => appraiseWorker({ model, host, signal: AbortSignal.any([signal, AbortSignal.timeout(120000)]), policy }));
   const candidates = await reachable(await discover(model, signal), signal);
@@ -103,18 +133,59 @@ export async function selectPublicWorker(model: PublicModel, signal: AbortSignal
       else if (error instanceof TeeError && error.code === "TEE_PUBLIC_ARTIFACT_UNAVAILABLE") unavailable = error;
     }
   }
-  if (best) { lastHealthy.set(model, best.host); return best; }
+  if (best) {
+    lastHealthy.set(model, best.host);
+    return { ...best, settle: lease(best) };
+  }
   throw (bestRejected && new RouteRejection(bestRejected)) ?? rejection ?? unavailable ?? new TeeError("TEE_PUBLIC_BUILD_DEPLOYMENT_UNAVAILABLE");
+}
+
+/** Each request gets its own transport. Its appraisal settles complete only
+ * once the response body is read to a clean end, every frame having
+ * authenticated. A failed or rejected dispatch, a body error or cancel, an
+ * abort of `signal` or of the request, and disposal settle it incomplete,
+ * independently of reads. */
+export function reuseAfterCompleteResponse(signal: AbortSignal, transport: SdkTransport, settle: (complete: boolean) => void): SdkTransport {
+  let done = false;
+  const finish = (complete: boolean) => {
+    if (done) return;
+    done = true;
+    signal.removeEventListener("abort", drop);
+    settle(complete);
+  };
+  const drop = () => finish(false);
+  if (signal.aborted) drop(); else signal.addEventListener("abort", drop, { once: true });
+  return { ...transport,
+    dispose: () => { drop(); transport.dispose?.(); },
+    fetch: async (input, init) => {
+      const requestSignal = init?.signal ?? (input instanceof Request ? input.signal : undefined);
+      if (requestSignal?.aborted) drop(); else requestSignal?.addEventListener("abort", drop, { once: true });
+      let response: Response;
+      try { response = await transport.fetch(input, init); } catch (error) { drop(); throw error; }
+      if (!response.ok || !response.body) { drop(); return response; }
+      const reader = response.body.getReader();
+      const body = new ReadableStream<Uint8Array>({
+        async pull(controller) {
+          let next: ReadableStreamReadResult<Uint8Array>;
+          try { next = await reader.read(); } catch (error) { drop(); controller.error(error); return; }
+          if (!next.done) { controller.enqueue(next.value); return; }
+          finish(true);
+          controller.close();
+        },
+        cancel(reason) { drop(); return reader.cancel(reason); },
+      });
+      return new Response(body, { status: response.status, statusText: response.statusText, headers: response.headers });
+    } };
 }
 
 export async function openRatedPublicWorkerTransport(signal: AbortSignal, model: string, policy: SecurityPolicy) {
   if (!isPublicModel(model)) throw new TeeError("TEE_MODEL_UNAVAILABLE");
-  const { host, keys } = await selectPublicWorker(model, signal, {}, policy);
+  const { host, keys, settle } = await selectPublicWorker(model, signal, {}, policy, "tinfoil-direct");
   const { platform: _platform, gpus: _gpus, ...admission } = keys.publicBuild;
   return {
     security: keys.security,
     admission: { profile: PUBLIC_BUILD_PROFILE_ID, model, authorityPolicyDigest: PUBLIC_BUILD_AUTHORITY_POLICY_DIGEST, ...admission },
-    transport: await openEncryptedWorkerTransport(signal, host, keys, keys.publicBuild.expiresAt, PUBLIC_BUILD_BASE_URL),
+    transport: reuseAfterCompleteResponse(signal, await openEncryptedWorkerTransport(signal, host, keys, keys.publicBuild.expiresAt, PUBLIC_BUILD_BASE_URL), settle),
   };
 }
 

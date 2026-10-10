@@ -10,7 +10,7 @@ export function formatProviderReport(report: ProviderReport): string {
     `${report.provider}: ${report.lastRequest}`,
     `Position: ${policy.position}`,
     `Position permits trust in: ${[...(providerTrust ? ["the provider"] : []), ...(hostTrust ? ["the host"] : [])].join(" and ") || "neither the provider nor the host"}.`,
-    `Thresholds: code=${policy.code}, host=${policy.host}, gpu=${policy.gpu}, egress=${policy.egress}${policy.build ? `, build=${policy.build}, review=${policy.review}` : ""}; verifier=${policy.verifier}.`,
+    `Thresholds: code=${policy.code}, host=${policy.host}, gpu=${policy.gpu}, egress=${policy.egress}${policy.build ? `, build=${policy.build}, review=${policy.review}` : ""}; verifier=${policy.verifier}, appraisal=${policy.appraisal}.`,
     ...policy.warnings.map(warning => `Warning: ${warning}`),
   ];
   if (!report.routeDecisions?.length) lines.push("No request has established route levels yet.");

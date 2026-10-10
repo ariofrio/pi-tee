@@ -31,6 +31,8 @@ Every plaintext/key recipient counts, including routers, sidecars, KMS, secret s
 
 `verifier=local` is the default. Opt-in NRAS authenticates NVIDIA's overall and detached device tokens, then applies the same mode, coverage, count, freshness, certificate/reference and firmware checks. It adds trust in service keys, insiders and appraisal policy; discloses GPU identity and attestation timing to NVIDIA; and depends on service availability. A remote verdict alone cannot qualify a route. [Settings and no-effect cases](reference/policy.md#forced-values-and-categories).
 
+`appraisal=per-request` is the default. Opt-in `appraisal=reuse` lets Tinfoil public requests reuse an accepted worker appraisal within its admission expiry; their levels then describe that earlier appraisal, not evidence fresh for the request. [What it weakens](reference/policy.md#appraisal-reuse).
+
 ## Status and commitments
 
 `/<provider> status` shows the position, thresholds, permitted trust, actual levels, computed gaps, observed details and candidate decisions. Before verification, levels are not established. Reports omit credentials, prompts, completions and quote bodies. Manufacturer authentication does not establish a complete safe software inventory or exclusive key custody.

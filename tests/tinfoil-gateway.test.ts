@@ -7,9 +7,11 @@ import { CipherSuite, KDF_HKDF_SHA256, AEAD_AES_256_GCM } from "hpke";
 import { KEM_DHKEM_X25519_HKDF_SHA256 } from "@panva/hpke-noble";
 import { openEncryptedGatewayTransport } from "../packages/tinfoil/src/direct.js";
 import { appraiseWorker } from "../packages/tinfoil/src/worker-appraisal.js";
-import { parsePolicy, formatProviderReport } from "../packages/core/src/index.js";
+import { createTeeProvider, parsePolicy, formatProviderReport } from "../packages/core/src/index.js";
+import { normalizeContext } from "@earendil-works/pi-ai/compat";
 import { createTinfoilProvider } from "../packages/tinfoil/src/index.js";
 import { discoverGatewayWorkers, openRatedGatewayTransport } from "../packages/tinfoil/src/gateway.js";
+import { reuseAfterCompleteResponse, selectPublicWorker } from "../packages/tinfoil/src/public-session.js";
 import { verifyPublicBuildArtifacts } from "../packages/tinfoil/src/public-build.js";
 
 const host = "glm-5-3-inf18.tinfoil.containers.tinfoil.dev";
@@ -201,4 +203,107 @@ test("gateway-only status limits appear only when the configured route can use t
     assert.equal(status.includes("frame boundary"), enabled, route);
     assert.equal(status.includes("no anti-replay"), enabled, route);
   }
+});
+
+test("appraisal=reuse keeps an appraisal only after a completely read, authenticated response", async () => {
+  const worker = await Identity.generate();
+  const model = { id: "glm-5-3", provider: "reuse", name: "Reuse", api: "openai-completions" as const, baseUrl: "https://inference-gateway.tinfoil.sh/v1",
+    reasoning: false, input: ["text" as const], contextWindow: 8192, maxTokens: 512, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } };
+  const digest = "a".repeat(64);
+  const security = { route: "tinfoil-gateway", provider: "Tinfoil", cpuVerified: true, code: 1 as const, host: 1 as const, gpu: 1 as const, egress: 2 as const, build: 3 as const, review: 3 as const, observed: [] };
+  let appraisals = 0, sends = 0;
+  const responses: ("valid" | "corrupt")[] = ["valid", "corrupt", "valid"];
+  const deps = { discover: async () => [host], reachable: async (hosts: string[]) => hosts, appraise: async () => {
+    appraisals++;
+    const checkedAt = Date.now();
+    return { tls: "b".repeat(64), hpke: await worker.getPublicKeyHex(), security, publicBuild: { checkedAt, expiresAt: checkedAt + 60000,
+      workloadDigest: digest, platformDigest: digest, cvmManifestDigest: digest, imageDigest: digest, configDigest: digest, platform: "tdx" as const, gpus: 1 } } as any;
+  } };
+  const wire = async (input: RequestInfo | URL, init?: RequestInit) => {
+    const kind = responses[sends++]!;
+    const request = new Request(input, init);
+    const enc = Buffer.from(request.headers.get("ehbp-encapsulated-key")!, "hex");
+    const recipient = await suite().SetupRecipient(worker.getPrivateKey(), enc, { info: new TextEncoder().encode("ehbp request") });
+    await recipient.Open(new Uint8Array(await request.arrayBuffer()).subarray(4));
+    const exported = Buffer.from(await recipient.Export(new TextEncoder().encode("ehbp response"), 32)), nonce = randomBytes(32), salt = Buffer.concat([enc, nonce]);
+    const cipher = createCipheriv("aes-256-gcm", Buffer.from(hkdfSync("sha256", exported, salt, "key", 32)), Buffer.from(hkdfSync("sha256", exported, salt, "nonce", 12)));
+    const ciphertext = Buffer.concat([cipher.update('data: {"id":"r","object":"chat.completion.chunk","created":1,"model":"glm-5-3","choices":[{"index":0,"delta":{"content":"ok"},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n'), cipher.final(), cipher.getAuthTag()]);
+    const frame = Buffer.alloc(4 + ciphertext.length);
+    frame.writeUInt32BE(ciphertext.length);
+    ciphertext.copy(frame, 4);
+    if (kind === "corrupt") frame[frame.length - 1]! ^= 1;
+    return new Response(frame, { headers: { "content-type": "text/event-stream", "ehbp-response-nonce": nonce.toString("hex") } });
+  };
+  const provider = createTeeProvider({ id: "reuse", name: "Reuse", baseUrl: model.baseUrl, apiKeyEnv: "REUSE_UNUSED", policy: "public-builds,egress=metadata,appraisal=reuse", assumptions: [],
+    parseCatalog: () => [model], catalogFetch: async () => Response.json({}), openSdkTransport: async () => { throw Error("unused"); },
+    routes: [{ id: security.route, potential: security, openSession: async ({ signal, policy }) => {
+      const selected = await selectPublicWorker("glm-5-3", signal, deps, policy, "reuse-stream");
+      const transport = await openEncryptedGatewayTransport(signal, host, selected.keys, model.id, selected.keys.publicBuild.expiresAt, wire);
+      const { platform: _platform, gpus: _gpus, ...admission } = selected.keys.publicBuild;
+      return { security: selected.keys.security, admission: { ...admission, model: model.id, profile: "synthetic-reuse", authorityPolicyDigest: digest },
+        transport: reuseAfterCompleteResponse(signal, transport, selected.settle) };
+    } }] });
+  await provider.initializeCatalog();
+  const context = normalizeContext({ messages: [{ role: "user", content: "synthetic-prompt", timestamp: 1 }] });
+  const outcomes = [];
+  for (let index = 0; index < 3; index++) {
+    const result = await provider.provider.streamSimple(model, context, { apiKey: "synthetic-key", maxRetries: 5 }).result();
+    outcomes.push(result.stopReason === "error" ? result.errorMessage : result.stopReason);
+  }
+  assert.deepEqual(outcomes, ["stop", "TEE_REQUEST_FAILED", "stop"]);
+  assert.equal(sends, 3, "one dispatch per request, no resend");
+  assert.equal(appraisals, 2, "the reused appraisal served the second request; its body authentication failure forced a fresh one");
+});
+
+test("appraisal=reuse never lends an appraisal to a concurrent request before its response ends", async () => {
+  const worker = await Identity.generate();
+  const model = { id: "glm-5-3", provider: "concurrent", name: "Concurrent", api: "openai-completions" as const, baseUrl: "https://inference-gateway.tinfoil.sh/v1",
+    reasoning: false, input: ["text" as const], contextWindow: 8192, maxTokens: 512, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } };
+  const digest = "a".repeat(64);
+  const security = { route: "tinfoil-gateway", provider: "Tinfoil", cpuVerified: true, code: 1 as const, host: 1 as const, gpu: 1 as const, egress: 2 as const, build: 3 as const, review: 3 as const, observed: [] };
+  let appraisals = 0, sends = 0;
+  const deps = { discover: async () => [host], reachable: async (hosts: string[]) => hosts, appraise: async () => {
+    appraisals++;
+    const checkedAt = Date.now();
+    return { tls: "b".repeat(64), hpke: await worker.getPublicKeyHex(), security, publicBuild: { checkedAt, expiresAt: checkedAt + 60000,
+      workloadDigest: digest, platformDigest: digest, cvmManifestDigest: digest, imageDigest: digest, configDigest: digest, platform: "tdx" as const, gpus: 1 } } as any;
+  } };
+  const wire = async (input: RequestInfo | URL, init?: RequestInit) => {
+    const open = ++sends === 1;
+    const request = new Request(input, init);
+    const enc = Buffer.from(request.headers.get("ehbp-encapsulated-key")!, "hex");
+    const recipient = await suite().SetupRecipient(worker.getPrivateKey(), enc, { info: new TextEncoder().encode("ehbp request") });
+    await recipient.Open(new Uint8Array(await request.arrayBuffer()).subarray(4));
+    const exported = Buffer.from(await recipient.Export(new TextEncoder().encode("ehbp response"), 32)), nonce = randomBytes(32), salt = Buffer.concat([enc, nonce]);
+    const cipher = createCipheriv("aes-256-gcm", Buffer.from(hkdfSync("sha256", exported, salt, "key", 32)), Buffer.from(hkdfSync("sha256", exported, salt, "nonce", 12)));
+    const content = open ? 'data: {"id":"r","choices":[{"index":0,"delta":{"content":"partial"},"finish_reason":null}]}\n\n'
+      : 'data: {"id":"r","choices":[{"index":0,"delta":{"content":"done"},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n';
+    const ciphertext = Buffer.concat([cipher.update(content), cipher.final(), cipher.getAuthTag()]);
+    const frame = Buffer.alloc(4 + ciphertext.length);
+    frame.writeUInt32BE(ciphertext.length);
+    ciphertext.copy(frame, 4);
+    // The first response stays open: no authenticated end arrives.
+    return new Response(open ? new ReadableStream({ start(controller) { controller.enqueue(frame); } }) : frame,
+      { headers: { "content-type": "text/event-stream", "ehbp-response-nonce": nonce.toString("hex") } });
+  };
+  const provider = createTeeProvider({ id: "concurrent", name: "Concurrent", baseUrl: model.baseUrl, apiKeyEnv: "CONCURRENT_UNUSED", policy: "public-builds,egress=metadata,appraisal=reuse", assumptions: [],
+    parseCatalog: () => [model], catalogFetch: async () => Response.json({}), openSdkTransport: async () => { throw Error("unused"); },
+    routes: [{ id: security.route, potential: security, openSession: async ({ signal, policy }) => {
+      const selected = await selectPublicWorker("glm-5-3", signal, deps, policy, "reuse-concurrent");
+      const transport = await openEncryptedGatewayTransport(signal, host, selected.keys, model.id, selected.keys.publicBuild.expiresAt, wire);
+      const { platform: _platform, gpus: _gpus, ...admission } = selected.keys.publicBuild;
+      return { security: selected.keys.security, admission: { ...admission, model: model.id, profile: "synthetic-reuse", authorityPolicyDigest: digest },
+        transport: reuseAfterCompleteResponse(signal, transport, selected.settle) };
+    } }] });
+  await provider.initializeCatalog();
+  const context = normalizeContext({ messages: [{ role: "user", content: "synthetic-prompt", timestamp: 1 }] });
+  const abort = new AbortController();
+  const first = provider.provider.streamSimple(model, context, { apiKey: "synthetic-key", maxRetries: 5, signal: abort.signal });
+  try {
+    for await (const event of first) if (event.type === "text_delta") break;
+    assert.equal((await provider.provider.streamSimple(model, context, { apiKey: "synthetic-key", maxRetries: 5 }).result()).stopReason, "stop");
+    assert.equal(appraisals, 2, "the concurrent request appraised afresh while the first response was unfinished");
+  } finally { abort.abort(); await first.result(); }
+  assert.equal((await provider.provider.streamSimple(model, context, { apiKey: "synthetic-key", maxRetries: 5 }).result()).stopReason, "stop");
+  assert.deepEqual([sends, appraisals], [3, 2], "the aborted dispatch dropped only its own appraisal; the completed one is reused");
 });

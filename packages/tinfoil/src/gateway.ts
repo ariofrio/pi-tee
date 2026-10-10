@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { fetchUpstream, readBoundedBody, record, RouteRejection, TeeError, type SecurityPolicy } from "pi-tee-core";
 import { GATEWAY_MODELS, openEncryptedGatewayTransport, TINFOIL_GATEWAY_BASE_URL } from "./direct.js";
 import { appraiseWorker, PUBLIC_MODELS, WORKER_HOST, type PublicModel } from "./worker-appraisal.js";
-import { selectPublicWorker } from "./public-session.js";
+import { reuseAfterCompleteResponse, selectPublicWorker } from "./public-session.js";
 import { PUBLIC_BUILD_AUTHORITY_POLICY_DIGEST, PUBLIC_BUILD_PROFILE_ID } from "./public-policy.js";
 
 export const GATEWAY_LIMITATIONS = [
@@ -41,11 +41,11 @@ export async function openRatedGatewayTransport(signal: AbortSignal, model: stri
     signal: AbortSignal.any([signal, AbortSignal.timeout(120000)]), policy, attestationRelay: "inference-gateway.tinfoil.sh" }),
 ) {
   if (!gatewayModel(model)) throw new TeeError("TEE_MODEL_UNAVAILABLE");
-  const { host, keys } = await selectPublicWorker(model, signal, {
+  const { host, keys, settle } = await selectPublicWorker(model, signal, {
     discover: (model, signal) => discoverGatewayWorkers(model, signal),
     reachable: async hosts => hosts,
     appraise,
-  }, policy).catch(error => {
+  }, policy, "tinfoil-gateway").catch(error => {
     if (error instanceof RouteRejection) throw new RouteRejection({ ...error.security, route: "tinfoil-gateway" });
     throw error;
   });
@@ -54,10 +54,10 @@ export async function openRatedGatewayTransport(signal: AbortSignal, model: stri
     security: { ...keys.security, route: "tinfoil-gateway", observed: [...keys.security.observed,
       "TLS terminates at the unattested billing gateway, authenticated by WebPKI. It receives the API key, model and routing headers; bodies are sealed to the freshly appraised worker's own HPKE key.",
       "Gateway is a fallback when no direct worker qualifies: direct exposes the key and metadata to fewer parties.",
-      "A 412 means the sealed worker is unavailable; this dispatch fails without a resend. A new request performs fresh selection and appraisal.",
+      `A 412 means the sealed worker is unavailable; this dispatch fails without a resend. A new request performs fresh selection and appraisal${policy.appraisal === "reuse" ? " unless appraisal=reuse keeps this one, which only a response read to its end does" : ""}.`,
       ...GATEWAY_LIMITATIONS,
     ] },
     admission: { profile: `${PUBLIC_BUILD_PROFILE_ID}-gateway`, model, authorityPolicyDigest: gatewayAuthorityDigest, ...admission },
-    transport: await openEncryptedGatewayTransport(signal, host, keys, model, keys.publicBuild.expiresAt),
+    transport: reuseAfterCompleteResponse(signal, await openEncryptedGatewayTransport(signal, host, keys, model, keys.publicBuild.expiresAt), settle),
   };
 }

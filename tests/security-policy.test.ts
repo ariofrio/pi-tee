@@ -15,6 +15,7 @@ test("positions disclose trust through their strict and loose defaults", () => {
     assert.equal(p.build, position.startsWith("public") ? "publisher-workflow" : undefined);
     assert.equal(p.review, position.startsWith("public") ? "none" : undefined);
     assert.equal(p.verifier, "local");
+    assert.equal(p.appraisal, "per-request");
   }
   assert.equal(parsePolicy().egress, "metadata");
 });
@@ -47,7 +48,7 @@ test("all 35 valid four-axis combinations have exactly one truthful position", (
 });
 
 test("grammar, unsupported refinements and obsolete names fail with migration guidance", () => {
-  for (const setting of ["", "typo", "Public-Builds", " public-builds", "public-builds, egress=metadata", "public-builds,egress=metadata ", "public-builds,", "public-builds,unknown=x", "public-builds,code=bad", "public-builds,host=bad", "public-builds,gpu=bad", "public-builds,egress=bad", "public-builds,build=bad", "public-builds,review=bad", "public-builds,verifier=bad", "public-builds,host=current,host=current", "trust-provider,build=signed", "trust-provider-and-host,review=none"]) {
+  for (const setting of ["", "typo", "Public-Builds", " public-builds", "public-builds, egress=metadata", "public-builds,egress=metadata ", "public-builds,", "public-builds,unknown=x", "public-builds,code=bad", "public-builds,host=bad", "public-builds,gpu=bad", "public-builds,egress=bad", "public-builds,build=bad", "public-builds,review=bad", "public-builds,verifier=bad", "public-builds,appraisal=bad", "public-builds,host=current,host=current", "trust-provider,build=signed", "trust-provider-and-host,review=none"]) {
     assert.throws(() => parsePolicy(setting), /TEE_POLICY_INVALID/, setting);
   }
   for (const build of ["reproduced", "reproduced-off-github", "signed"]) assert.throws(() => parsePolicy(`public-builds,build=${build}`), /not yet supported/);
@@ -58,4 +59,5 @@ test("grammar, unsupported refinements and obsolete names fail with migration gu
   const ignored = parsePolicy("trust-provider-and-host,verifier=nras");
   assert.match(ignored.warnings.join(" "), /no effect.*gpu=unchecked/);
   assert.deepEqual(parsePolicy("trust-provider,verifier=nras").warnings, []);
+  assert.equal(parsePolicy("public-builds,egress=metadata,appraisal=reuse").appraisal, "reuse");
 });

@@ -9,6 +9,7 @@ export const POLICY_VALUES = {
   build: ["reproduced-off-github", "reproduced", "publisher-workflow", "signed"],
   review: ["pinned", "window", "none"],
   verifier: ["local", "nras"],
+  appraisal: ["per-request", "reuse"],
 } as const;
 export type SecurityPolicy = Readonly<{
   position: Position;
@@ -19,6 +20,7 @@ export type SecurityPolicy = Readonly<{
   build?: typeof POLICY_VALUES.build[number];
   review?: typeof POLICY_VALUES.review[number];
   verifier: typeof POLICY_VALUES.verifier[number];
+  appraisal: typeof POLICY_VALUES.appraisal[number];
   warnings: readonly string[];
 }>;
 export const DEFAULT_POLICY = "public-builds,egress=metadata";
@@ -69,7 +71,7 @@ export function parsePolicy(value = DEFAULT_POLICY): SecurityPolicy {
   const policy: { -readonly [K in keyof SecurityPolicy]: SecurityPolicy[K] } = {
     position, code: publicCode ? "public-release" : "provider-controlled",
     host: trustsHost ? "stale" : "current", gpu: trustsHost ? "unchecked" : "verified",
-    egress: publicCode ? "none" : "any", verifier: "local", warnings: [],
+    egress: publicCode ? "none" : "any", verifier: "local", appraisal: "per-request", warnings: [],
     ...(publicCode ? { build: "publisher-workflow" as const, review: "none" as const } : {}),
   };
   const seen = new Set<string>();

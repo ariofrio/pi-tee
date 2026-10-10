@@ -2,7 +2,7 @@
 
 NEAR AI, Tinfoil, Chutes and Privatemode extensions for Pi: native API-key login, model discovery, tools, reasoning, usage and encrypted inference. **Work in progress; packages are unpublished.** Use the locked Node 24 checkout with Pi 1.0.4.
 
-Start with the [quick start](docs/quick-start.md). The default `public-builds,egress=metadata` admits Tinfoil workers only after fresh public-build, CPU and GPU checks pass. Other routes require explicit provider and host trust. Every request establishes its own levels; a catalog label or previous success cannot authorize it.
+Start with the [quick start](docs/quick-start.md). The default `public-builds,egress=metadata` admits Tinfoil workers only after fresh public-build, CPU and GPU checks pass. Other routes require explicit provider and host trust. Every request establishes its own levels; a catalog label or previous success cannot authorize it unless you opt in to [reusing a Tinfoil appraisal](docs/reference/policy.md#appraisal-reuse) for up to a minute.
 
 | Read next | Purpose |
 | --- | --- |

@@ -32,6 +32,6 @@ The request is sealed to the attested HPKE key and sent once over TLS pinned to 
 
 A fresh random encrypted `cache_salt` is generated per public dispatch. This defeats cross-turn prompt caching and can increase prefill work and cost. Per-request caching is a privacy choice, not a billing guarantee.
 
-Public workers are rediscovered/appraised per request. Delivery can withhold candidates or close ingress; no availability promise is made. Authenticated immutable caching does not extend fresh CPU/GPU/key/witness checks. [Limits](../reference/support-limits.md), [storage](../reference/commands-settings.md), [required serving contract](../contracts/tinfoil-public-builds.md).
+Public workers are rediscovered/appraised per request unless `appraisal=reuse` [reuses an accepted appraisal](../reference/policy.md#appraisal-reuse) for up to a minute. Delivery can withhold candidates or close ingress; no availability promise is made. Authenticated immutable caching does not extend fresh CPU/GPU/key/witness checks. [Limits](../reference/support-limits.md), [storage](../reference/commands-settings.md), [required serving contract](../contracts/tinfoil-public-builds.md).
 
 Tinfoil commitments have not been reviewed and do not gate admission. Historical router-only model/configuration findings and independent implementation reviews remain in the [design snapshot](../evidence/client/2026-10-09-design-assessment.md#provider-assessment) and [review archive](../archive/reviews/README.md). Use the live catalog rather than historical model availability statements.

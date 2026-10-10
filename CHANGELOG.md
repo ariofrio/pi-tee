@@ -7,6 +7,7 @@
 - Four separate Pi extensions: NEAR AI, Tinfoil, Chutes and Privatemode, with native API-key login, discovery, tools, reasoning, usage and cancellation. Packages remain unpublished. [Provider guide](docs/providers.md).
 - Tinfoil public direct workers for Gemma 4 31B, DeepSeek V4.1 Flash and GLM-5.3, plus a DeepSeek/GLM billing-relay fallback. Fresh public release/runtime/key, CPU and serving-GPU checks precede inference; direct is preferred. [Serving contract](docs/contracts/tinfoil-public-builds.md).
 - Hash-checked local WASM verifiers, isolated workers, owned TLS transport and six desktop Node/Bun host checks; no user-installed compiler/container. Android emulator results have a narrower credential-free scope. [Support](docs/reference/support-limits.md), [evidence](docs/evidence/README.md).
+- Opt-in `appraisal=reuse` lets Tinfoil public direct and gateway requests reuse an accepted worker appraisal for the same route, model and policy until five seconds before its admission expiry, skipping about 2–5 seconds of appraisal. Each request still gets its own transport, sealed to the worker's HPKE key, and sends once; an appraisal becomes reusable only after its dispatch reads a complete, authenticated response, and is unavailable while that dispatch is unfinished. Reused requests carry no fresh challenge, GPU or revocation check of their own. [What it weakens](docs/reference/policy.md#appraisal-reuse).
 
 ### Changed
 

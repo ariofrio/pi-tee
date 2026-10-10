@@ -21,6 +21,7 @@ Use the locked Node 24 workspace and Pi 1.0.4. Local NVIDIA and Tinfoil CPU/rele
 | Whole provider request | Default/max 600 seconds; a smaller caller timeout applies; [run()](../../packages/core/src/provider.ts) |
 | Tinfoil public direct discovery/appraisal | At most eight reachable candidates; 16 concurrent TCP probes, 3 seconds each; 120-second per-candidate cap; [selection](../../packages/tinfoil/src/public-session.ts) |
 | Tinfoil admission | Minimum of check +60 seconds, challenge +300 seconds and both witness timestamps +7 days; rechecked at dispatch/TLS handoff |
+| Tinfoil appraisal reuse | `appraisal=reuse` only: same route, model and policy, until 5 seconds before admission expiry; in memory, reusable only after a response body is read to a clean end with every frame authenticated; unavailable while its dispatch is unfinished; [selection](../../packages/tinfoil/src/public-session.ts) |
 | Tinfoil immutable cache | 96 MiB / 128 entries; [cache](../../packages/tinfoil/src/public-build.ts) |
 | NVIDIA local verifier | One worker per GPU, at most eight per process; 120 seconds and 256 MiB JavaScript heap each; [verifier](../../packages/core/src/nvidia-verifier.ts) |
 | NVIDIA reference-manifest cache | 1 hour / 8 MiB, filled only from runs NVIDIA's verifier accepted; [verifier](../../packages/core/src/nvidia-verifier.ts) |
