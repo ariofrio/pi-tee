@@ -167,8 +167,30 @@ test("the NVIDIA collateral bridge admits only its loopback test relay and at mo
   await request("GET", "http://127.0.0.1:8080/v1/rim/X", {}, empty);
   await request("POST", "http://127.0.0.1:8080/ocsp", {}, empty);
   await assert.rejects(request("GET", "http://127.0.0.1:8081/v1/rim/X", {}, empty));
-  for (let count = 3; count < 192; count++) await request("GET", "https://rim.attestation.nvidia.com/v1/rim/X", {}, empty);
+  // A relay's reference manifest never answers for NVIDIA's.
+  await request("GET", "https://rim.attestation.nvidia.com/v1/rim/X", {}, empty);
+  assert.equal(stub.calls.length, 3);
+  for (let count = 4; count < 192; count++) await request("POST", "https://ocsp.ndis.nvidia.com/", {}, empty);
   assert.equal(stub.calls.length, 191);
-  await assert.rejects(request("GET", "https://rim.attestation.nvidia.com/v1/rim/X", {}, empty));
+  await assert.rejects(request("POST", "https://ocsp.ndis.nvidia.com/", {}, empty));
   assert.equal(stub.calls.length, 191);
+});
+
+test("the NVIDIA collateral bridge downloads each reference manifest once and never reuses a failure", async () => {
+  const stub = stubFetch();
+  const seen: string[] = [];
+  const request = nvidiaCollateralBridge({ fetch: stub.fetch, rims: { "https://rim.attestation.nvidia.com/v1/rim/Seeded": new Uint8Array([7]) }, onRim: id => seen.push(id) });
+  const empty = new Uint8Array();
+  const [a, b] = await Promise.all([request("GET", "https://rim.attestation.nvidia.com/v1/rim/X", {}, empty), request("GET", "https://rim.attestation.nvidia.com/v1/rim/X", {}, empty)]);
+  assert.deepEqual([a.status, b.status, stub.calls.length, seen], [200, 200, 1, ["https://rim.attestation.nvidia.com/v1/rim/X"]]);
+  assert.deepEqual([...(await request("GET", "https://rim.attestation.nvidia.com/v1/rim/Seeded", {}, empty)).body], [7]);
+  assert.equal(stub.calls.length, 1);
+  stub.reply = () => new Response("missing", { status: 404 });
+  await request("GET", "https://rim.attestation.nvidia.com/v1/rim/Y", {}, empty);
+  await request("GET", "https://rim.attestation.nvidia.com/v1/rim/Y", {}, empty);
+  assert.deepEqual([stub.calls.length, seen], [3, ["https://rim.attestation.nvidia.com/v1/rim/X"]]);
+  // Each OCSP request carries its own nonce and is always sent.
+  await request("POST", "https://ocsp.ndis.nvidia.com/", {}, empty);
+  await request("POST", "https://ocsp.ndis.nvidia.com/", {}, empty);
+  assert.equal(stub.calls.length, 5);
 });

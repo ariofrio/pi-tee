@@ -1,7 +1,7 @@
 import { parentPort, workerData } from "node:worker_threads";
 
-const { module, glue, glueUrl, evidence, args, collateralOrigin } = workerData as {
-  module: WebAssembly.Module; glue: string; glueUrl: string; evidence: string; args: string[]; collateralOrigin?: string;
+const { module, glue, glueUrl, evidence, args, collateralOrigin, rims } = workerData as {
+  module: WebAssembly.Module; glue: string; glueUrl: string; evidence: string; args: string[]; collateralOrigin?: string; rims: Record<string, Uint8Array>;
 };
 
 // Import the glue from the source the host authenticated: Node accepts data:
@@ -31,7 +31,7 @@ try {
     },
     print(line: string) { if (stdout.length + line.length > 262144) overflow = true; else stdout += `${line}\n`; },
     printErr() {},
-    piTeeRequest: nvidiaCollateralBridge({ collateralOrigin }),
+    piTeeRequest: nvidiaCollateralBridge({ collateralOrigin, rims, onRim: (rim, body) => parentPort!.postMessage({ rim, body }) }),
   });
   runtime.FS.writeFile("/evidence.json", evidence);
   // An asynchronous ccall returns main's status after network waits; callMain

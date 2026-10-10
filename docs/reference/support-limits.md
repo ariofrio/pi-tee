@@ -22,6 +22,7 @@ Use the locked Node 24 workspace and Pi 1.0.4. Local NVIDIA and Tinfoil CPU/rele
 | Tinfoil public direct discovery/appraisal | At most eight reachable candidates; 16 concurrent TCP probes, 3 seconds each; 120-second per-candidate cap; [selection](../../packages/tinfoil/src/public-session.ts) |
 | Tinfoil admission | Minimum of check +60 seconds, challenge +300 seconds and both witness timestamps +7 days; rechecked at dispatch/TLS handoff |
 | Tinfoil immutable cache | 96 MiB / 128 entries; [cache](../../packages/tinfoil/src/public-build.ts) |
+| NVIDIA reference-manifest cache | 1 hour / 8 MiB, filled only from runs NVIDIA's verifier accepted; [verifier](../../packages/core/src/nvidia-verifier.ts) |
 | Chutes admission | Minimum of invocation-token expiry and fresh challenge +60 seconds; rechecked after hooks/encryption |
 | Privatemode bootstrap/admission | 60 seconds; isolated worker disposed on cancellation/error; network/decrypted chunks use backpressure |
 

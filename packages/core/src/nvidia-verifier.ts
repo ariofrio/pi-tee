@@ -37,6 +37,31 @@ function compiled() {
 
 export const NVIDIA_VERIFIER_DIGEST = createHash("sha256").update(JSON.stringify([NVIDIA_ARTIFACTS["nvattest.wasm"], NVIDIA_ARTIFACTS["nvattest.mjs"]])).digest("hex");
 
+function accepted(stdout: string) {
+  try { return JSON.parse(stdout).result_code === 0; } catch { return false; }
+}
+
+// Reference manifests are signed and named by firmware version. The verifier
+// checks each copy's signature, and its signing chain's revocation, on every
+// use; only downloads from runs NVIDIA accepted are reused, for an hour.
+// Test relays never share them.
+const RIM_TTL_MS = 3600000;
+const RIM_CACHE_BYTES = 8 * 1024 * 1024;
+const rims = new Map<string, { body: Uint8Array; at: number }>();
+function cachedRims() {
+  const now = Date.now();
+  for (const [key, value] of rims) if (now - value.at >= RIM_TTL_MS) rims.delete(key);
+  return Object.fromEntries([...rims].map(([key, value]) => [key, value.body]));
+}
+function keepRims(fetched: Map<string, Uint8Array>) {
+  let size = [...rims.values()].reduce((total, value) => total + value.body.length, 0);
+  for (const [key, body] of fetched) {
+    if (rims.has(key) || size + body.length > RIM_CACHE_BYTES) continue;
+    rims.set(key, { body, at: Date.now() });
+    size += body.length;
+  }
+}
+
 /** Appraises file evidence with NVIDIA's local verifier and returns its JSON result. */
 export async function runNvidiaVerifier(options: { evidence: unknown[]; nonce: string; signal: AbortSignal; collateralOrigin?: string }): Promise<{ code: number; stdout: string }> {
   options.signal.throwIfAborted();
@@ -51,7 +76,7 @@ export async function runNvidiaVerifier(options: { evidence: unknown[]; nonce: s
     // Source checkouts run through a TypeScript loader that workers inherit.
     const worker = new Worker(new URL(`./nvattest-worker.${import.meta.url.endsWith(".ts") ? "ts" : "js"}`, import.meta.url), {
       workerData: {
-        module: wasm, glue, glueUrl: location("nvattest.mjs").href, evidence: JSON.stringify(options.evidence), collateralOrigin: origin,
+        module: wasm, glue, glueUrl: location("nvattest.mjs").href, evidence: JSON.stringify(options.evidence), collateralOrigin: origin, rims: origin ? {} : cachedRims(),
         args: ["--log-level", "off", "--format", "json", "attest", "--device", "gpu", "--gpu-evidence-source", "file",
           "--gpu-evidence-file", "/evidence.json", "--verifier", "local", "--nonce", options.nonce,
           ...(origin ? ["--rim-url", origin, "--ocsp-url", `${origin}/ocsp`] : [])],
@@ -74,9 +99,14 @@ export async function runNvidiaVerifier(options: { evidence: unknown[]; nonce: s
     const abort = () => finish(options.signal.reason ?? new TeeError("TEE_VERIFIER_PROCESS_REJECTED"));
     const timer = setTimeout(() => finish(new TeeError("TEE_VERIFIER_PROCESS_REJECTED")), 120000);
     options.signal.addEventListener("abort", abort, { once: true });
-    worker.once("message", (message: { code: number; stdout: string } | { error: true }) => {
-      if ("error" in message) finish(new TeeError("TEE_VERIFIER_PROCESS_REJECTED"));
-      else finish(undefined, message);
+    const fetched = new Map<string, Uint8Array>();
+    worker.on("message", (message: { code: number; stdout: string } | { error: true } | { rim: string; body: Uint8Array }) => {
+      if ("rim" in message) { if (!origin) fetched.set(message.rim, message.body); }
+      else if ("error" in message) finish(new TeeError("TEE_VERIFIER_PROCESS_REJECTED"));
+      else {
+        if (message.code === 0 && accepted(message.stdout)) keepRims(fetched);
+        finish(undefined, message);
+      }
     });
     worker.once("error", () => finish(new TeeError("TEE_VERIFIER_PROCESS_REJECTED")));
     worker.once("exit", () => finish(new TeeError("TEE_VERIFIER_PROCESS_REJECTED")));
