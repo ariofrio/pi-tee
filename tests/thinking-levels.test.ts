@@ -86,3 +86,16 @@ test("Privatemode GLM effort follows the template's own names; off selects its w
   const efforts = Object.fromEntries(await Promise.all((["off", "low", "medium", "high", "max"] as const).map(async l => [l, (await sent(glm, l)).effort])));
   assert.deepEqual(efforts, { off: "low", low: "low", medium: "high", high: "high", max: "max" });
 });
+
+test("Chutes DeepSeek-V4-Flash-0731 receives its serving profile's effort as a top-level field", async () => {
+  const ds = chutes("deepseek-ai/DeepSeek-V4-Flash-0731-TEE");
+  assert.deepEqual(getSupportedThinkingLevels(ds), ["off", "minimal", "low", "medium", "high"]);
+  const efforts = Object.fromEntries(await Promise.all((["off", "low", "medium", "high"] as const).map(async l => [l, await sent(ds, l)])));
+  assert.deepEqual(efforts, {
+    off: { kwargs: undefined, effort: "none" }, low: { kwargs: undefined, effort: "high" },
+    medium: { kwargs: undefined, effort: "high" }, high: { kwargs: undefined, effort: "max" },
+  });
+  for (const model of [near("deepseek-ai/DeepSeek-V4-Flash-0731"), chutes("deepseek-ai/DeepSeek-V4-Flash-TEE")]) {
+    assert.deepEqual(await sent(model, "high"), { kwargs: on, effort: undefined }, model.id);
+  }
+});

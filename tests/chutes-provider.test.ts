@@ -135,6 +135,22 @@ test("a known Chutes template receives Pi's level as its own effort inside the s
   }
 });
 
+test("DeepSeek-V4-Flash-0731's top-level effort travels only inside the sealed body", async () => {
+  for (const [reasoning, effort] of [["high", "max"], [undefined, "none"]] as const) {
+    const f = await fixture(undefined, { ...raw, id: "deepseek-ai/DeepSeek-V4-Flash-0731-TEE" });
+    try {
+      const integration = createChutesProvider({ policy: "trust-provider-and-host,host=current", catalogFetch: f.fetch, seams: { fetch: f.fetch, invoke: f.fetch, cpu: f.cpu } });
+      await integration.initializeCatalog();
+      const result = await integration.provider.streamSimple(integration.provider.getModels()[0]!, context, { apiKey: "synthetic-key", ...(reasoning ? { reasoning } : {}) }).result();
+      assert.equal(result.stopReason, "stop");
+      assert.equal(f.opened().reasoning_effort, effort);
+      assert.equal(f.opened().chat_template_kwargs, undefined);
+      const sealed = Buffer.from(await f.hops.find(h => h.method === "POST")!.arrayBuffer());
+      assert.equal(sealed.includes(Buffer.from("reasoning_effort")), false);
+    } finally { await f.remove(); }
+  }
+});
+
 test("authenticated below-floor Chutes hosts can be admitted only by a policy allowing H2", async () => {
   const f = await fixture("floor");
   try {
