@@ -24,6 +24,7 @@
 
 ### Fixed
 
+- `npm run smoke:near-gpu` appraises CPU evidence under the direct route's own Intel policy and reports each endpoint's Intel status and host level. Since it began checking any discovered model, it had demanded `UpToDate` and failed with `policy.tcb_status_not_allowed` on the `OutOfDate` (H2) Qwen endpoints; route admission is unchanged. [Live result](docs/near-direct-discovery.md#gpu-evidence-smoke-2026-10-10).
 - Preserve native credential selection across all four extensions; reject ambiguous Privatemode attestation-field aliases and manifest/policy mismatches before inference.
 - Guard final post-hook payload/model/endpoint/authentication; bind actual sockets/recipient keys, bound memory/time and reject forged output, reconnects and unwanted resends. Chutes' owned invocation socket cannot replay HTTP 421.
 - Status names why a host failed with its HTTP status and a fixed class (rate-limited, upstream unavailable, evidence unavailable, request refused, connection failed), never provider text. Terminal codes thrown during dispatch, such as a rejected Tinfoil wire status, now surface instead of `TEE_REQUEST_FAILED`. [Diagnosis](docs/quick-start.md#diagnose-a-blocked-request).

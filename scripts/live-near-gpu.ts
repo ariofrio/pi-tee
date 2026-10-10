@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
 
 // Public, credential-free check of the NEAR direct route's evidence: a fresh
-// client nonce, the owned TLS channel, Intel quote verification and NVIDIA's
-// local GPU verifier under the route's default GPU policy, which fails closed
-// on hardware it does not admit. Reports NVIDIA's verdict either way.
+// client nonce, the owned TLS channel, Intel quote verification under the
+// route's CPU policy and NVIDIA's local GPU verifier under the route's default
+// GPU policy, which fails closed on hardware it does not admit. Reports the
+// Intel status, host level and NVIDIA's verdict either way.
 // No inference; nothing is saved.
 const contacted = new Set<string>();
 const realFetch = globalThis.fetch;
@@ -16,7 +17,8 @@ const { DirectAttestationClient, verifyDirectModelAttestations } = await import(
 const { NearDirectChannel } = await import("../packages/nearai/src/direct-channel.js");
 const { createNearProvider } = await import("../packages/nearai/src/index.js");
 const { discoverNearDirectEndpoints } = await import("../packages/nearai/src/discovery.js");
-const { checkNearGpuEvidence } = await import("../packages/nearai/src/gpu.js");
+const { createNearCpuVerifier } = await import("../packages/nearai/src/cpu.js");
+const { checkNearGpuEvidence, nearModelVerification } = await import("../packages/nearai/src/gpu.js");
 const { runNvidiaVerifier } = await import("pi-tee-core");
 
 const signal = AbortSignal.timeout(240000);
@@ -34,13 +36,13 @@ class Evidence extends DirectAttestationClient {
 }
 let gpuRuns = 0;
 let nvidia: Record<string, unknown> | undefined;
+const cpu: { host: number; observed: string[] }[] = [];
 const started = Date.now();
 try {
   const fetched = await new Evidence({ baseUrl: `${baseUrl}/` }).fresh();
   const verified = await verifyDirectModelAttestations({
     ...fetched,
-    policy: { acceptedTcbStatuses: ["UpToDate"], gpuEvidence: "required" },
-    verifiers: { gpuEvidence: (payload: string) => checkNearGpuEvidence(payload, { signal, run: async options => {
+    ...nearModelVerification(createNearCpuVerifier({ signal, onRating: rating => cpu.push(rating) }), payload => checkNearGpuEvidence(payload, { signal, run: async options => {
       gpuRuns++;
       const result = await runNvidiaVerifier(options);
       try {
@@ -49,7 +51,7 @@ try {
           drivers: [...new Set(claims.map(c => c["x-nvidia-gpu-driver-version"]))], vbios: [...new Set(claims.map(c => c["x-nvidia-gpu-vbios-version"]))] };
       } catch { nvidia = { resultCode: "unparsed" }; }
       return result;
-    } }) },
+    } })),
   });
   assert.equal(verified.tlsBinding.kind, "attested");
   channel.approve(verified.tlsBinding.spkiFingerprint);
@@ -57,7 +59,7 @@ try {
   assert.ok(gpuRuns >= 1);
   assert.ok(![...contacted].some(host => host.endsWith("nvidia.com")), "The SDK contacted an NVIDIA service directly.");
   console.log(JSON.stringify({
-    model: model, attestations: verified.attestations.length, gpuAppraisals: gpuRuns,
+    model: model, attestations: verified.attestations.length, cpu, gpuAppraisals: gpuRuns,
     gpuEvidence: "verified-locally", tlsBinding: "attested", elapsedMs: Date.now() - started, hostsContactedByMainThread: [...contacted].sort(),
   }));
 } catch (error) {
@@ -65,7 +67,7 @@ try {
   const code = (error as { failure?: { code?: string }; message?: string })?.failure?.code ?? (error as Error)?.message;
   console.error(`FAIL: NEAR direct evidence check: ${/^[a-z0-9_.]+$|^TEE_[A-Z_]+$|^\[/i.test(String(code)) ? code : "unclassified error"}`);
   const cause = (error as { cause?: { message?: string } })?.cause?.message;
-  console.error(JSON.stringify({ gpuPolicy: /^TEE_[A-Z_]+$/.test(String(cause)) ? cause : undefined, nvidia, nvidiaContactedByMainThread: [...contacted].some(host => host.endsWith("nvidia.com")) }));
+  console.error(JSON.stringify({ model, cpu, gpuPolicy: /^TEE_[A-Z_]+$/.test(String(cause)) ? cause : undefined, nvidia, nvidiaContactedByMainThread: [...contacted].some(host => host.endsWith("nvidia.com")) }));
   process.exitCode = 1;
 } finally {
   channel.close();

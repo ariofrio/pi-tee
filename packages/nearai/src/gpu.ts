@@ -65,11 +65,13 @@ export async function observeNearGpuEvidence(payload: string, nonce: string, opt
 /**
  * Model verification for both NEAR routes. They strip GPU payloads before SDK
  * appraisal; the SDK's default GPU verifier would submit any that still reach
- * it to NRAS, so this one rejects them locally instead.
+ * it to NRAS, so this one rejects them locally instead. A caller-supplied GPU
+ * verifier makes GPU evidence required under the same CPU statuses, so a GPU
+ * check is not stricter about the host than the routes it checks.
  */
-export function nearModelVerification(tdxQuote: TdxQuoteVerifier): { policy: ModelAttestationPolicy; verifiers: ModelAttestationVerifiers } {
+export function nearModelVerification(tdxQuote: TdxQuoteVerifier, gpuEvidence?: (payload: string) => Promise<void>): { policy: ModelAttestationPolicy; verifiers: ModelAttestationVerifiers } {
   return {
-    policy: { acceptedTcbStatuses: ["UpToDate", "OutOfDate"], gpuEvidence: "if-present" },
-    verifiers: { tdxQuote, gpuEvidence: () => { throw new TeeError("TEE_GPU_POLICY_REJECTED"); } },
+    policy: { acceptedTcbStatuses: ["UpToDate", "OutOfDate"], gpuEvidence: gpuEvidence ? "required" : "if-present" },
+    verifiers: { tdxQuote, gpuEvidence: gpuEvidence ?? (() => { throw new TeeError("TEE_GPU_POLICY_REJECTED"); }) },
   };
 }

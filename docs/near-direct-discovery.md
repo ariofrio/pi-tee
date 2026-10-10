@@ -33,4 +33,8 @@ The compiled runtime is the official [Pi 1.0.4 macOS ARM64 release](https://gith
 
 [Provider/SDK-boundary tests](../tests/near-direct-discovery.test.ts) cover catalog/registry mismatches, hostile hostnames, no-tool models, below-floor policy rejection before prompt transmission, unreachable endpoint skipping/status, and report-model mismatch. Existing [CPU floor tests](../tests/near-cpu.test.ts), [socket tests](../tests/near-direct-channel.test.ts), and [local GPU/no-NRAS tests](../tests/near-gpu.test.ts) retain their checks. CI runs discovery under Node and Bun.
 
+## GPU evidence smoke, 2026-10-10
+
+[`npm run smoke:near-gpu [model]`](../scripts/live-near-gpu.ts) appraises CPU evidence with the direct route's Intel verifier and statuses, and requires GPU evidence and applies NVIDIA's local verifier and the default GPU policy. With no argument it checks the first discovered direct model. Intel statuses and TDX SVNs matched the table above under Intel's TCB info for FMSPC `90C06F000000` (edition 20, TCB date 2025-08-13; this copy issued 2026-10-10). The Qwen endpoints' TDX late-microcode SVN is 3; edition 20's `UpToDate` level requires 4. For all three models, NVIDIA's verifier accepted eight Hopper GPUs (result code 0) and the default policy rejected them with `TEE_GPU_POLICY_REJECTED`; the smoke reports that and exits 1. GLM reported driver `595.58.03` and both Qwen endpoints `570.172.08`, all with VBIOS `96.00.CF.00.02`.
+
 Written by Codex.

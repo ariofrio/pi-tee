@@ -147,3 +147,26 @@ test("GPU evidence that reaches the SDK is rejected locally, never submitted to 
   assert.deepEqual(contacted, []);
   assert.match(String(gpuError), /TEE_GPU_POLICY_REJECTED/);
 });
+
+test("required GPU appraisal admits the routes' CPU statuses, so the GPU check reaches OutOfDate hosts", async () => {
+  const fixture = JSON.parse(await readFile("tests/fixtures/near-glm-direct-attestation.json", "utf8"));
+  const { verifyDirectModelAttestations } = await import("@nearai/inference-sdk/node");
+  const { Quote } = await import("@phala/dcap-qvl");
+  const td = Quote.parse(Buffer.from(fixture.intel_quote, "hex")).report.asTd10()!;
+  const attestation = { nonce: fixture.request_nonce, signer: { signingAlgo: "ed25519" as const, signingAddress: fixture.signing_address },
+    intelQuote: fixture.intel_quote, eventLog: fixture.event_log, appCompose: fixture.info.tcb_info.app_compose, nvidiaPayload: fixture.nvidia_payload,
+    modelName: fixture.model_name, spkiFingerprint: fixture.tls_cert_fingerprint };
+  const appraise = (tcbStatus: "UpToDate" | "OutOfDate" | "SWHardeningNeeded") => {
+    const payloads: string[] = [];
+    const quote = async () => ({ tcbStatus, advisoryIds: ["INTEL-SA-01192"], debugEnabled: false, reportData: td.reportData, mrConfigId: td.mrConfigId, rtMr3: td.rtMr3 });
+    const { policy, verifiers } = nearModelVerification(quote, async payload => { payloads.push(payload); });
+    return { payloads, result: verifyDirectModelAttestations({ servingAttestation: attestation, attestations: [attestation],
+      clientBinding: { nonce: fixture.request_nonce, spkiFingerprint: fixture.tls_cert_fingerprint }, policy, verifiers }) };
+  };
+  for (const status of ["UpToDate", "OutOfDate"] as const) {
+    const { payloads, result } = appraise(status);
+    assert.equal((await result).attestations[0]!.gpuEvidence, "verified", status);
+    assert.deepEqual(payloads, [fixture.nvidia_payload]);
+  }
+  await assert.rejects(appraise("SWHardeningNeeded").result, (error: any) => error?.failure?.code === "policy.tcb_status_not_allowed");
+});
