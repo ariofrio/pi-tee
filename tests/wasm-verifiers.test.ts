@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import { compileVerifiedWasm, runWasiCommand } from "pi-tee-core";
 import { nvidiaCollateralBridge } from "../packages/core/src/nvattest-bridge.js";
-import { runNvidiaVerifier } from "../packages/core/src/nvidia-verifier.js";
+import { combineGpuVerdicts, runNvidiaVerifier, verifierSlot } from "../packages/core/src/nvidia-verifier.js";
 import { runPublicBuildHelper } from "../packages/tinfoil/src/wasm-verifiers.js";
 
 // Minimal hand-assembled WASI commands exercising the shim boundary. Imported
@@ -101,6 +101,38 @@ test("the NVIDIA verifier starts offline and rejects empty evidence", async () =
   const result = await runNvidiaVerifier({ evidence: [], nonce: "0".repeat(64), signal: AbortSignal.timeout(60000) });
   assert.notEqual(result.code, 0);
   assert.notEqual(JSON.parse(result.stdout).result_code, 0);
+});
+
+test("multi-GPU evidence is appraised one GPU per verifier and fails as a whole", async () => {
+  const result = await runNvidiaVerifier({ evidence: [{}, {}], nonce: "0".repeat(64), signal: AbortSignal.timeout(60000) });
+  assert.notEqual(result.code, 0);
+  const claim = (ueid: string) => ({ code: 0, stdout: JSON.stringify({ result_code: 0, claims: [{ ueid }] }) });
+  assert.deepEqual(JSON.parse(combineGpuVerdicts([claim("a"), claim("b")]).stdout), { result_code: 0, claims: [{ ueid: "a" }, { ueid: "b" }] });
+  const failed = { code: 0, stdout: JSON.stringify({ result_code: 1, claims: [{ ueid: "b" }] }) };
+  assert.deepEqual(combineGpuVerdicts([claim("a"), failed]), { code: 1, stdout: failed.stdout });
+  assert.equal(combineGpuVerdicts([claim("a"), { code: 0, stdout: JSON.stringify({ result_code: 0, claims: [{}, {}] }) }]).code, 1);
+  assert.equal(combineGpuVerdicts([claim("a"), { code: 0, stdout: "" }]).code, 1);
+  assert.equal(combineGpuVerdicts([claim("a"), { code: 7, stdout: claim("b").stdout }]).code, 7);
+});
+
+test("verifier slots bound concurrency, release once and leave the queue on cancellation", async () => {
+  const state = { running: 0, waiting: [] as (() => void)[] };
+  const never = new AbortController().signal;
+  const first = await verifierSlot(never, 2, state);
+  await verifierSlot(never, 2, state);
+  let third = false;
+  const queued = verifierSlot(never, 2, state).then(release => { third = true; return release; });
+  const cancelled = new AbortController();
+  const abandoned = verifierSlot(cancelled.signal, 2, state);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual([third, state.running, state.waiting.length], [false, 2, 2]);
+  cancelled.abort(Error("stop"));
+  await assert.rejects(abandoned, /stop/);
+  assert.equal(state.waiting.length, 1);
+  first(); first();
+  await queued;
+  assert.deepEqual([third, state.running, state.waiting.length], [true, 2, 0]);
+  await assert.rejects(verifierSlot(cancelled.signal, 2, state), /stop/);
 });
 
 test("the NVIDIA verifier honors cancellation that arrives while it is starting", async () => {

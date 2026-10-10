@@ -62,8 +62,63 @@ function keepRims(fetched: Map<string, Uint8Array>) {
   }
 }
 
+type Verdict = { code: number; stdout: string };
+
+// NVIDIA's verifier appraises each GPU independently, so each GPU gets its own
+// fresh verifier and their waits on NVIDIA's services overlap. Each verifier
+// adds roughly 30-60 MB of WebAssembly and heap. Eight, the most GPUs any
+// admitted CVM has, finish in one round; more appraisals queue rather than
+// multiply memory.
+const MAX_VERIFIERS = 8;
+const slots = { running: 0, waiting: [] as (() => void)[] };
+/** Waits for a verifier slot; the returned function releases it once. */
+export function verifierSlot(signal: AbortSignal, limit = MAX_VERIFIERS, state = slots): Promise<() => void> {
+  return new Promise((resolve, reject) => {
+    const grant = () => {
+      signal.removeEventListener("abort", abort);
+      state.running++;
+      let released = false;
+      resolve(() => { if (released) return; released = true; state.running--; state.waiting.shift()?.(); });
+    };
+    const abort = () => {
+      const index = state.waiting.indexOf(grant);
+      if (index >= 0) state.waiting.splice(index, 1);
+      reject(signal.reason);
+    };
+    if (signal.aborted) return reject(signal.reason);
+    if (state.running < limit) return grant();
+    state.waiting.push(grant);
+    signal.addEventListener("abort", abort, { once: true });
+  });
+}
+
+/** Combines single-GPU verdicts in evidence order; any failure is the whole verdict. */
+export function combineGpuVerdicts(verdicts: Verdict[]): Verdict {
+  const claims: unknown[] = [];
+  for (const verdict of verdicts) {
+    let parsed: any;
+    try { parsed = JSON.parse(verdict.stdout); } catch { return { code: verdict.code || 1, stdout: verdict.stdout }; }
+    if (verdict.code !== 0 || parsed?.result_code !== 0 || !Array.isArray(parsed.claims) || parsed.claims.length !== 1) return { code: verdict.code || 1, stdout: verdict.stdout };
+    claims.push(parsed.claims[0]);
+  }
+  return { code: 0, stdout: JSON.stringify({ result_code: 0, claims }) };
+}
+
 /** Appraises file evidence with NVIDIA's local verifier and returns its JSON result. */
-export async function runNvidiaVerifier(options: { evidence: unknown[]; nonce: string; signal: AbortSignal; collateralOrigin?: string }): Promise<{ code: number; stdout: string }> {
+export async function runNvidiaVerifier(options: { evidence: unknown[]; nonce: string; signal: AbortSignal; collateralOrigin?: string }): Promise<Verdict> {
+  if (options.evidence.length < 2) return runOne(options);
+  const controller = new AbortController();
+  const signal = AbortSignal.any([options.signal, controller.signal]);
+  return combineGpuVerdicts(await Promise.all(options.evidence.map(item =>
+    runOne({ ...options, evidence: [item], signal }).catch(error => { controller.abort(error); throw error; }))));
+}
+
+async function runOne(options: { evidence: unknown[]; nonce: string; signal: AbortSignal; collateralOrigin?: string }): Promise<Verdict> {
+  const release = await verifierSlot(options.signal);
+  try { return await runWorker(options); } finally { release(); }
+}
+
+async function runWorker(options: { evidence: unknown[]; nonce: string; signal: AbortSignal; collateralOrigin?: string }): Promise<Verdict> {
   options.signal.throwIfAborted();
   // Tests may relay NVIDIA collateral through a loopback proxy; nothing else can redirect it.
   const origin = options.collateralOrigin;
