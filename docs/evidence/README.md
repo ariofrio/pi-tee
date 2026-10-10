@@ -8,6 +8,7 @@ These are dated observations and source investigations. A passing run qualifies 
 | --- | --- | --- |
 | [Security-model and earlier client validation](client/implementation-validation.md) | 2026-10-07–09; locked Node 24, Bun and Pi 1.0.4, direct and gateway/router suites | The security-model section records credentialed NEAR GLM suites on Node and Bun, six default Tinfoil direct suites, and the Bun router loading failure. The 126-test count and two-provider inventory precede Chutes. Earlier policies and setup remain historical. |
 | [Portable verification](client/portable-verification.md) | 2026-10-07–09; WASM/source boundaries, six desktop CI targets and Android emulator | The earlier NEAR Bun “not yet run” statement is superseded by the security-model run above. Android has credential-free appraisal, not a live Pi suite. Architecture descriptions reflect the preserved source snapshot. |
+| [GPU appraisal latency](client/gpu-appraisal-latency.md) | 2026-10-10; one eight-GPU GLM-5.3 Tinfoil worker, Node 26 on macOS arm64, per-GPU verifier concurrency and complete appraisal versus main | One worker, client and network path; latency, not inference or availability. |
 | [Pre-restructure design/investigation snapshot](client/2026-10-09-design-assessment.md) | Preserved from main fa5e154, 2026-10-09 | Source investigations and old availability conclusions retain their original scope; current architecture/adapter behavior lives separately. |
 
 ## Tinfoil
