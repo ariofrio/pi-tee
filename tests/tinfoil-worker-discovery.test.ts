@@ -25,6 +25,9 @@ test("public worker discovery preserves candidates without treating claimed keys
 test("worker discovery rejects changed authorities, arbitrary hosts and malformed releases", async () => {
   for (const value of [document("attacker/workload"), document(repository, "127.0.0.1"), document(repository, "gemma4-31b-inf1.tinfoil.containers.tinfoil.dev.attacker.invalid"),
     { models: { [model]: { ...document().models[model], tag: "latest" } } },
+    { models: { [model]: { ...document().models[model], tag: "v0.0.25-rc.1" } } },
+    { models: { [model]: { ...document().models[model], tag: "v0.0.25+b200/../x" } } },
+    { models: { [model]: { ...document().models[model], tag: `v0.0.25+${"a".repeat(60)}` } } },
     { models: { [model]: { ...document().models[model], enclaves: Object.fromEntries(Array.from({ length: 129 }, (_, i) =>
       [`gemma4-31b-inf${i}.tinfoil.containers.tinfoil.dev`, {}])) } } },
   ]) {
@@ -56,4 +59,12 @@ test("worker host aliases need not equal catalog model IDs", async () => {
     } } }),
   });
   assert.deepEqual(candidates, [{ host: "glm5-3-flash-inf15.tinfoil.containers.tinfoil.dev", claimedTag: "v0.0.8" }]);
+});
+
+test("worker discovery admits release tags with SemVer build metadata", async () => {
+  for (const tag of ["v0.0.10+b200", "v0.0.9+b300-throughput"]) {
+    const candidates = await discoverTinfoilWorkers({ model, repository, signal: AbortSignal.timeout(3000),
+      fetch: async () => Response.json({ models: { [model]: { ...document().models[model], tag } } }) });
+    assert.deepEqual(candidates, [{ host, claimedTag: tag }]);
+  }
 });

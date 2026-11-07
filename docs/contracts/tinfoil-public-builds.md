@@ -39,7 +39,7 @@ All identities require the GitHub OIDC issuer, public source and an authenticate
 
 | Authority | Accepted workflow / ref |
 | --- | --- |
-| Three workload repositories in the model table | `.github/workflows/tinfoil-release-publish.yml@refs/tags/vMAJOR.MINOR.PATCH`, each only for its own model |
+| Three workload repositories in the model table | `.github/workflows/tinfoil-release-publish.yml@refs/tags/vMAJOR.MINOR.PATCH[+BUILD]`, each only for its own model. SemVer build metadata (`v0.0.10+b200`) names a hardware variant of a release; pre-release and other tags are rejected |
 | Guest builder `tinfoilsh/cvmimage` | `.github/workflows/release.yml@refs/tags/vMAJOR.MINOR.PATCH` |
 | Platform publisher `tinfoilsh/cvmimage` | `.github/workflows/platform-release.yml@refs/tags/platform-vMAJOR.MINOR.PATCH` |
 | Continued acceptance `tinfoilsh/freshness-witness` | `.github/workflows/freshness.yml@refs/heads/main` |

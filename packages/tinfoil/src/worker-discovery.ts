@@ -1,4 +1,5 @@
 import { readBoundedBody, record, TeeError, withAbort } from "pi-tee-core";
+import { isReleaseTag } from "./public-build.js";
 
 const deliveryUrls = [
   "https://inference.tinfoil.sh/.well-known/tinfoil-proxy",
@@ -21,13 +22,13 @@ export async function discoverTinfoilWorkers(options: {
       const bytes = await readBoundedBody(response.body, 2 * 1024 * 1024, bound);
       const status = record(JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)));
       const entry = record(record(status.models)[model]);
-      if (entry.repo !== repository || typeof entry.tag !== "string" ||
-          !/^v(0|[1-9][0-9]{0,9})\.(0|[1-9][0-9]{0,9})\.(0|[1-9][0-9]{0,9})$/.test(entry.tag)) continue;
+      const claimedTag = entry.tag;
+      if (entry.repo !== repository || !isReleaseTag(claimedTag)) continue;
       const hosts = Object.keys(record(entry.enclaves));
       if (!hosts.length || hosts.length > 128 || hosts.some(host => !hostPattern.test(host) || host.length > 253)) continue;
       signal.throwIfAborted();
       // Ignore delivery-supplied measurements and keys: they cannot authorize inference.
-      return hosts.map(host => ({ host, claimedTag: entry.tag as string }));
+      return hosts.map(host => ({ host, claimedTag }));
     } catch { signal.throwIfAborted(); }
   }
   throw new TeeError("TEE_WORKER_DISCOVERY_UNAVAILABLE");

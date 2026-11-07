@@ -32,7 +32,7 @@ const authorityPolicy = {
   sigstoreRoot: "6494e21ea73fa7ee769f85f57d5a3e6a08725eae1e38c755fc3517c9e6bc0b66",
   issuer: "https://token.actions.githubusercontent.com",
   publicHostedWorkflows: [
-    ...Object.values(PUBLIC_MODELS).map(repo => `${repo}/.github/workflows/tinfoil-release-publish.yml@refs/tags/vMAJOR.MINOR.PATCH`),
+    ...Object.values(PUBLIC_MODELS).map(repo => `${repo}/.github/workflows/tinfoil-release-publish.yml@refs/tags/vMAJOR.MINOR.PATCH[+BUILD]`),
     "tinfoilsh/cvmimage/.github/workflows/release.yml@refs/tags/vMAJOR.MINOR.PATCH",
     "tinfoilsh/cvmimage/.github/workflows/platform-release.yml@refs/tags/platform-vMAJOR.MINOR.PATCH",
     "tinfoilsh/freshness-witness/.github/workflows/freshness.yml@refs/heads/main",

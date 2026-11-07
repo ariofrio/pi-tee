@@ -9,6 +9,10 @@ import { computeBootMeasurements } from "./boot-measurements.js";
 import { computeSnpLaunchDigest } from "./snp-measurement.js";
 import { PUBLIC_BUILD_HELPER_DIGEST, runPublicBuildHelper } from "./wasm-verifiers.js";
 
+/** A publisher release tag: stable SemVer, optionally with build metadata naming a variant (v0.0.10+b200). */
+export const isReleaseTag = (tag: unknown): tag is string => typeof tag === "string" && tag.length <= 64 &&
+  /^v(0|[1-9][0-9]{0,9})\.(0|[1-9][0-9]{0,9})\.(0|[1-9][0-9]{0,9})(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/.test(tag);
+
 const parseJson = (bytes: string | Uint8Array): any => JSON.parse(typeof bytes === "string" ? bytes : new TextDecoder("utf-8", { fatal: true }).decode(bytes));
 const sha256 = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex");
 
@@ -178,7 +182,7 @@ export async function verifyPublicBuildArtifacts(options: {
     } else throw new TeeError("TEE_PUBLIC_BUILD_REJECTED");
     assert(verified.cpuVerified === true && verified.publicBuildVerified === true && verified.inferenceQualified === false, "TEE_PUBLIC_BUILD_REJECTED");
     assert.equal(verified.repo, repo);
-    assert(/^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/.test(verified.tag));
+    assert(isReleaseTag(verified.tag));
     assert(/^[a-f0-9]{40}$/.test(verified.commit));
     assert(/^[a-f0-9]{64}$/.test(verified.digest));
     assert(/^[a-f0-9]{64}$/.test(verified.codeStatementDigest));

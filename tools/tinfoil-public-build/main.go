@@ -39,6 +39,13 @@ const routerRepo = "tinfoilsh/confidential-model-router"
 
 var stableTag = regexp.MustCompile(`^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$`)
 
+// A publisher's release tag: a stable SemVer version, optionally with build
+// metadata naming a variant of that release (v0.0.10+b200). Pre-releases and
+// other tags in the repository are not releases.
+var releaseTag = regexp.MustCompile(`^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$`)
+
+func isReleaseTag(tag string) bool { return len(tag) <= 64 && releaseTag.MatchString(tag) }
+
 type input struct {
 	AllowOutdated   bool               `json:"allowOutdated,omitempty"`
 	Nonce           string             `json:"nonce"`
@@ -77,7 +84,7 @@ func requireCodeWorkflow(raw []byte, repo, tag string) error {
 }
 
 func requireReleaseWorkflow(raw []byte, repo, tag string, router bool) error {
-	if (router && repo != routerRepo) || (!router && publicRepos[repo] == "") || !stableTag.MatchString(tag) {
+	if (router && repo != routerRepo) || (!router && publicRepos[repo] == "") || !isReleaseTag(tag) {
 		return errors.New("TEE_PUBLIC_BUILD_IDENTITY_REJECTED")
 	}
 	return requirePublicWorkflow(raw, repo, codeWorkflow, "refs/tags/"+tag)
