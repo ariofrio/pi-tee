@@ -1,11 +1,16 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { access, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { resolve, join } from "node:path";
 import { promisify } from "node:util";
 
 const execute = promisify(execFile);
 const root = resolve(".");
+const lock = JSON.parse(await readFile(join(root, "package-lock.json"), "utf8")) as { packages: Record<string, { version?: string }> };
+const lockedPi = Object.fromEntries(Object.entries(lock.packages)
+  .filter(([path]) => /^node_modules\/@earendil-works\/[^/]+$/.test(path))
+  .map(([path, entry]) => [path.slice("node_modules/".length), entry.version!]));
+assert.ok(lockedPi["@earendil-works/pi-coding-agent"]);
 // A sibling scratch directory prevents Node from falling back to this workspace's node_modules.
 await mkdir("../work", { recursive: true });
 const scratch = await mkdtemp(resolve("../work/pi-tee-package-smoke-"));
@@ -25,8 +30,14 @@ try {
   for (const name of ["nearai", "tinfoil", "chutes", "privatemode"]) {
     const directory = join(scratch, name);
     await mkdir(directory);
-    await writeFile(join(directory, "package.json"), JSON.stringify({ name: `isolated-${name}-smoke`, private: true, type: "module" }));
+    // Pi is the host, not the package under test. Pi 1.0.x caret-ranges its sibling packages,
+    // and later siblings drop exports it imports (earendil-works/pi#10865), so lock them.
+    await writeFile(join(directory, "package.json"), JSON.stringify({ name: `isolated-${name}-smoke`, private: true, type: "module", overrides: lockedPi }));
     await execute("npm", ["install", "--prefer-offline", "--ignore-scripts", "--no-audit", "--no-fund", packed.get("core")!, packed.get(name)!], { cwd: directory, maxBuffer: 2 * 1024 * 1024 });
+    for (const [pi, version] of Object.entries(lockedPi)) {
+      const installed = JSON.parse(await readFile(join(directory, "node_modules", pi, "package.json"), "utf8")) as { version: string };
+      assert.equal(installed.version, version, `${name} installs locked ${pi}`);
+    }
     const sdkNames = { nearai: "@nearai/inference-sdk", tinfoil: "tinfoil", privatemode: "privatemode-ai" };
     // pi-tinfoil appraises Tinfoil's router itself, so it installs no vendor SDK.
     const otherSdks = Object.entries(sdkNames).filter(([provider]) => provider !== name || name === "tinfoil").map(([, sdk]) => sdk);
