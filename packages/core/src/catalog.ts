@@ -43,14 +43,16 @@ type NativeEffort = { kwarg: "reasoning_effort" | "thinking_effort"; levels: rea
 /** Effort controls of open-weight chat templates, keyed by `templateFamily()`. Hosts
  * expose no template metadata, so these are read from the published templates; a
  * template that rejects or ignores other names cannot be probed safely. Models not
- * listed keep only the on/off switch. `canDisable` is false where the template always
- * thinks, so a switch would only stop the host from separating the reasoning. */
+ * listed keep only the on/off switch. `canDisable` is false where the model always
+ * thinks, so a switch would only stop the host from separating the reasoning or select
+ * a mode the model's developer does not support. */
 const NATIVE_EFFORT: Record<string, NativeEffort> = {
   "qwen3-8-27b": { kwarg: "reasoning_effort", levels: ["low", "medium", "xhigh"], canDisable: true },
   "glm-5-2": { kwarg: "reasoning_effort", levels: ["high", "max"], canDisable: true },
   "glm-5-3": { kwarg: "reasoning_effort", levels: ["low", "high", "max"], canDisable: false },
   "glm-5-3-flash": { kwarg: "reasoning_effort", levels: ["low", "high", "max"], canDisable: false },
   "kimi-k3": { kwarg: "thinking_effort", levels: ["low", "high", "max"], canDisable: true },
+  "kimi-k3-1-pro": { kwarg: "thinking_effort", levels: ["low", "high", "max"], canDisable: false },
 };
 
 function templateFamily(id: string) {

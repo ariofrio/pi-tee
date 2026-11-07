@@ -36,6 +36,8 @@ test("Pi's thinking level selects each known template's own effort, inside chat_
     [near("Qwen/Qwen3.8-27B"), { high: { ...on, reasoning_effort: "xhigh" } }],
     [chutes("moonshotai/Kimi-K3-TEE"), { off, low: { ...on, thinking_effort: "low" }, medium: { ...on, thinking_effort: "high" }, high: { ...on, thinking_effort: "high" }, max: { ...on, thinking_effort: "max" } }],
     [tinfoil("kimi-k3"), { off, high: { ...on, thinking_effort: "high" } }],
+    [tinfoil("kimi-k3-1-pro"), { off: { thinking_effort: "low" }, low: { thinking_effort: "low" }, medium: { thinking_effort: "high" }, high: { thinking_effort: "high" }, max: { thinking_effort: "max" } }],
+    [chutes("moonshotai/Kimi-K3.1-Pro-TEE"), { off: { thinking_effort: "low" }, high: { thinking_effort: "high" } }],
     [near("z-ai/glm-5.3-flash"), { off: { reasoning_effort: "low" }, low: { reasoning_effort: "low" }, medium: { reasoning_effort: "high" }, high: { reasoning_effort: "high" }, max: { reasoning_effort: "max" } }],
     [chutes("zai-org/GLM-5.2-TEE"), { low: { ...on, reasoning_effort: "high" }, high: { ...on, reasoning_effort: "high" }, max: { ...on, reasoning_effort: "max" } }],
   ];
@@ -49,11 +51,12 @@ test("Pi's thinking level selects each known template's own effort, inside chat_
 test("Pi offers only the extra-high levels a known template names", () => {
   assert.deepEqual(getSupportedThinkingLevels(chutes("Qwen/Qwen3.8-27B-TEE")), ["off", "minimal", "low", "medium", "high", "xhigh"]);
   assert.deepEqual(getSupportedThinkingLevels(chutes("moonshotai/Kimi-K3-TEE")), ["off", "minimal", "low", "medium", "high", "max"]);
+  assert.deepEqual(getSupportedThinkingLevels(tinfoil("kimi-k3-1-pro")), ["off", "minimal", "low", "medium", "high", "max"]);
   assert.deepEqual(getSupportedThinkingLevels(chutes("Qwen/Qwen3.6-27B-TEE")), ["off", "minimal", "low", "medium", "high"]);
 });
 
 test("Unknown and on/off-only reasoning models keep only the thinking switch", async () => {
-  for (const model of [chutes("Qwen/Qwen3.6-27B-TEE"), chutes("vendor/Unknown-TEE"), near("vendor/kimi-k3-preview"), tinfoil("unknown-chat")]) {
+  for (const model of [chutes("Qwen/Qwen3.6-27B-TEE"), chutes("vendor/Unknown-TEE"), near("vendor/kimi-k3-preview"), tinfoil("kimi-k3-2-pro"), tinfoil("unknown-chat")]) {
     assert.deepEqual(await sent(model, "high"), { kwargs: on, effort: undefined }, model.id);
     assert.deepEqual(await sent(model, "off"), { kwargs: off, effort: undefined }, model.id);
   }
