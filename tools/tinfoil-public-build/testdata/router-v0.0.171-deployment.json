@@ -1,0 +1,29 @@
+{
+    "snp_measurement": "f5bcc220a94d5c34c5c80db9593dcc88d7d1a19b43796c05ec4b6cdcf921c8176a56cb3d0224650b1250ee892a0ec438",
+    "tdx_measurement": {
+        "rtmr1": "482d0a481acfdf35c0e90b17faf98d313b3d26e948ab34cb349e5cc7b49f9dee85b56c0e20db740832d122285fac8e4f",
+        "rtmr2": "62009a157441be73fe44ff2ff1d08426763269cb6c070f4b5fc43a800822ab4d607b2e19533bfb1944dbcbeb25b38726"
+    },
+    "firmware": {
+        "sev_snp": {
+            "type": "ovmf",
+            "version": "v0.0.4",
+            "sha256": "78c890175928167a1bc095d4bf3bb4ad81de80cd7e4e9e683477fc359119c1c4"
+        }
+    },
+    "vm_shape": {
+        "cpus": 8,
+        "memory_mb": 16384,
+        "gpus": 0,
+        "disks": 3
+    },
+    "cmdline": "readonly=on pci=realloc,nocrs modprobe.blacklist=nouveau nouveau.modeset=0 root=/dev/mapper/root roothash=72399940d5f095d1510035bd50baed7fbc2552a31c65938acff8bf352ad89398 tinfoil-config-hash=2c535e189302f9ba6e9ca9d5250eb322b62f1de30c89a8cfa47d19defeed31ea",
+    "hashes": {
+        "version": "v0.14.15",
+        "root": "72399940d5f095d1510035bd50baed7fbc2552a31c65938acff8bf352ad89398",
+        "initrd": "deb5ce956eea4dbd709cab140045e9234691109209fd215290417658184116ef",
+        "kernel": "91b9c7979e00d4703cbabf9f6872639d23b1b60df88b971a7d49f11603ba4346",
+        "raw": "7a0225578f8906003a29886c7613142cc5a5d857dd2b8582920115c704c37997"
+    },
+    "config": "Y3ZtLXZlcnNpb246IDAuMTQuMTUKbWVtb3J5OiAxNjM4NApjcHVzOiA4Cgpjb250YWluZXJzOgogIC0gbmFtZTogInByb3h5IgogICAgaW1hZ2U6ICJnaGNyLmlvL3RpbmZvaWxzaC9jb25maWRlbnRpYWwtbW9kZWwtcm91dGVyQHNoYTI1NjozNTAyMGQxOGM5MGY1NDliMWRjOGU5OTY4MjFlOWQzYzRhNzRjYmM2ZWY5NjkzOGY0NWMwMjgwZDg2YWU0Yzk1IiAjIHYwLjAuMTcxCiAgICByZXN0YXJ0OiBhbHdheXMKICAgIG5ldHdvcmtzOiBbd2ViXQogICAgZW52OgogICAgICAtIFJFRlJFU0hfSU5URVJWQUw6ICIxbSIKICAgICAgLSBDQUNIRV9TQUxUX0VOQUJMRUQ6ICJ0cnVlIgogICAgICAtIFVTQUdFX1JFUE9SVEVSX0lEOiAibW9kZWwtcm91dGVyIgogICAgICAtIENPTlRST0xfUExBTkVfVVJMOiAiaHR0cHM6Ly9hcGkudGluZm9pbC5zaCIKICAgICAgLSBVUERBVEVfQ09ORklHX1VSTDogImh0dHBzOi8vYXBpLnRpbmZvaWwuc2gvYXBpL3NoaW0vcm91dGVyLWNvbmZpZyIKICAgIHNlY3JldHM6CiAgICAgIC0gVVNBR0VfUkVQT1JURVJfU0VDUkVUCiAgICAgIC0gVVNBR0VfQ09OVEVYVF9TRUNSRVQKICAgICAgLSBDQUNIRV9ST1VURV9TRUNSRVQKICAgICAgLSBNRVRSSUNTX0FQSV9LRVkKICAgIGhlYWx0aGNoZWNrOgogICAgICB0ZXN0OiBbIkNNRCIsICJ3Z2V0IiwgIi1xIiwgIi0tc3BpZGVyIiwgImh0dHA6Ly9sb2NhbGhvc3Q6ODA4OS9oZWFsdGgiXQogICAgICBpbnRlcnZhbDogMzBzCiAgICAgIHRpbWVvdXQ6IDVzCiAgICAgIHN0YXJ0X3BlcmlvZDogNW0KCm5ldHdvcmtzOgogIHdlYjoKICAgIGVncmVzczogb3BlbgoKc2hpbToKICB1cHN0cmVhbS1wb3J0OiA4MDg5CiAgcGF0aHM6CiAgICAtIC8KICAgIC0gL2hlYWx0aAogICAgLSAvLndlbGwta25vd24vdGluZm9pbC1wcm94eQogICAgLSAvLndlbGwta25vd24vcHJvbWV0aGV1cy10YXJnZXRzCiAgICAtIC9tZXRyaWNzCiAgICAtIC92MS8qCiAgYXV0aGVudGljYXRlZDogdHJ1ZQogIGF1dGhlbnRpY2F0ZWQtZW5kcG9pbnRzOgogICAgLSAvbWV0cmljcwo="
+}

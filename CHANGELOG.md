@@ -24,6 +24,7 @@
 
 ### Fixed
 
+- The Tinfoil router route works again. Router releases since v0.0.156 (2026-10-12) sign an extra `firmware` member naming the SEV-SNP OVMF their measurement was computed with, and the helper's strict predicate decoding rejected every one of them as `TEE_PUBLIC_BUILD_REJECTED`. The member is now decoded strictly and ignored by router appraisal, which already takes the measurement from the authenticated release. Direct workers still recompute the launch digest with the pinned OVMF. [Router record](docs/evidence/tinfoil/router-appraisal.md#2026-11-07-signed-firmware-member).
 - `npm run smoke:near-gpu` appraises CPU evidence under the direct route's own Intel policy and reports each endpoint's Intel status and host level. Since it began checking any discovered model, it had demanded `UpToDate` and failed with `policy.tcb_status_not_allowed` on the `OutOfDate` (H2) Qwen endpoints; route admission is unchanged. [Live result](docs/near-direct-discovery.md#gpu-evidence-smoke-2026-10-10).
 - Preserve native credential selection across all four extensions; reject ambiguous Privatemode attestation-field aliases and manifest/policy mismatches before inference.
 - Guard final post-hook payload/model/endpoint/authentication; bind actual sockets/recipient keys, bound memory/time and reject forged output, reconnects and unwanted resends. Chutes' owned invocation socket cannot replay HTTP 421.

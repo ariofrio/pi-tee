@@ -74,3 +74,32 @@ func TestRouterEvidence(t *testing.T) {
 		t.Fatal("router mode accepted a replayed nonce")
 	}
 }
+
+// Releases since measure-image-action v0.13.0 also sign the SEV-SNP firmware
+// the measurement was computed with. The publisher already fixes that
+// measurement; recording its firmware widens nothing.
+func TestRouterReleaseWithFirmware(t *testing.T) {
+	bundle, err := os.ReadFile("testdata/router-v0.0.171.bundle.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	deployment, err := os.ReadFile("testdata/router-v0.0.171-deployment.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = requireReleaseWorkflow(bundle, routerRepo, "v0.0.171", true); err != nil {
+		t.Fatalf("router release: %v", err)
+	}
+	code, err := provenance.AuthenticateCode(bundle, routerRepo, "v0.0.171", digest256(deployment))
+	if err != nil {
+		t.Fatalf("router signature: %v", err)
+	}
+	predicate, _, err := codePredicate(bundle, code)
+	if err != nil {
+		t.Fatalf("router predicate with firmware: %v", err)
+	}
+	if predicate.Firmware == nil || predicate.Firmware.SEVSNP == nil || predicate.Firmware.SEVSNP.Type != "ovmf" || predicate.Firmware.SEVSNP.Version != "v0.0.4" ||
+		predicate.Firmware.SEVSNP.SHA256 != "78c890175928167a1bc095d4bf3bb4ad81de80cd7e4e9e683477fc359119c1c4" {
+		t.Fatalf("firmware not decoded: %+v", predicate.Firmware)
+	}
+}

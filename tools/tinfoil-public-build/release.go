@@ -29,9 +29,23 @@ type deployment struct {
 		GPUs     int `json:"gpus"`
 		Disks    int `json:"disks"`
 	} `json:"vm_shape"`
-	Command string      `json:"cmdline"`
-	Hashes  cvmManifest `json:"hashes"`
-	Config  string      `json:"config"`
+	// Optional: the SEV-SNP firmware snp_measurement was computed with.
+	Firmware *firmware   `json:"firmware,omitempty"`
+	Command  string      `json:"cmdline"`
+	Hashes   cvmManifest `json:"hashes"`
+	Config   string      `json:"config"`
+}
+
+type firmware struct {
+	SEVSNP *struct {
+		Type    string `json:"type"`
+		Version string `json:"version"`
+		SHA256  string `json:"sha256"`
+	} `json:"sev_snp"`
+}
+
+func (f *firmware) valid() bool {
+	return f == nil || (f.SEVSNP != nil && f.SEVSNP.Type == "ovmf" && stableTag.MatchString(f.SEVSNP.Version) && digestPattern.MatchString(f.SEVSNP.SHA256))
 }
 
 // Compare strict decoded fields with the CPU-accepted statement; independent parsers must not select different boot expectations.
@@ -53,7 +67,7 @@ func codePredicate(raw []byte, code *provenance.Code) (*deployment, string, erro
 		return nil, "", reject
 	}
 	p := &statement.Predicate
-	if code.Measurement == nil || len(code.Measurement.Registers) != 3 || code.Shape == nil || code.Shape.GPUs == nil ||
+	if !p.Firmware.valid() || code.Measurement == nil || len(code.Measurement.Registers) != 3 || code.Shape == nil || code.Shape.GPUs == nil ||
 		!reflect.DeepEqual(code.Measurement.Registers, []string{p.SNP, p.TDX.RTMR1, p.TDX.RTMR2}) ||
 		code.Shape.CPUs != p.Shape.CPUs || code.Shape.MemoryMB != p.Shape.MemoryMB || *code.Shape.GPUs != p.Shape.GPUs || code.Shape.Disks != p.Shape.Disks {
 		return nil, "", reject
