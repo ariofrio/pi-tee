@@ -53,6 +53,9 @@ const NATIVE_EFFORT: Record<string, NativeEffort> = {
   "glm-5-3-flash": { kwarg: "reasoning_effort", levels: ["low", "high", "max"], canDisable: false },
   "kimi-k3": { kwarg: "thinking_effort", levels: ["low", "high", "max"], canDisable: true },
   "kimi-k3-1-pro": { kwarg: "thinking_effort", levels: ["low", "high", "max"], canDisable: false },
+  // Its template reads no switch and defaults to "high"; "max" repeats "xhigh". Its "none"
+  // effort still reasons, unseparated, in the answer.
+  "inkling-2-small": { kwarg: "reasoning_effort", levels: ["minimal", "low", "medium", "high", "xhigh"], canDisable: false },
 };
 
 function templateFamily(id: string) {

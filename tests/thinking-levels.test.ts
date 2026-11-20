@@ -6,7 +6,7 @@ import { parseNearCatalog } from "../packages/nearai/src/catalog.js";
 import { parseTinfoilCatalog } from "../packages/tinfoil/src/catalog.js";
 import { privatemodeCatalog, SHIPPED_CATALOG } from "../packages/privatemode/src/catalog.js";
 
-type Level = "off" | "low" | "medium" | "high" | "xhigh" | "max";
+type Level = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
 
 /** The reasoning fields Pi serializes for a level, observed at the fetch seam. */
 async function sent(model: Model<"openai-completions">, level: Level) {
@@ -82,6 +82,17 @@ test("Tinfoil's effort map names the template's efforts; Pi's levels select them
     xhigh: { kwargs: { reasoning_effort: "xhigh", thinking: true }, effort: undefined },
   });
   assert.deepEqual(await sent(ds, "off"), { kwargs: { thinking: false }, effort: undefined });
+});
+
+test("Inkling 2 Small takes its template's own effort names, and off selects its weakest effort", async () => {
+  // Tinfoil's catalog entry on 2026-11-20: effort only, no switch, mapped to stronger efforts.
+  const inkling = tinfoil("inkling-2-small", { effort_map: { high: "max", low: "low", medium: "high" },
+    params: { "/v1/chat/completions": { enable: { chat_template_kwargs: { reasoning_effort: "$EFFORT" } } } } });
+  assert.deepEqual(getSupportedThinkingLevels(inkling), ["off", "minimal", "low", "medium", "high", "xhigh"]);
+  const efforts = Object.fromEntries(await Promise.all((["off", "minimal", "low", "medium", "high", "xhigh"] as const).map(async l => [l, await sent(inkling, l)])));
+  assert.deepEqual(efforts, Object.fromEntries(Object.entries({ off: "minimal", minimal: "minimal", low: "low", medium: "medium", high: "high", xhigh: "xhigh" })
+    .map(([level, effort]) => [level, { kwargs: { reasoning_effort: effort }, effort: undefined }])));
+  assert.deepEqual(await sent(near("thinkingmachines/Inkling-2-Small"), "high"), { kwargs: { reasoning_effort: "high" }, effort: undefined });
 });
 
 test("Privatemode GLM effort follows the template's own names; off selects its weakest effort", async () => {
