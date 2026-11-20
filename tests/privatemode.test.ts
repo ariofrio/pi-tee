@@ -6,7 +6,7 @@ import {
   privatemodeCatalog,
   SHIPPED_CATALOG,
 } from "../packages/privatemode/src/catalog.js";
-import { createPinnedManifestPolicy } from "../packages/privatemode/src/manifest.js";
+import { createPinnedManifestPolicy, shippedManifestPolicy } from "../packages/privatemode/src/manifest.js";
 import { decodeCoordinatorResponse } from "../packages/privatemode/src/evidence.js";
 
 test("the diagnostic decoder and Go verifier cannot select different case-aliased attestation fields", () => {
@@ -252,6 +252,37 @@ test("a rate-limited Coordinator attestation reports its status class, not the p
   assert.match(text, /TEE_ATTESTATION_REJECTED \(upstream: HTTP 429 rate-limited\)/);
   assert.match(text, /Request result: TEE_POLICY_ROUTE_REJECTED \(upstream: HTTP 429 rate-limited\)/);
   assert.ok(!text.includes("configured rate limit") && !text.includes("synthetic prompt"), text);
+});
+
+test("a Coordinator presenting a different manifest, policy closure or platform reports pi-tee's own rejection before key exchange", { timeout: 60000 }, async () => {
+  const pinned = (await shippedManifestPolicy.admit(AbortSignal.timeout(1000))).bytes;
+  const policies = Object.keys(JSON.parse(Buffer.from(pinned).toString()).Policies);
+  const other = Buffer.from('{"Policies":{},"ReferenceValues":{},"SeedshareOwnerPubKeys":[]}');
+  for (const [doc, expected] of [
+    [{ manifests: [other.toString("base64")], policies: [], attestation_type: [1, 3, 9901, 2, 1] }, "TEE_WORKLOAD_PIN_REJECTED"],
+    [{ manifests: [Buffer.from(pinned).toString("base64")], policies: [], attestation_type: [1, 3, 9901, 2, 1] }, "TEE_WORKLOAD_PIN_REJECTED"],
+    [{ manifests: [Buffer.from(pinned).toString("base64")], policies, attestation_type: [1, 3, 9901, 2, 9] }, "TEE_CPU_POLICY_REJECTED"],
+  ] as const) {
+    const paths: string[] = [];
+    const adapter = createPrivatemodeProvider({
+      policy: "trust-provider-and-host,code=fixed-private",
+      recordAdmission: async () => undefined,
+      networkFetch: async (input) => {
+        const path = new URL(new Request(input).url).pathname;
+        paths.push(path);
+        if (path !== "/privatemode/v1/attest") return new Response("unexpected", { status: 500 });
+        const attestation = { version: "fixture", raw_attestation_doc: "", root_ca: "", mesh_ca: "", ...doc };
+        return Response.json({ AttestationDoc: Buffer.from(JSON.stringify(attestation)).toString("base64") });
+      },
+    });
+    await adapter.initializeCatalog();
+    const result = await adapter.provider
+      .streamSimple(adapter.provider.getModels()[0]!, normalizeContext({ messages: [{ role: "user", content: "synthetic prompt", timestamp: 1 }] }), { apiKey: "fixture-key" })
+      .result();
+    assert.equal(result.stopReason, "error");
+    assert.deepEqual(paths, ["/privatemode/v1/attest"], expected);
+    assert.match(formatProviderReport(adapter.getReport()), new RegExp(`${expected}[\\s\\S]*Request result: TEE_POLICY_ROUTE_REJECTED`), expected);
+  }
 });
 
 import { Worker } from "node:worker_threads";

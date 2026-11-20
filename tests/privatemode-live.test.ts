@@ -132,7 +132,7 @@ test(
           }
           return response;
         }),
-        /TEE_ATTESTATION_REJECTED/,
+        ["manifest", "closure", "duplicate-policy"].includes(mutation) ? /TEE_WORKLOAD_PIN_REJECTED/ : /TEE_ATTESTATION_REJECTED/,
         mutation,
       );
       if (mutation !== "secret-signature")

@@ -24,6 +24,12 @@ let attestation: Record<string, unknown> | undefined;
 const editions: unknown[] = [];
 let nonce: string | undefined;
 let initialized = false;
+// The SDK's own errors are discarded; only pi-tee's checks of the presented closure name a cause.
+let rejection: "TEE_WORKLOAD_PIN_REJECTED" | "TEE_CPU_POLICY_REJECTED" | undefined;
+const reject = (code: NonNullable<typeof rejection>) => {
+  rejection ??= code;
+  return new TeeError(code);
+};
 const manifest = Buffer.from(workerData.manifest as Uint8Array);
 let attestRequests = 0,
   secretRequests = 0,
@@ -76,14 +82,14 @@ globalThis.fetch = async (input, init) => {
       manifests.length !== 1 ||
       !Buffer.from(manifests[0]!, "base64").equals(manifest)
     )
-      throw new TeeError("TEE_WORKLOAD_PIN_REJECTED");
+      throw reject("TEE_WORKLOAD_PIN_REJECTED");
     const oid = (doc.attestation_type as number[]).join(".");
     if (!["1.3.9901.2.1", "1.3.9901.2.2"].includes(oid))
-      throw new TeeError("TEE_CPU_POLICY_REJECTED");
+      throw reject("TEE_CPU_POLICY_REJECTED");
     const policies = doc.policies as string[];
     const allowed = Object.keys(JSON.parse(manifest.toString()).Policies);
     if (!Array.isArray(policies))
-      throw new TeeError("TEE_WORKLOAD_PIN_REJECTED");
+      throw reject("TEE_WORKLOAD_PIN_REJECTED");
     const hashes = policies.map((policy) =>
       createHash("sha256").update(Buffer.from(policy, "base64")).digest("hex"),
     );
@@ -92,7 +98,7 @@ globalThis.fetch = async (input, init) => {
       new Set(hashes).size !== allowed.length ||
       allowed.some((hash) => !hashes.includes(hash))
     )
-      throw new TeeError("TEE_WORKLOAD_PIN_REJECTED");
+      throw reject("TEE_WORKLOAD_PIN_REJECTED");
     attestation = doc;
   } else if (/\/(tcb|qe\/identity)/.test(path) && response.ok) {
     const collateral = (await response
@@ -144,6 +150,6 @@ void (async () => {
       checkedAt: Date.now(),
     });
   } catch {
-    port.postMessage({ kind: "error" });
+    port.postMessage({ kind: "error", code: rejection });
   }
 })();

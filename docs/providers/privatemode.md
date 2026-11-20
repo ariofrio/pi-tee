@@ -10,7 +10,7 @@ Every request uses an isolated hash-checked SDK 1.58.0 verifier, fresh nonce and
 
 ## Manifest admission
 
-`PI_PRIVATEMODE_MANIFEST_MODE=hard-pin` is the default. The shipped manifest is [v1.58.0](../../packages/privatemode/manifests/v1.58.0.json), SHA-256 `384a2137e534357d74392bf3940373ff49d309d91551376b5a7f828e372af42b`. Every different manifest is rejected, even if the provider publishes it. Set `PI_PRIVATEMODE_MANIFEST_PATH` to choose another local manifest; its bytes are captured once per provider instance and held immutable. Restart to adopt a changed file.
+`PI_PRIVATEMODE_MANIFEST_MODE=hard-pin` is the default. The shipped manifest is [v1.58.0](../../packages/privatemode/manifests/v1.58.0.json), SHA-256 `384a2137e534357d74392bf3940373ff49d309d91551376b5a7f828e372af42b`. Every different manifest is rejected before key exchange with `TEE_WORKLOAD_PIN_REJECTED`, even if the provider publishes it. Set `PI_PRIVATEMODE_MANIFEST_PATH` to choose another local manifest; its bytes are captured once per provider instance and held immutable. Restart to adopt a changed file.
 
 Explicit `PI_PRIVATEMODE_MANIFEST_MODE=logged-cdn` instead authorizes pi-tee to fetch [the CDN manifest](https://cdn.confidential.cloud/privatemode/v2/manifest.json) for each request and adopt its exact bytes only after saving the change record. It cannot be combined with a local path. This trusts Privatemode's CDN to choose each new private-code pin; it does not establish a public release, reproduction or review approval. Fetch or recording failure blocks the request. The SDK's high-level client and its automatic mismatch re-fetch are never used in either mode.
 

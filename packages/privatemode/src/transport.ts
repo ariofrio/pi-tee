@@ -64,8 +64,9 @@ export async function openPrivatemodeTransport(options: {
     readers.clear();
     void worker.terminate();
   };
-  const fail = () => {
-    const code = ready ? "TEE_RESPONSE_REJECTED" : "TEE_ATTESTATION_REJECTED";
+  const fail = (rejection?: unknown) => {
+    const code = ready ? "TEE_RESPONSE_REJECTED"
+      : rejection === "TEE_WORKLOAD_PIN_REJECTED" || rejection === "TEE_CPU_POLICY_REJECTED" ? rejection : "TEE_ATTESTATION_REJECTED";
     const error = new TeeError(code, code, upstream);
     rejectReady(error);
     controller?.error(error);
@@ -91,7 +92,7 @@ export async function openPrivatemodeTransport(options: {
       return;
     }
     if (message.kind === "error") {
-      fail();
+      fail(message.code);
       return;
     }
     if (message.kind === "done") {
