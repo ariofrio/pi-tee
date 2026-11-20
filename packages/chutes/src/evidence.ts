@@ -41,7 +41,9 @@ export async function verifyChutesInstance(value: unknown, publicKey: string, no
     const body = base64(evidence.attested_body);
     if (!verifySignature("sha256", body, { key: certificate.publicKey, padding: cryptoConstants.RSA_PKCS1_PADDING }, base64(evidence.signature))) throw new Error();
     const signed = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(body));
-    if (signed.nonce !== nonce || signed.evidence?.tdx_quote !== evidence.quote) throw new Error();
+    // sek8s 1.5.0 renamed the signed TDX quote from `tdx_quote` to the platform-neutral `quote`; exactly one must bind it.
+    const signedQuotes = ["quote", "tdx_quote"].filter(key => Object.hasOwn(record(signed.evidence), key)).map(key => signed.evidence[key]);
+    if (signed.nonce !== nonce || signedQuotes.length !== 1 || signedQuotes[0] !== evidence.quote) throw new Error();
     const gpus = typeof signed.evidence?.nvtrust_evidence === "string" ? JSON.parse(signed.evidence.nvtrust_evidence) : signed.evidence?.nvtrust_evidence;
     if (!Array.isArray(gpus) || JSON.stringify(gpus) !== JSON.stringify(evidence.gpu_evidence)) throw new Error();
     return rateAuthenticatedTdxHost(checked.status, td.teeTcbSvn, collateral);

@@ -47,7 +47,11 @@ async function fixture(fault?: string, model = raw) {
       createHash("sha256").update(cert.publicKey.export({ type: "spki", format: "der" })).digest().copy(quote, 600);
       if (fault === "key") quote[568] = quote[568]! ^ 1;
       const quoted = quote.toString("base64");
-      const body = Buffer.from(JSON.stringify({ nonce, evidence: { tdx_quote: quoted, nvtrust_evidence: "[]" } }));
+      // sek8s 1.5.0 signs the quote as `quote` on every platform; earlier guests signed it as `tdx_quote`.
+      const other = Buffer.from(quote.map((byte, index) => index === quote.length - 1 ? byte ^ 1 : byte)).toString("base64");
+      const signedQuote = fault === "legacy-signed-quote" ? { tdx_quote: quoted } : fault === "signed-quote" ? { quote: other }
+        : fault === "both-signed-quotes" ? { quote: quoted, tdx_quote: other } : fault === "no-signed-quote" ? {} : { quote: quoted };
+      const body = Buffer.from(JSON.stringify({ nonce, evidence: { ...signedQuote, nvtrust_evidence: "[]" } }));
       return Response.json({ evidence: [{ instance_id: fault === "outside" ? "unverified-recipient" : instance, tee_type: "tdx", quote: quoted,
         certificate: cert.raw.toString("base64"), signature: sign("sha256", body, signingKey).toString("base64"), attested_body: body.toString("base64"), gpu_evidence: [] }] });
     }
@@ -151,6 +155,18 @@ test("DeepSeek-V4-Flash-0731's top-level effort travels only inside the sealed b
   }
 });
 
+test("the signed evidence body binds the appraised quote under either Chutes field name", async () => {
+  for (const fault of [undefined, "legacy-signed-quote"]) {
+    const f = await fixture(fault);
+    try {
+      const integration = createChutesProvider({ policy: "trust-provider-and-host,host=current", catalogFetch: f.fetch, seams: { fetch: f.fetch, invoke: f.fetch, cpu: f.cpu } });
+      await integration.initializeCatalog();
+      const result = await integration.provider.streamSimple(integration.provider.getModels()[0]!, context, { apiKey: "synthetic-key" }).result();
+      assert.equal(result.stopReason, "stop", `${fault}: ${result.errorMessage}`);
+    } finally { await f.remove(); }
+  }
+});
+
 test("authenticated below-floor Chutes hosts can be admitted only by a policy allowing H2", async () => {
   const f = await fixture("floor");
   try {
@@ -221,8 +237,8 @@ test("cancellation after an authenticated text delta aborts Chutes response read
   } finally { controller.abort(); await f.remove(); }
 });
 
-test("wrong nonce, swapped key, stale evidence, below-floor host and recipient outside the evidence closure never receive a prompt", async () => {
-  for (const fault of ["nonce", "key", "stale", "floor", "outside"]) {
+test("wrong nonce, swapped key, unbound or ambiguous signed quote, stale evidence, below-floor host and recipient outside the evidence closure never receive a prompt", async () => {
+  for (const fault of ["nonce", "key", "signed-quote", "both-signed-quotes", "no-signed-quote", "stale", "floor", "outside"]) {
     const f = await fixture(fault);
     try {
       const integration = createChutesProvider({ policy: "trust-provider-and-host,host=current", catalogFetch: f.fetch, seams: { fetch: f.fetch, invoke: f.fetch, cpu: f.cpu } });
