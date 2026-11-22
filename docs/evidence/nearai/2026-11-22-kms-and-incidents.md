@@ -2,7 +2,7 @@
 
 Observed 2026-11-22 11:43–11:52 UTC from macOS on Node 26.10.0, client [c1418ff](https://github.com/ariofrio/pi-tee/commit/c1418ff), `@nearai/inference-sdk` 0.1.0 and `@phala/dcap-qvl` 0.6.3. Two incident reports prompted this record:
 
-- [Phala's preliminary report](https://phala.com/posts/phala-november-preliminary-incident-report) (2026-11-10) describes attacker-created CVMs, possibly exposed secrets derived from Phala's KMS, and a KMS root-key rotation on 2026-11-06. It also describes a compromised DeepSeek V4 Flash 0731 inference VM that exposed request data from 2026-10-21 to 2026-11-08. A Phala cofounder [attributed the KMS exposure](https://news.ycombinator.com/item?id=50598304) to a bug in the KMS replication policy that let a fake replica obtain key material.
+- [Phala's preliminary report](https://phala.com/posts/phala-november-preliminary-incident-report) (2026-11-10) describes attacker-created CVMs, possibly exposed secrets derived from Phala's KMS, and a KMS root-key rotation on 2026-11-06. It also describes a compromised DeepSeek V4 Flash 0731 inference VM. Canary credentials confirmed exposure of requests sent on 2026-10-21 and 22; Phala asks users to treat 2026-10-21 00:00 to 2026-11-08 05:35 UTC as a precautionary exposure window. A Phala cofounder [attributed the KMS exposure](https://news.ycombinator.com/item?id=50598304) to a bug in the KMS replication policy that let a fake replica obtain key material.
 - [NEAR's report](https://near.ai/blog/security-incident-report-sglang-vulnerability) (2026-11-09) describes an SGLang remote-code-execution vulnerability. It gave an attacker code execution on one inference server, and on 2026-11-08 the attacker could have observed requests being processed there, including confidential ones.
 
 The question was whether NEAR's private inference depends on Phala's KMS, and whether either incident changes the NEAR ratings. This record compares the October fixtures with today's evidence and with Base chain state.
@@ -10,8 +10,9 @@ The question was whether NEAR's private inference depends on Phala's KMS, and wh
 ## Scope and method
 
 - **NEAR direct.** The six discovered direct endpoints, which serve DeepSeek V4.1 Flash 1017 and its abliterated variant, GLM-5.3 Flash, Qwen3.6-35B and Qwen3.8-27B and its abliterated variant. Each was fetched over the [direct channel](../../../packages/nearai/src/direct-channel.ts) with a fresh nonce. The [NEAR CPU verifier](../../../packages/nearai/src/cpu.ts) verified each quote as Intel `UpToDate` at H1.
-- **NEAR gateway.** `GET /v1/attestation/report` for GLM-5.3 Flash, DeepSeek V4.1 Flash 1017 and Qwen3.8-27B, with the API key and a fresh nonce. The gateway and all six distinct model CVMs verified `UpToDate`, debug off and H1, and each report bound its request's nonce.
-- **Authenticated fields.** For every CVM, the RTMR3 event log was replayed and matched the verified quote's RTMR3, with every runtime event's digest recomputed from its name and payload. So `app-id`, `compose-hash`, `instance-id`, `os-image-hash`, `key-provider` and `mr-kms` below are bound to verified quotes. The same replay matches both October fixtures. pi-tee itself does not replay RTMR3 for NEAR, and these fields do not affect admission.
+- **NEAR gateway.** `GET /v1/attestation/report` for GLM-5.3 Flash, DeepSeek V4.1 Flash 1017 and Qwen3.8-27B, with the API key and a fresh nonce. Each report bound its request's nonce.
+- **Identities.** Counted by authenticated (`app-id`, `instance-id`), the samples cover six CVMs: one gateway (`f550fdfb…`/`249acfa6…`) and five model CVMs of app `2c0a0c96…` (`7bb9af0a…`, `fccd496a…`, `cc796618…`, `19aea169…`, `a8a25faa…`). The three Qwen endpoints share `a8a25faa…`, which also appears in GLM-5.3 Flash's set. All six verified `UpToDate`, debug off and H1.
+- **Authenticated fields.** For every CVM, the RTMR3 event log was replayed and matched the verified quote's RTMR3, with every runtime event's digest recomputed from its name and payload. So `app-id`, `compose-hash`, `instance-id`, `os-image-hash`, `key-provider` and `mr-kms` below are bound to verified quotes. The same replay matches both October fixtures. NEAR's SDK, which pi-tee's routes call, also replays RTMR3 on every request (`verifyDstackDeployment` → `verifyAndReplayRtmr3`, `@nearai/inference-sdk` 0.1.0 `dist/node.js` L1957–1962). What pi-tee does not do is pin the KMS root, `mr-kms` or app ID as admission policy.
 - **On-chain state.** Public `eth_call` and `eth_getStorageAt` on Base (chain 8453) and Ethereum through public RPCs. Historical reads use blocks found by timestamp, and each reported time is that block's timestamp.
 - **Phala Cloud's KMS list.** The public `GET https://cloud-api.phala.network/api/v1/kms`.
 - **Not done.** No inference, NRAS, KMS RPC or management interface. Third-party pins are cited as corroboration, not as authority.
@@ -26,13 +27,13 @@ In dstack, the `key-provider` event's `id` is the DER public key of the KMS root
 
 | Evidence | 2026-10-07/09 fixtures | 2026-11-22 |
 | --- | --- | --- |
-| Model app ID | `2c0a0c96…f91b` (GLM, [fixture](../../../tests/fixtures/near-glm-direct-attestation.json)) | `2c0a0c96…f91b` on all six model CVMs |
+| Model app ID | `2c0a0c96…f91b` (GLM, [fixture](../../../tests/fixtures/near-glm-direct-attestation.json)) | `2c0a0c96…f91b` on all five model CVMs |
 | Gateway app ID | `f550fdfb…31ae` ([fixture](../../../tests/fixtures/near-gateway-attestation.json)) | `f550fdfb…31ae` |
-| KMS root CA (`key-provider` id) | P-256 `04394aae…b6c11682`, model and gateway | The same key on all seven CVMs |
-| `mr-kms` | `a1fc1360…e641` (dstack-nvidia 0.5.11 image); none on the 0.5.4 gateway | `22a6652c…bc56` on all seven CVMs (dstack-nvidia 0.5.15, `os_image_hash` `3bb7d262…4ef2`; gateway `8db40cb2…15bd`) |
+| KMS root CA (`key-provider` id) | P-256 `04394aae…b6c11682`, model and gateway | The same key on all six CVMs |
+| `mr-kms` | `a1fc1360…e641` (dstack-nvidia 0.5.11 image); none on the 0.5.4 gateway | `22a6652c…bc56` on all six CVMs (dstack-nvidia 0.5.15, `os_image_hash` `3bb7d262…4ef2`; gateway `8db40cb2…15bd`) |
 | `key_provider_id` pin in `app_compose` | Empty | Not pinned |
 
-The KMS CA `04394aae…` matches none of Phala's KMS roots:
+The KMS CA `04394aae…` matches none of the Phala KMS roots known here:
 
 | KMS | CA key | Source |
 | --- | --- | --- |
@@ -43,7 +44,7 @@ The KMS CA `04394aae…` matches none of Phala's KMS roots:
 
 Neither NEAR app is registered in Phala's KMSs. On Phala's Base KMS, `registeredApps()` is false for the model app at every sampled block from 2026-05-02 to 2026-11-22, and for the gateway app on 2026-11-22. Neither address has code on Ethereum, and Phala's Ethereum KMS registers neither.
 
-### Who governs it
+### The contracts behind NEAR's app IDs
 
 NEAR's apps are `DstackApp` proxies on Base. They are registered in the `DstackKms` proxy `0x8fa1593f…d637`. A May 2026 third-party trace identified that proxy as the contract of NEAR's KMS at `kms.cvm1.near.ai` ([trust-chain analysis](https://github.com/amiller/devproof-audits-guide/blob/43e938f32d21111306e3c4dfd0e2f9201dcc952b/case-studies/near-ai-private-inference/TRUST-CHAIN-ANALYSIS.md)). On 2026-11-22:
 
@@ -51,7 +52,7 @@ NEAR's apps are `DstackApp` proxies on Base. They are registered in the `DstackK
 - **OS images.** NEAR's `DstackKms` allows both current OS images. It removed the October 0.5.11 image (`a6eafc5f…`) at block 55200078, 2026-11-09 13:19:51 UTC ([tx `e03d0ce9…`](https://basescan.org/tx/0xe03d0ce991e81a500dc0000a22eb97458e3011e70a27471a23bf8917336a8f71)). It added `3bb7d262…` by block 58361826 (2026-11-16 20:59 UTC).
 - **KMS measurements.** `kmsAllowedAggregatedMrs` is true for both observed `mr-kms` values. `a1fc1360…` became true by 2026-09-02 15:22 UTC and `22a6652c…` by 2026-10-21 04:48 UTC. Phala's Base KMS allows neither. In the [reference contract](https://github.com/Dstack-TEE/dstack/blob/c87303818753e7abb3233bd1f5a4b611cb981154/dstack/kms/auth-eth/contracts/test-utils/reference/v0.6.0/DstackKmsV060.sol#L256-L307), this mapping gates which KMS instances may receive the root keys, and `isAppAllowed` gates app boots on registration, OS image and the app's own policy. The deployed implementation `0x2e99ade1…2e28` was not source-verified here.
 - **Owner.** Both apps and the `DstackKms` share one owner, an address without code. The owner was `0x21e6b7eF…AB8d` until 2026-11-11. `transferOwnership` then moved the KMS to `0x3CE41427…Dcdb` at 21:49:41 UTC ([tx `577aca44…`](https://basescan.org/tx/0x577aca44cd98b69a24191fab13c22227062c52ba7671118eeaf1638b023c3dc0)), and the model app at 22:15:14 UTC ([tx `25364f45…`](https://basescan.org/tx/0x25364f450489ca3b4255d701d28658be2323af9b946adbc973b32c3f0f0ff54f)). Phala's Base KMS has a different owner, `0x3926658a…a663`.
-- **`kmsInfo()`.** It names CA `04228f80…bcbc`, not `0439…`. Third-party captures from May and teep's September testdata show that earlier NEAR root on NEAR CVMs. The chain does not say which KMS instance holds `0439…`.
+- **`kmsInfo()`.** It names CA `04228f80…bcbc`, not `0439…`. Third-party captures from May and teep's September testdata show that earlier NEAR root on NEAR CVMs. The chain does not say which KMS instance holds `0439…`, who operates it, or that it obeys this contract.
 
 ### Keys before and after 2026-11-06 and 2026-11-08
 
@@ -83,13 +84,18 @@ After the incident, NEAR added admin authentication and credential redaction to 
 
 ## Conclusions
 
-- **NEAR does not use Phala's KMS.** Every NEAR CVM sampled, in October and today, takes keys from the KMS root `04394aae…`. It is none of Phala's four KMS roots, and it did not change across Phala's 2026-11-06 rotation. The measured KMS build and NEAR's app policies are authorized in NEAR's Base contracts, which Phala's contracts do not reference. The serving KMS instance's operator is not shown by the chain. Its name, `kms.cvm1.near.ai`, comes only from the May third-party trace.
+- **The sampled root is not one of the known Phala KMS pools.** Every NEAR CVM sampled, in October and today, takes keys from the KMS root `04394aae…`. It differs from the four Phala KMS roots above, and it did not change across Phala's 2026-11-06 rotation. NEAR's apps are not registered in Phala's KMS contracts. This distinguishes `0439…` from those pools. It does not establish who operates `0439…`.
+- **The link from `0439…` to contract `0x8fa1593f…` is an inference.** The serving KMS's measurements are allowed in that contract's replication list, and NEAR's apps, compose hashes and OS images are admitted there. But `kmsInfo()` names `0228…`, and no public evidence shows that the `0439…` KMS consults this contract. Its host name, `kms.cvm1.near.ai`, comes only from the May third-party trace, which observed the `0228…` root.
 - **No public evidence places NEAR in the scope of Phala's incident.** The NEAR app IDs, KMS root and KMS-derived keys are unchanged. Phala's report names one tenant and one model route, neither identified as NEAR.
 - **NEAR's SGLang incident was inside the attested closure.** SGLang is an authorized container in the measured, compose-manager-deployed workload. It receives plaintext from the proxy by design. NEAR's report says the attacker could observe confidential requests on that server.
 - **Whether the SGLang compromise reached KMS-derived keys is unknown.** NEAR's report says nothing either way. In the GLM pack, getting keys from an SGLang container requires a further step, such as a container escape or reaching the privileged proxy or compose-manager. The report says the attacker went on from the server to NEAR's infrastructure.
-- **The app-wide keys were not rotated.** If any of them was obtained, it still decrypts captured E2EE/OHTTP payloads and signs valid responses for every CVM of the app. A client cannot detect that. The [runtime/KMS investigation](runtime-key-custody.md) already counts every workload in the app as a key holder.
+- **The app-wide keys were not rotated.** What a leaked secret would still allow depends on which secret leaked, and a client cannot detect any of these cases:
+  - **The app's KMS-provisioned master secret,** available to any container with `dstack.sock` in any CVM of the app. It derives every model's keys, so it allows signing and decryption for every model.
+  - **A per-model Ed25519 seed** from `get_key`. It signs that model's responses, and the model's E2EE X25519 key and OHTTP HPKE key derive from it ([`ohttp_gateway.rs` L19–34](https://github.com/nearai/inference-proxy/blob/0ac85577a2cc66c554430213b54996419d55ebd6/src/ohttp_gateway.rs#L19-L34)), so it also decrypts that model's captured E2EE and OHTTP payloads.
+  - **An isolated derived HPKE or X25519 private key.** It decrypts only that model's matching payloads, and cannot sign or derive the others.
+  The [runtime/KMS investigation](runtime-key-custody.md) already counts every workload in the app as a key holder.
 - **Ratings.** The A3/H1–H2/G3/X3 levels remain accurate. Neither incident changes code authority, fresh CPU evidence (H1 today), GPU coverage or egress.
-- **No new admission check.** The required `trust-provider-and-host` policy already trusts NEAR's operator. The operator controls compose hashes, OS images and KMS replication through a single-owner contract, so pinning the KMS root, app ID or `mr-kms` would not bound what it can deploy. A pin would not detect a fake replica holding the real root, which is the failure Phala described, or a compromised workload inside the closure, which is NEAR's incident. It would also break on the rotation one would want after such a compromise.
+- **No new admission check.** The required `trust-provider-and-host` policy already trusts NEAR's operator. Through the single-owner contracts behind its app IDs, the operator controls compose hashes, OS images and, on the inference above, KMS replication. So pinning the KMS root, app ID or `mr-kms` would not bound what it can deploy. A pin would not detect a fake replica holding the real root, which is the failure Phala described, or a compromised workload inside the closure, which is NEAR's incident. It would also break on the rotation one would want after such a compromise.
 
 ## Unknowns
 
