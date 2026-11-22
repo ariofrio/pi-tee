@@ -112,26 +112,42 @@ func snpFloorsOf(t *testing.T, artifact *policy.Artifact, identity string) (snp,
 	return *p.MinimumTCB.SnpSpl, *p.MinimumTCB.UcodeSpl, p.MinimumAPIVersion
 }
 
-// AMD has no UpToDate verdict: per-CPU floors from AMD-SB-3019/3020/3027
-// backstop the publisher's, keyed on the report's authenticated CPUID.
+func snpBuildOf(t *testing.T, artifact *policy.Artifact, identity string) uint8 {
+	t.Helper()
+	_, selected, err := artifact.PolicyFor(identity, policy.PlatformSEVSNP)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return *selected.SEVSNP.MinimumBuild
+}
+
+// AMD has no UpToDate verdict: per-CPU floors from AMD's bulletins
+// (through AMD-SB-3059 and AMD-SB-3061) backstop the publisher's, keyed on
+// the report's authenticated CPUID. Build/API are the bulletin's SEV firmware
+// version (API 1.58 restarted the build counter).
 func TestSNPLocalFloorsFollowAMDBulletinsPerCPU(t *testing.T) {
 	for _, item := range []struct {
 		name               string
 		cpu                [3]byte
 		turin              bool
 		wantSNP, wantUcode uint8
+		wantAPI            string
+		wantBuild          uint8
 	}{
-		{"Genoa B1", [3]byte{0x19, 0x11, 0x01}, false, 0x1b, 0x56},
-		{"Genoa-X B2", [3]byte{0x19, 0x11, 0x02}, false, 0x1b, 0x51},
-		{"Turin C1", [3]byte{0x1a, 0x02, 0x01}, true, 0x04, 0x51},
+		{"Genoa B1", [3]byte{0x19, 0x11, 0x01}, false, 0x1e, 0x5b, "1.58", 4},
+		{"Genoa-X B2", [3]byte{0x19, 0x11, 0x02}, false, 0x1e, 0x5b, "1.58", 4},
+		{"Turin C1", [3]byte{0x1a, 0x02, 0x01}, true, 0x08, 0x76, "1.58", 10},
 	} {
 		weak, identity := snpArtifact(t, "amd-test-prod", item.turin, true)
 		floored, err := floorSNPArtifact(weak, identity, item.cpu)
 		if err != nil {
 			t.Fatalf("%s: %v", item.name, err)
 		}
-		if snp, ucode, _ := snpFloorsOf(t, floored, identity); snp != item.wantSNP || ucode != item.wantUcode {
-			t.Fatalf("%s: floors snp=%#x ucode=%#x", item.name, snp, ucode)
+		if snp, ucode, api := snpFloorsOf(t, floored, identity); snp != item.wantSNP || ucode != item.wantUcode || api != item.wantAPI {
+			t.Fatalf("%s: floors snp=%#x ucode=%#x api=%s", item.name, snp, ucode, api)
+		}
+		if build := snpBuildOf(t, floored, identity); build != item.wantBuild {
+			t.Fatalf("%s: build floor %d", item.name, build)
 		}
 		if snp, _, _ := snpFloorsOf(t, weak, identity); snp != 0 {
 			t.Fatalf("%s: publisher input was altered", item.name)

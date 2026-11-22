@@ -1,11 +1,12 @@
 export { tdxMeetsFloors } from "./tdx-host.js";
 
 /** CPUID/TCB minima from tools/tinfoil-public-build/release.go's snpFloors.
- * TCB order is bootloader, TEE, SNP, microcode, optional Turin FMC. */
+ * TCB order is bootloader, TEE, SNP, microcode, optional Turin FMC. Build and
+ * API are checked independently, as the Go verifier does. */
 const SNP_FLOORS: Record<string, { build: number; api: readonly number[]; tcb: readonly number[] }> = {
-  "19/11/01": { build: 21, api: [1, 55], tcb: [7, 0, 27, 86] },
-  "19/11/02": { build: 21, api: [1, 55], tcb: [7, 0, 27, 81] },
-  "1a/02/01": { build: 0, api: [1, 58], tcb: [1, 1, 4, 81, 1] },
+  "19/11/01": { build: 4, api: [1, 58], tcb: [7, 0, 0x1e, 0x5b] },
+  "19/11/02": { build: 4, api: [1, 58], tcb: [7, 0, 0x1e, 0x5b] },
+  "1a/02/01": { build: 10, api: [1, 58], tcb: [1, 1, 0x08, 0x76, 1] },
 };
 export function snpMeetsFloors(evidence: {
   cpu: string; build: number; api: readonly number[]; provisional: boolean;

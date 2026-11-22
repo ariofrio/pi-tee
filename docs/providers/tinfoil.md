@@ -8,7 +8,7 @@ Public admission covers `gemma4-31b`, `deepseek-v4-1-flash` and `glm-5-3` when t
 
 Every dispatch freshly appraises CPU evidence, public guest/workload/container/runtime inputs, quote-bound serving keys, declared serving-GPU coverage and applicable hardware checks. Authenticated compatible releases from the named workflows update automatically without maintained deployment pins; B3/S3 is neither independent reproduction nor per-release review.
 
-Genoa below local floors can be H2 while preserving publisher minima, revocation, nonce/key binding and production restrictions. Intel `OutOfDate` public workers are rejected under every policy by the pinned verifier. G2 authenticated gaps need explicitly admitting thresholds; `gpu=unchecked` skips GPU appraisal and rates G3. Local is the default; NRAS uses the same GPU rules with added service trust. [Hardware rules](../reference/hardware-policy.md).
+SEV-SNP evidence (Genoa or Turin) below local floors can be H2 while preserving publisher minima, revocation, nonce/key binding and production restrictions. Intel `OutOfDate` public workers are rejected under every policy by the pinned verifier. G2 authenticated gaps need explicitly admitting thresholds; `gpu=unchecked` skips GPU appraisal and rates G3. Local is the default; NRAS uses the same GPU rules with added service trust. [Hardware rules](../reference/hardware-policy.md).
 
 Direct checks the appraised SPKI on the actual TLS 1.3 socket before credentials/ciphertext. That quote-bound key replaces WebPKI endpoint authorization. The encrypted transport sends once, rejects reconnect/resend and rechecks admission after hooks and at TLS handoff.
 

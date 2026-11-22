@@ -18,11 +18,11 @@ const authorityPolicy = {
       status: "UpToDate", attributes: "0000001000000000", svnFloor: TDX_SVN_FLOOR, collateralFloor: TDX_COLLATERAL_FLOOR },
     sevSnp: { arks: { genoa: "4c6598d19c18719c5dfd4a7d335f674e5bfe1d8f800cea2cf270c10d103db2f1", turin: "1f084161a44bb6d93778a904877d4819cafa5d05ef4193b2ded9dd9c73dd3f6a" },
       revocation: "AMD CRL", tcbFloors: "platform publisher, raised to local per-CPU floors",
-      // AMD-SB-3019/3020/3027, keyed on the report's CPUID family/model/stepping.
+      // AMD-SB-3019/3020/3027/3059/3061, keyed on the report's CPUID family/model/stepping.
       localFloors: {
-        "19/11/01 Genoa": { build: 21, api: "1.55", tcb: "bl7/tee0/snp1b/ucode56" },
-        "19/11/02 Genoa-X": { build: 21, api: "1.55", tcb: "bl7/tee0/snp1b/ucode51" },
-        "1a/02/01 Turin": { build: 0, api: "1.58", tcb: "fmc1/bl1/tee1/snp04/ucode51" },
+        "19/11/01 Genoa": { build: 4, api: "1.58", tcb: "bl7/tee0/snp1e/ucode5b" },
+        "19/11/02 Genoa-X": { build: 4, api: "1.58", tcb: "bl7/tee0/snp1e/ucode5b" },
+        "1a/02/01 Turin": { build: 10, api: "1.58", tcb: "fmc1/bl1/tee1/snp08/ucode76" },
       },
       firmware: SNP_FIRMWARE,
       guest: { debug: false, migrateMA: false, vmpl: 0, provisionalFirmware: false } },

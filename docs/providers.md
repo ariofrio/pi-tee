@@ -5,7 +5,7 @@ These are installed adapter capabilities, checked against the merged implementat
 | Provider / route | Verified levels | Tightest policy for the stated case |
 | --- | --- | --- |
 | [Tinfoil direct / billing gateway](providers/tinfoil.md), current protected worker | A1 H1 G1 X2 B3 S3 | `public-builds,egress=metadata` |
-| Tinfoil Genoa worker below local floors, otherwise G1 | A1 H2 G1 X2 B3 S3 | `public-builds-trust-host,egress=metadata,host=outdated-firmware,gpu=verified` |
+| Tinfoil SEV-SNP worker below local floors, otherwise G1 | A1 H2 G1 X2 B3 S3 | `public-builds-trust-host,egress=metadata,host=outdated-firmware,gpu=verified` |
 | Tinfoil router | A3 H3 G3 X3 | `trust-provider-and-host` |
 | [NEAR direct / gateway](providers/nearai.md), current CPU evidence | A3 H1 G3 X3 | `trust-provider-and-host,host=current` |
 | NEAR fresh outdated/below-floor CPU evidence | A3 H2 G3 X3 | `trust-provider-and-host,host=outdated-firmware` |

@@ -126,13 +126,16 @@ func floorTDXArtifact(artifact *policy.Artifact, identity string) (*policy.Artif
 // Local SEV-SNP floors per CPU, keyed on the report's authenticated CPUID
 // family/model/stepping. AMD has no UpToDate verdict, so these track AMD's
 // bulletins and must be raised as AMD publishes fixes:
-//   - AMD-SB-3019 (CVE-2024-56161), AMD-SB-3020 (CVE-2025-0033): SNP SPL
-//     0x1B on Genoa/Genoa-X, 0x04 on Turin.
-//   - AMD-SB-3027 (CVE-2025-29943): microcode SPL 0x56 Genoa B1, 0x51
-//     Genoa-X B2, 0x51 Turin C1.
+//   - AMD-SB-3059 (CVE-2026-0462): SNP SPL 0x1E on Genoa (SEV firmware
+//     1.3A.4, i.e. API 1.58 build 4), 0x08 on Turin (1.3A.0A, build 10).
+//   - AMD-SB-3061 (CVE-2026-40671): microcode 0x0A10115B Genoa B1, 0x0A10125B
+//     Genoa B2, 0x0B002176 Turin C1; the microcode SPL is the revision's low
+//     byte, as AMD-SB-3027 pairs each revision with its TCB[MICROCODE].
 //
-// Bootloader/TEE/FMC floors and the build/API minimums come from Tinfoil's
-// SDK before v3 delegated them (tinfoil-go 05e8179 verifier/attestation/sev.go).
+// The verifier checks build and API independently and AMD restarted the build
+// count at API 1.58, so both come from the same bulletin firmware version.
+// Bootloader/TEE/FMC floors come from Tinfoil's SDK before v3 delegated them
+// (tinfoil-go 05e8179 verifier/attestation/sev.go); no bulletin since raised them.
 type snpFloor struct {
 	turin bool
 	build int
@@ -141,9 +144,9 @@ type snpFloor struct {
 }
 
 var snpFloors = map[[3]byte]snpFloor{
-	{0x19, 0x11, 0x01}: {false, 21, [2]int{1, 55}, policy.TCB{BlSpl: u8(7), TeeSpl: u8(0), SnpSpl: u8(0x1b), UcodeSpl: u8(0x56)}},
-	{0x19, 0x11, 0x02}: {false, 21, [2]int{1, 55}, policy.TCB{BlSpl: u8(7), TeeSpl: u8(0), SnpSpl: u8(0x1b), UcodeSpl: u8(0x51)}},
-	{0x1a, 0x02, 0x01}: {true, 0, [2]int{1, 58}, policy.TCB{FmcSpl: u8(1), BlSpl: u8(1), TeeSpl: u8(1), SnpSpl: u8(0x04), UcodeSpl: u8(0x51)}},
+	{0x19, 0x11, 0x01}: {false, 4, [2]int{1, 58}, policy.TCB{BlSpl: u8(7), TeeSpl: u8(0), SnpSpl: u8(0x1e), UcodeSpl: u8(0x5b)}},
+	{0x19, 0x11, 0x02}: {false, 4, [2]int{1, 58}, policy.TCB{BlSpl: u8(7), TeeSpl: u8(0), SnpSpl: u8(0x1e), UcodeSpl: u8(0x5b)}},
+	{0x1a, 0x02, 0x01}: {true, 10, [2]int{1, 58}, policy.TCB{FmcSpl: u8(1), BlSpl: u8(1), TeeSpl: u8(1), SnpSpl: u8(0x08), UcodeSpl: u8(0x76)}},
 }
 
 func u8(value uint8) *uint8 { return &value }

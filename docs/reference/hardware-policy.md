@@ -14,11 +14,13 @@ TCB components below use hexadecimal values; build and ABI are decimal. Both cur
 
 | CPUID family/model/stepping | Minimum firmware build / ABI | Minimum TCB |
 | --- | --- | --- |
-| `19/11/01` Genoa | 21 / 1.55 | bootloader `07`, TEE `00`, SNP `1b`, microcode `56` |
-| `19/11/02` Genoa-X | 21 / 1.55 | bootloader `07`, TEE `00`, SNP `1b`, microcode `51` |
-| `1a/02/01` Turin | 0 / 1.58 | FMC `01`, bootloader `01`, TEE `01`, SNP `04`, microcode `51` |
+| `19/11/01` Genoa | 4 / 1.58 | bootloader `07`, TEE `00`, SNP `1e`, microcode `5b` |
+| `19/11/02` Genoa-X | 4 / 1.58 | bootloader `07`, TEE `00`, SNP `1e`, microcode `5b` |
+| `1a/02/01` Turin | 10 / 1.58 | FMC `01`, bootloader `01`, TEE `01`, SNP `08`, microcode `76` |
 
-[Go CPU enforcement](../../tools/tinfoil-public-build/main.go), [shared SNP diagnostics](../../packages/core/src/cpu-floors.ts). Tinfoil Genoa H2 retains publisher-signed minima, AMD signatures/CRL, nonce/endpoint binding and a non-debug, non-migratable VMPL0 production guest with non-provisional firmware. The pinned SNP OVMF identity belongs to the [serving contract](../contracts/tinfoil-public-builds.md). Privatemode Coordinator diagnostics do not establish serving-worker freshness or raise the route above H3.
+SNP and microcode minima are those of [AMD-SB-3059](https://www.amd.com/en/resources/product-security/bulletin/amd-sb-3059.html) and [AMD-SB-3061](https://www.amd.com/en/resources/product-security/bulletin/amd-sb-3061.html) (2026-11-10). The microcode SPL is the low byte of AMD's microcode revision, the pairing [AMD-SB-3027](https://www.amd.com/en/resources/product-security/bulletin/amd-sb-3027.html) publishes. Build and ABI are checked separately, so both come from the bulletin's SEV firmware version (Genoa `1.3A.4`, Turin `1.3A.0A`): AMD restarted the build count at ABI 1.58. A publisher minimum that is stronger in either field still applies. [Floor record](../evidence/client/2026-11-22-amd-sev-snp-floors.md).
+
+[Go CPU enforcement](../../tools/tinfoil-public-build/main.go), [shared SNP diagnostics](../../packages/core/src/cpu-floors.ts). Tinfoil SEV-SNP H2 retains publisher-signed minima, AMD signatures/CRL, nonce/endpoint binding and a non-debug, non-migratable VMPL0 production guest with non-provisional firmware. The pinned SNP OVMF identity belongs to the [serving contract](../contracts/tinfoil-public-builds.md). Privatemode Coordinator diagnostics do not establish serving-worker freshness or raise the route above H3.
 
 ## NVIDIA GPUs
 
